@@ -24,6 +24,27 @@ const TAB_ICONS: Record<ScreenKey, string> = {
   coach: 'bot',
 };
 
+const MOIS_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const MOIS_PL = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
+
+/** The eyebrow says where in the plan you are, so it is computed, not stored. */
+function eyebrow(app: ReturnType<typeof useApp>): string {
+  const fr = app.lang === 'fr';
+  const [, mois, jour] = app.date.split('-');
+  const nomMois = (fr ? MOIS_FR : MOIS_PL)[Number(mois) - 1];
+  const s = fr ? 'S' : 'T';
+  switch (app.screen) {
+    case 'today':
+      return `${Number(jour)} ${nomMois} · ${s}${app.semaine}`;
+    case 'week':
+      return `${s}${app.semaine} / ${db.derniereSemaine} · ${fr ? 'bloc' : 'blok'} ${db.blocDeSemaine(app.semaine).code}`;
+    case 'form':
+      return fr ? '28 jours' : '28 dni';
+    case 'coach':
+      return `${fr ? 'Hebdo' : 'Tygodniowa'} · ${s}${app.semaine}`;
+  }
+}
+
 /* Below this the bezel would cost more room than it is worth. */
 const FRAME_QUERY = '(min-width: 720px) and (min-height: 940px)';
 
@@ -93,7 +114,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
               textOverflow: 'ellipsis',
             }}
           >
-            {ui.eyebrows[app.screen]}
+            {eyebrow(app)}
           </div>
           <h1
             style={{

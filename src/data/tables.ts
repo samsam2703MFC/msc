@@ -1,4 +1,12 @@
 /* MySmartCoach — the MSC database (msc_ prefix).
+
+   The plan itself lives in ./plan.generated (imported from the workbook) and
+   its mechanic in ./reference + ./engine. What is left here is the reference
+   vocabulary (types, statuses, UI copy) and a seeded example of what the
+   Anthropic API writes back — analyses, adaptations, adjustments. Those seeded
+   rows are anchored on session 1052, the plan's first quality session
+   (semaine 7, "CAP · Seuil — 5 × 3'", 14/10/2026), and their figures follow the
+   worked example in the workbook's "Suivi & ajustement" sheet.
    Ported verbatim from the Claude Design handoff. Every screen reads these
    tables; no data is hard-coded in the UI. Access them through ./db, which is
    the seam a real backend replaces. */
@@ -14,15 +22,10 @@ import type {
   MscExcuse,
   MscJournal,
   MscMetric,
-  MscSession,
-  MscSessionStatut,
-  MscSessionStep,
   MscSource,
   MscStatut,
   MscType,
   MscUiStrings,
-  MscWeek,
-  MscZone,
 } from './types';
 
 export const msc_type: MscType[] = [
@@ -68,6 +71,9 @@ export const msc_type: MscType[] = [
   { code: 'repos', icon: 'moon', color: '#7E9090', label: { fr: 'Repos', pl: 'Odpoczynek' }, gain: { fr: 'Progresser', pl: 'Postęp' },
     why: { fr: 'L’entraînement crée le stimulus ; le repos crée la forme.', pl: 'Trening tworzy bodziec; odpoczynek tworzy formę.' },
     sci: { fr: ['La surcompensation a lieu pendant la récupération, pas à l’effort.', 'Une séance ajoutée ici fatigue, elle ne renforce pas.'], pl: ['Superkompensacja zachodzi w regeneracji, nie w wysiłku.', 'Trening dodany tutaj zmęczy, nie wzmocni.'] } },
+  { code: 'course', icon: 'flag', color: '#E24B4A', label: { fr: 'Course', pl: 'Zawody' }, gain: { fr: 'Mesurer', pl: 'Pomiar' },
+    why: { fr: 'Le jour où le plan est jugé. Quatre dans la saison, une seule qui compte.', pl: 'Dzień, w którym plan jest oceniany. Cztery w sezonie, tylko jedne się liczą.' },
+    sci: { fr: ['Une course de préparation cale l’allure mieux que n’importe quelle séance.', 'L’affûtage rend 2 à 3 % de performance : il se prépare, il ne s’improvise pas.'], pl: ['Zawody przygotowawcze kalibrują tempo lepiej niż jakikolwiek trening.', 'Tapering daje 2–3 % wydajności: przygotowuje się go, nie improwizuje.'] } },
   { code: 'biere', icon: 'beer', color: '#C9A227', label: { fr: 'Bière', pl: 'Piwo' }, gain: { fr: 'Tenir 30 semaines', pl: 'Wytrwać 30 tygodni' },
     why: { fr: 'Un plan qu’on ne peut jamais quitter, on le quitte pour de bon. Une bière prévue vaut mieux qu’un abandon.', pl: 'Plan, z którego nigdy nie można wyjść, porzuca się na dobre. Zaplanowane piwo jest lepsze niż rezygnacja.' },
     sci: { fr: ['L’adhésion à long terme prédit mieux le résultat que la perfection d’une semaine.', 'À placer après la séance, jamais la veille d’une qualité : l’alcool coupe le sommeil profond.'], pl: ['Długoterminowa konsekwencja przewiduje wynik lepiej niż idealny tydzień.', 'Po treningu, nigdy przed dniem jakościowym: alkohol tnie głęboki sen.'] } },
@@ -79,57 +85,26 @@ export const msc_type: MscType[] = [
     sci: { fr: ['Une recharge glucidique restaure le glycogène plus vite qu’un déficit prolongé.', 'Le déficit chronique fait chuter la performance et la densité osseuse avant le poids.'], pl: ['Doładowanie węglowodanowe odbudowuje glikogen szybciej niż przedłużony deficyt.', 'Chroniczny deficyt obniża wydolność i gęstość kości szybciej niż wagę.'] } },
 ];
 
-/* Zones d'allure glissantes — l'allure n'est jamais en dur dans l'UI. */
-export const msc_zone: MscZone[] = [
-  { code: 'ef', bloc: 'A', allure: '6:27/km', label: { fr: 'Échauffement', pl: 'Rozgrzewka' }, icon: 'flame' },
-  { code: 'seuil', bloc: 'A', allure: '5:12/km', label: { fr: 'Seuil', pl: 'Próg' }, icon: 'gauge' },
-  { code: 'recup', bloc: 'A', allure: '6:47/km', label: { fr: 'Récup.', pl: 'Przerwa' }, icon: 'leaf' },
-];
 
-export const msc_session: MscSession[] = [
-  { id: 301, semaine: 3, bloc: 'A', date: '2026-09-01', jour: { fr: 'LUN', pl: 'PON' }, type: 'repos', duree_min: 0,
-    titre: { fr: 'Repos', pl: 'Odpoczynek' }, meta: { fr: 'adaptation', pl: 'adaptacja' } },
-  { id: 302, semaine: 3, bloc: 'A', date: '2026-09-02', jour: { fr: 'MAR', pl: 'WT' }, type: 'nage', duree_min: 48, natation_m: 2400,
-    titre: { fr: 'Nage 2 400 m', pl: 'Pływanie 2 400 m' }, meta: { fr: '48 min · RPE 5', pl: '48 min · RPE 5' } },
-  { id: 303, semaine: 3, bloc: 'A', date: '2026-09-03', jour: { fr: 'MER', pl: 'ŚR' }, type: 'seuil', duree_min: 58, rpe_cible: 7, zones: ['ef', 'seuil', 'recup'],
-    titre: { fr: "4 × 8' au seuil, 2' de récupération", pl: "4 × 8' na progu, 2' przerwy" },
-    titre_court: { fr: "4 × 8' au seuil", pl: "4 × 8' na progu" },
-    meta: { fr: '58 min · RPE 7', pl: '58 min · RPE 7' },
-    but: { fr: 'Repousser le point où le lactate s’accumule. La séance qui fait le 10 km.', pl: 'Przesunąć moment kumulacji laktatu. Trening, który buduje 10 km.' },
-    reussite: { fr: 'Réussie si le dernier bloc est aussi rapide que le premier.', pl: 'Udany, jeśli ostatni blok jest tak szybki jak pierwszy.' } },
-  { id: 304, semaine: 3, bloc: 'A', date: '2026-09-04', jour: { fr: 'JEU', pl: 'CZW' }, type: 'recup', duree_min: 50, distance_km: 8, adapte_par: 'msc_analyse:9001',
-    titre: { fr: 'Récup 8 km', pl: 'Regeneracja 8 km' }, meta: { fr: 'adaptée par Claude', pl: 'zmienione przez Claude' } },
-  { id: 305, semaine: 3, bloc: 'A', date: '2026-09-05', jour: { fr: 'VEN', pl: 'PT' }, type: 'force', duree_min: 50,
-    titre: { fr: 'Force Hyrox n°1', pl: 'Siła Hyrox nr 1' }, meta: { fr: '50 min', pl: '50 min' } },
-  { id: 306, semaine: 3, bloc: 'A', date: '2026-09-06', jour: { fr: 'SAM', pl: 'SOB' }, type: 'longue', duree_min: 95,
-    titre: { fr: 'Sortie longue 1h35', pl: 'Długi bieg 1h35' }, meta: { fr: "dont 2 × 10' allure semi", pl: "w tym 2 × 10' tempo półmaratonu" } },
-  { id: 307, semaine: 3, bloc: 'A', date: '2026-09-07', jour: { fr: 'DIM', pl: 'ND' }, type: 'velo', duree_min: 75,
-    titre: { fr: 'Vélo Z2 1h15', pl: 'Rower Z2 1h15' }, meta: { fr: 'zone 2 · 85-95 tr/min', pl: 'strefa 2 · 85-95 obr.' } },
-];
 
-export const msc_session_step: MscSessionStep[] = [
-  { session_id: 303, ordre: 1, duree: "15'", icon: 'flame', detail: { fr: 'Échauffement + 3 lignes droites.', pl: 'Rozgrzewka + 3 przebieżki.' } },
-  { session_id: 303, ordre: 2, duree: "4 × 8'", icon: 'gauge', detail: { fr: 'Au seuil, allure tenable une heure.', pl: 'Na progu, tempo na godzinę.' } },
-  { session_id: 303, ordre: 3, duree: "8'", icon: 'leaf', detail: { fr: 'Retour au calme, lent.', pl: 'Wyciszenie, wolno.' } },
-  { session_id: 303, ordre: 4, duree: '—', icon: 'info', detail: { fr: 'Terrain plat. Dérive > 5 s/km : on arrête.', pl: 'Płaski teren. Spadek > 5 s/km: kończymy.' } },
-];
 
 /* Ce que Strava renvoie — agrégats uniquement, jamais les streams bruts. */
 export const msc_activity: MscActivity[] = [
-  { id_strava: 148120, session_id: 302, date: '2026-09-02', sport: 'swim', duree_min: 48, statut: 'fait' },
-  { id_strava: 148377, session_id: 303, date: '2026-09-03', sport: 'run', duree_min: 58, allure_moy: '5:07/km', fc_moy: 168,
-    splits_blocs: [307, 309, 311, 314], statut: 'fait' },
+  { id_strava: 148120, session_id: 1050, date: '2026-10-13', sport: 'swim', duree_min: 70, statut: 'fait' },
+  { id_strava: 148377, session_id: 1052, date: '2026-10-14', sport: 'run', duree_min: 68, allure_moy: '4:56/km', fc_moy: 168,
+    /* Five threshold blocks against a 4:55 target — the drift the analysis reads. */
+    splits_blocs: [292, 293, 295, 299, 304], statut: 'fait' },
 ];
 
 export const msc_journal: MscJournal[] = [
-  { date: '2026-09-03', session_id: 303, rpe_ressenti: 8, sommeil: 7.2, douleurs: [] },
+  { date: '2026-10-14', session_id: 1052, rpe_ressenti: 8, sommeil: 7.2, douleurs: [] },
 ];
 
 export const msc_daily: MscDaily[] = [
-  { date: '2026-08-28', fc_repos: 57 }, { date: '2026-08-29', fc_repos: 56 },
-  { date: '2026-08-30', fc_repos: 56 }, { date: '2026-08-31', fc_repos: 55 },
-  { date: '2026-09-01', fc_repos: 55 }, { date: '2026-09-02', fc_repos: 54 },
-  { date: '2026-09-03', fc_repos: 54 },
+  { date: '2026-10-08', fc_repos: 47 }, { date: '2026-10-09', fc_repos: 46 },
+  { date: '2026-10-10', fc_repos: 46 }, { date: '2026-10-11', fc_repos: 45 },
+  { date: '2026-10-12', fc_repos: 45 }, { date: '2026-10-13', fc_repos: 44 },
+  { date: '2026-10-14', fc_repos: 44 },
 ];
 
 export const msc_metric: MscMetric[] = [
@@ -147,25 +122,17 @@ export const msc_metric: MscMetric[] = [
     formule: { fr: 'la vraie progression, sur les EF', pl: 'prawdziwy postęp, na wytrzymałości' } },
 ];
 
-export const msc_week: MscWeek[] = [
-  { semaine: 3, bloc: 'A',
-    totaux: [
-      { code: 'duree', icon: 'clock', realise: '4h20', prevu: '8h05', label: { fr: 'Durée', pl: 'Czas' } },
-      { code: 'course', icon: 'footprints', realise: '31 km', prevu: '52 km', label: { fr: 'Course', pl: 'Bieg' } },
-      { code: 'nage', icon: 'waves', realise: '2 400 m', prevu: '4 800 m', label: { fr: 'Nage', pl: 'Pływanie' } },
-    ] },
-];
 
 /* Sorties de l'API Anthropic, horodatées et conservées. */
 export const msc_analyse: MscAnalyse[] = [
-  { id: 9001, date: '2026-09-03', type: 'seance', session_id: 303, modele: 'haiku-4-5', cout_eur: 0.008,
+  { id: 9001, date: '2026-10-14', type: 'seance', session_id: 1052, modele: 'haiku-4-5', cout_eur: 0.008,
     verdict: { fr: 'Parti 5 s/km trop vite : le 4ᵉ bloc lâche de 7 s/km. Le travail au seuil a eu lieu.', pl: 'Start o 5 s/km za szybko: czwarty blok traci 7 s/km. Praca progowa się odbyła.' },
     stats: [
       { valeur: '+7 s/km', icon: 'trending-down', couleur: '#BA7517', label: { fr: 'dérive B1 → B4', pl: 'spadek B1 → B4' } },
       { valeur: '5:07/km', icon: 'gauge', couleur: '#0A1C33', label: { fr: 'moyenne · cible 5:12', pl: 'średnia · cel 5:12' } },
       { valeur: '8', icon: 'activity', couleur: '#BA7517', label: { fr: 'RPE · cible 7', pl: 'RPE · cel 7' } },
     ] },
-  { id: 9002, date: '2026-09-03', type: 'hebdo', semaine: 3, modele: 'sonnet-5', cout_eur: 0.07,
+  { id: 9002, date: '2026-10-18', type: 'hebdo', semaine: 7, modele: 'sonnet-5', cout_eur: 0.07,
     verdict: { fr: 'Charge sous contrôle (ACWR 1,18), allure à FC constante en progrès de 6 s/km.', pl: 'Obciążenie pod kontrolą (ACWR 1,18), tempo przy stałym tętnie lepsze o 6 s/km.' },
     blocs: [
       { icon: 'circle-check', couleur: '#038870', items: { fr: ['Dérive cardiaque : +14 % → +6,4 %.', 'FC repos stable à 54 bpm.'], pl: ['Dryf tętna: +14 % → +6,4 %.', 'Tętno spoczynkowe stabilne, 54 bpm.'] } },
@@ -175,19 +142,19 @@ export const msc_analyse: MscAnalyse[] = [
 
 /* Adaptation issue de l'analyse de séance : proposition, jamais écriture directe. */
 export const msc_adaptation: MscAdaptation[] = [
-  { id: 7001, analyse_id: 9001, session_id: 304, type: 'recup', session_avant: { fr: 'EF 10 km · 65 min', pl: 'Wytrzymałość 10 km · 65 min' },
-    session_apres: '8 km · 50 min · 6:47/km',
+  { id: 7001, analyse_id: 9001, session_id: 1055, type: 'recup', session_avant: { fr: 'Footing de récupération · 58 min', pl: 'Trucht regeneracyjny · 58 min' },
+    session_apres: '45 min · 6:20/km',
     pourquoi: { fr: 'Le seuil a coûté plus que prévu. On protège la sortie longue de samedi.', pl: 'Próg kosztował więcej niż zakładano. Chronimy sobotni długi bieg.' } },
 ];
 
 export const msc_ajustement: MscAjustement[] = [
-  { id: 7101, analyse_id: 9002, session_id: 306, type: 'longue', quand: { fr: 'Samedi · S3', pl: 'Sobota · T3' }, quoi: { fr: 'Sortie longue 1h35 → 1h20', pl: 'Długi bieg 1h35 → 1h20' } },
-  { id: 7102, analyse_id: 9002, session_id: 305, type: 'nage', quand: { fr: 'Vendredi · S3', pl: 'Piątek · T3' }, quoi: { fr: 'Nage 2 400 → 3 000 m', pl: 'Pływanie 2 400 → 3 000 m' } },
-  { id: 7103, analyse_id: 9002, semaine: 6, type: 'test', quand: { fr: 'Semaine 6', pl: 'Tydzień 6' }, quoi: { fr: 'Test de 30 min décalé d’une semaine', pl: 'Test 30 min przesunięty o tydzień' } },
+  { id: 7101, analyse_id: 9002, session_id: 1056, type: 'longue', quand: { fr: 'Samedi · S7', pl: 'Sobota · T7' }, quoi: { fr: 'Sortie longue 1h37 → 1h20', pl: 'Długi bieg 1h37 → 1h20' } },
+  { id: 7102, analyse_id: 9002, session_id: 1054, type: 'nage', quand: { fr: 'Vendredi · S7', pl: 'Piątek · T7' }, quoi: { fr: 'Nage 2 000 → 2 600 m', pl: 'Pływanie 2 000 → 2 600 m' } },
+  { id: 7103, analyse_id: 9002, semaine: 10, type: 'test', quand: { fr: 'Semaine 10', pl: 'Tydzień 10' }, quoi: { fr: 'Test de 30 min décalé d’une semaine', pl: 'Test 30 min przesunięty o tydzień' } },
 ];
 
 export const msc_ecart: MscEcart[] = [
-  { semaine: 3, retard: '−3h20', sautees: 2, realisation: '82 %',
+  { semaine: 7, retard: '−3h20', sautees: 2, realisation: '82 %',
     texte: { fr: 'Deux séances sautées, 3h20 de retard. Le coach réétalonne au lieu de faire rattraper.', pl: 'Dwa opuszczone treningi, 3h20 zaległości. Trener przelicza, zamiast kazać nadrabiać.' },
     stats: [
       { valeur: '−3h20', icon: 'clock', label: { fr: 'volume en retard', pl: 'zaległej objętości' } },
@@ -195,9 +162,9 @@ export const msc_ecart: MscEcart[] = [
       { valeur: '82 %', icon: 'percent', label: { fr: 'réalisation', pl: 'realizacja' } },
     ],
     recalcul: [
-      { portee: 'S3–S4', texte: { fr: 'Volume ramené à 7h, nage avant la force.', pl: 'Objętość do 7h, pływanie przed siłą.' } },
-      { portee: 'S5', texte: { fr: 'Test de 30 min déplacé en semaine 6.', pl: 'Test 30 min przeniesiony na tydzień 6.' } },
-      { portee: 'S6–S12', texte: { fr: 'Progression lissée à +6 % / semaine. Semi du 22/11 conservé.', pl: 'Progresja wygładzona do +6 % / tydzień. Półmaraton 22/11 zachowany.' } },
+      { portee: 'S7–S8', texte: { fr: 'Volume ramené à 7h, nage avant la force.', pl: 'Objętość do 7h, pływanie przed siłą.' } },
+      { portee: 'S9', texte: { fr: 'Test de 30 min déplacé en semaine 6.', pl: 'Test 30 min przeniesiony na tydzień 6.' } },
+      { portee: 'S10–S23', texte: { fr: 'Progression lissée à +6 % / semaine. Semi du 22/11 conservé.', pl: 'Progresja wygładzona do +6 % / tydzień. Półmaraton 22/11 zachowany.' } },
     ] },
 ];
 
@@ -209,11 +176,6 @@ export const msc_statut: MscStatut[] = [
   { code: 'prevu', icon: 'circle-dashed', couleur: '#7E9090' },
 ];
 
-export const msc_session_statut: MscSessionStatut[] = [
-  { session_id: 301, statut: 'repos' }, { session_id: 302, statut: 'fait' },
-  { session_id: 303, statut: 'aujourdhui' }, { session_id: 304, statut: 'adapte' },
-  { session_id: 305, statut: 'prevu' }, { session_id: 306, statut: 'prevu' }, { session_id: 307, statut: 'prevu' },
-];
 
 export const msc_source: MscSource[] = [
   { code: 'strava', etat: 'off', canal: 'MCP',
@@ -226,7 +188,6 @@ export const msc_source: MscSource[] = [
 export const msc_ui: Record<Lang, MscUiStrings> = {
   fr: {
     screens: { today: "Aujourd'hui", week: 'La semaine', form: 'État de forme', coach: 'Coach' },
-    eyebrows: { today: '3 sept · S3', week: 'S3 / 30 · bloc A', form: '28 jours', coach: 'Hebdo · S3' },
     tabs: { today: "Aujourd'hui", week: 'Semaine', form: 'Forme', coach: 'Coach' },
     doneOn: 'Séance faite', doneOff: 'Marquer la séance faite',
     rpeLabel: 'RPE ressenti', notePlaceholder: 'Sommeil, douleurs, sensations',
@@ -241,7 +202,6 @@ export const msc_ui: Record<Lang, MscUiStrings> = {
   },
   pl: {
     screens: { today: 'Dzisiaj', week: 'Tydzień', form: 'Forma', coach: 'Trener' },
-    eyebrows: { today: '3 wrz · T3', week: 'T3 / 30 · blok A', form: '28 dni', coach: 'Tygodniowa · T3' },
     tabs: { today: 'Dzisiaj', week: 'Tydzień', form: 'Forma', coach: 'Trener' },
     doneOn: 'Wykonane', doneOff: 'Oznacz jako wykonane',
     rpeLabel: 'Odczuwany RPE', notePlaceholder: 'Sen, bóle, odczucia',
@@ -258,23 +218,23 @@ export const msc_ui: Record<Lang, MscUiStrings> = {
 
 /* La vraie vie d'un sportif : motifs déclarés par l'athlète, réponse du coach. */
 export const msc_excuse: MscExcuse[] = [
-  { code: 'pas_envie', icon: 'battery-low', type: 'recup', session_id: 303,
+  { code: 'pas_envie', icon: 'battery-low', type: 'recup', session_id: 1052,
     label: { fr: 'Pas envie de m’entraîner', pl: 'Nie mam ochoty trenować' },
     reponse: { fr: 'On garde le geste, on enlève l’intensité. Vingt minutes valent mieux que zéro.', pl: 'Zostawiamy ruch, zdejmujemy intensywność. Dwadzieścia minut jest lepsze niż zero.' },
-    remplacement: { fr: 'Récup 20 min · 6:47/km, sans montre', pl: 'Regeneracja 20 min · 6:47/km, bez zegarka' } },
-  { code: 'pas_le_temps', icon: 'clock-alert', type: 'seuil', session_id: 303,
+    remplacement: { fr: 'Récup 20 min · 6:20/km, sans montre', pl: 'Regeneracja 20 min · 6:20/km, bez zegarka' } },
+  { code: 'pas_le_temps', icon: 'clock-alert', type: 'seuil', session_id: 1052,
     label: { fr: 'Pas le temps aujourd’hui', pl: 'Nie mam dziś czasu' },
     reponse: { fr: 'On garde le stimulus utile et on coupe le reste. Le seuil tient en 30 minutes.', pl: 'Zostawiamy użyteczny bodziec, resztę ucinamy. Próg mieści się w 30 minutach.' },
-    remplacement: { fr: '2 × 8’ au seuil · 30 min total', pl: '2 × 8’ na progu · 30 min łącznie' } },
-  { code: 'soiree', icon: 'wine', type: 'velo', session_id: 304,
+    remplacement: { fr: '3 × 3’ au seuil · 30 min total', pl: '3 × 3’ na progu · 30 min łącznie' } },
+  { code: 'soiree', icon: 'wine', type: 'velo', session_id: 1055,
     label: { fr: 'Je bois ce soir', pl: 'Piję dziś wieczorem' },
     reponse: { fr: 'L’alcool coupe la récupération et le sommeil. On avance la qualité et on allège demain.', pl: 'Alkohol tnie regenerację i sen. Przesuwamy jakość i odciążamy jutro.' },
     remplacement: { fr: 'Demain : vélo Z2 45 min au lieu de la récup', pl: 'Jutro: rower Z2 45 min zamiast regeneracji' } },
-  { code: 'fatigue', icon: 'bed', type: 'repos', session_id: 303,
+  { code: 'fatigue', icon: 'bed', type: 'repos', session_id: 1052,
     label: { fr: 'Mal dormi, jambes lourdes', pl: 'Źle spałem, ciężkie nogi' },
     reponse: { fr: 'FC de repos à +4 bpm : le corps a déjà répondu. Repos complet, on décale la qualité.', pl: 'Tętno spoczynkowe +4 bpm: ciało już odpowiedziało. Pełny odpoczynek, jakość przesunięta.' },
     remplacement: { fr: 'Repos · seuil déplacé à jeudi', pl: 'Odpoczynek · próg przeniesiony na czwartek' } },
-  { code: 'voyage', icon: 'plane', type: 'force', session_id: 305,
+  { code: 'voyage', icon: 'plane', type: 'force', session_id: 1049,
     label: { fr: 'En déplacement, pas de salle', pl: 'W podróży, bez siłowni' },
     reponse: { fr: 'La force sans charge existe : la protection tendineuse ne demande pas de barre.', pl: 'Siła bez obciążenia istnieje: ochrona ścięgien nie wymaga sztangi.' },
     remplacement: { fr: 'Circuit poids du corps 25 min · mollets, fentes, gainage', pl: 'Obwód z ciężarem ciała 25 min · łydki, zakroki, core' } },

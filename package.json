@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "check:engine": "npx esbuild scripts/check-engine.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-engine.mjs --log-level=error && node node_modules/.tmp/check-engine.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.549.0",

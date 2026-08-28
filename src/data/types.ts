@@ -16,7 +16,12 @@ export type Hex = string;
 export type TypeCode =
   | 'ef' | 'recup' | 'endactive' | 'seuil' | 'allure10' | 'vma' | 'longue'
   | 'montagne' | 'test' | 'force' | 'compromis' | 'nage' | 'velo' | 'repos'
+  | 'course'
   | 'biere' | 'chocolat' | 'gavage';
+
+/** The eight pace zones, in order from slowest to fastest. */
+export type ZoneCode =
+  | 'recup' | 'ef' | 'endactive' | 'marathon' | 'semi' | 'seuil' | 'allure10' | 'vma';
 
 export interface MscType {
   code: TypeCode;
@@ -226,7 +231,6 @@ export type ScreenKey = 'today' | 'week' | 'form' | 'coach';
 
 export interface MscUiStrings {
   screens: Record<ScreenKey, string>;
-  eyebrows: Record<ScreenKey, string>;
   tabs: Record<ScreenKey, string>;
   doneOn: string;
   doneOff: string;
@@ -252,4 +256,141 @@ export interface MscUiStrings {
   modalKind: string;
   modalSci: string;
   modalClose: string;
+}
+
+/* ============================================================
+   The training mechanic — profile, blocks, zones, rules.
+   See ./reference for the data and ./engine for what computes from it.
+   ============================================================ */
+
+/** The two references the whole plan slides between. */
+export interface MscAthlete {
+  id: number;
+  nom: string;
+  /** Current 10 km pace, in seconds per km. The week-5 time trial rewrites it. */
+  ref_actuelle_s: number;
+  /** Target 10 km pace, in seconds per km. */
+  ref_cible_s: number;
+  fc_repos: number;
+  fc_repos_moy7: number;
+  fc_moy_reference: number;
+  derive_reference_pct: number;
+  /** Weekly volume floor, in hours. */
+  plancher_heures: number;
+  /** Distance floor per run, in km. */
+  plancher_km_sortie: number;
+  debut: string;
+  note: Localized;
+}
+
+export interface MscBloc {
+  code: string;
+  /** First and last week of the block, inclusive. */
+  de: number;
+  a: number;
+  /** Share of the way from the current reference to the target one, 0 → 1. */
+  part: number;
+  nom: Localized;
+  quoi: Localized;
+}
+
+export interface MscZoneDef {
+  code: ZoneCode;
+  /** Offset from the block's 10 km reference, in seconds per km. */
+  ecart_s: number;
+  icon: IconName;
+  label: Localized;
+  usage: Localized;
+}
+
+export interface MscObjectif {
+  id: number;
+  date: string;
+  semaine: number;
+  /** The one race the plan is built backwards from. */
+  principal: boolean;
+  nom: Localized;
+  cible: Localized;
+  role: Localized;
+}
+
+/** What a rule does once it fires. */
+export type MscEffet =
+  | { type: 'allure'; secondes: number; semaines?: number; zone?: ZoneCode }
+  | { type: 'coupe'; disciplines: string[] }
+  | { type: 'decharge' }
+  | { type: 'stop'; jours: number; sauf: string[] }
+  | { type: 'remplace'; par: TypeCode }
+  | { type: 'sacrifice'; ordre: string[] };
+
+/** The signals the rules watch, all of them already measured. */
+export type MscSignal =
+  | 'rpe_qualite'
+  | 'derive_longue'
+  | 'fc_repos_delta'
+  | 'sensation_dure'
+  | 'douleur_tendineuse'
+  | 'nuits_courtes'
+  | 'seance_sautee';
+
+export interface MscRegle {
+  code: string;
+  signal: MscSignal;
+  op: '>' | '>=' | '<=' | '<';
+  seuil: number;
+  /** How many consecutive days the signal must hold, where that matters. */
+  jours?: number;
+  gravite: 'ajuste' | 'allege' | 'stop';
+  si: Localized;
+  alors: Localized;
+  pourquoi: Localized;
+  effet: MscEffet;
+}
+
+export interface MscRpe {
+  de: number;
+  a: number;
+  label: Localized;
+  quoi: Localized;
+}
+
+/** A session as imported from the plan. */
+export interface MscPlanSession {
+  id: number;
+  semaine: number;
+  phase: string;
+  bloc: string;
+  date: string;
+  jour: Localized;
+  jour_long: string;
+  discipline: string;
+  type: TypeCode;
+  duree_min: number;
+  rpe_cible: number;
+  /** Planned load: duration × target RPE. */
+  charge: number;
+  zones: ZoneCode[];
+  titre: Localized;
+  titre_court: Localized;
+  meta: Localized;
+  detail: Localized;
+  distance_km?: number;
+  natation_m?: number;
+  /** Free-text pace instruction, where the session is run on effort not pace. */
+  consigne?: Localized;
+}
+
+/** A week's planned totals, as the workbook computes them. */
+export interface MscPlanWeek {
+  semaine: number;
+  phase: string;
+  bloc: string;
+  heures: number;
+  heures_course: number;
+  heures_hyrox: number;
+  heures_nage: number;
+  heures_velo: number;
+  km: number;
+  metres_nage: number;
+  charge: number;
 }

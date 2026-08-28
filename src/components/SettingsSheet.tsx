@@ -11,6 +11,7 @@ import type { App } from '../state/useApp';
 const SETTINGS_TITLE: Record<Lang, string> = { fr: 'Paramètres', pl: 'Ustawienia' };
 const LANG_LABEL: Record<Lang, string> = { fr: 'Langue', pl: 'Język' };
 const DB_LABEL: Record<Lang, string> = { fr: 'Base MSC · tables', pl: 'Baza MSC · tabele' };
+const DATE_LABEL: Record<Lang, string> = { fr: 'Jour du plan', pl: 'Dzień planu' };
 const LANGS: Lang[] = ['fr', 'pl'];
 
 export function SettingsSheet({ app }: { app: App }) {
@@ -147,6 +148,88 @@ export function SettingsSheet({ app }: { app: App }) {
               {l.toUpperCase()}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* where in the plan you are — the app opens on today, this walks it */}
+      <div
+        style={{
+          borderRadius: 12,
+          border: `1px solid ${C.border}`,
+          padding: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 9,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `1px solid ${C.border}`,
+            color: C.inkSecondary,
+            flexShrink: 0,
+          }}
+        >
+          <Icon name="calendar-days" size={18} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <label htmlFor="msc-date" style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>
+            {DATE_LABEL[lang]}
+          </label>
+          <div style={{ fontSize: 11, color: C.inkSecondary }}>
+            {`${lang === 'fr' ? 'Semaine' : 'Tydzień'} ${app.semaine} / ${db.derniereSemaine} · ${lang === 'fr' ? 'bloc' : 'blok'} ${db.blocDeSemaine(app.semaine).code}`}
+          </div>
+        </div>
+        <input
+          id="msc-date"
+          type="date"
+          value={app.date}
+          onChange={(e) => e.target.value && app.allerA(e.target.value)}
+          style={{
+            borderRadius: R.md,
+            border: `1px solid ${C.border}`,
+            background: C.surface,
+            color: C.ink,
+            padding: '8px 10px',
+            fontFamily: F.mono,
+            fontSize: 11,
+          }}
+        />
+      </div>
+
+      {/* the two references the whole plan slides between */}
+      <div
+        style={{
+          borderRadius: 12,
+          background: C.page,
+          border: `1px solid ${C.border}`,
+          padding: 14,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <SectionLabel icon="gauge" color={C.teal}>
+          {lang === 'fr' ? 'Références 10 km' : 'Odniesienia 10 km'}
+        </SectionLabel>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Mono size={13} color={C.ink}>
+            {db.format10k(db.athlete.ref_actuelle_s)}
+          </Mono>
+          <Icon name="arrow-right" size={14} color={C.accentDeep} />
+          <Mono size={13} color={C.accentDeep}>
+            {db.format10k(db.athlete.ref_cible_s)}
+          </Mono>
+        </div>
+        <div style={{ fontSize: 11, color: C.inkSecondary, lineHeight: 1.4 }}>
+          {lang === 'fr'
+            ? "Toutes les allures du plan sont calculées depuis ces deux nombres. Le test de 30' recale le premier."
+            : 'Wszystkie tempa planu liczone są z tych dwóch liczb. Test 30 min przelicza pierwszą.'}
         </div>
       </div>
 

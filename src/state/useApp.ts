@@ -2,12 +2,9 @@
    the analysis and the plan recalculation are the two async steps, everything
    else is a toggle. */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as db from '../data/db';
 import type { Lang, ScreenKey, TypeCode } from '../data/types';
-
-/** The session the day's screen is built around, and its week. */
-export const TODAY_ID = 303;
-export const WEEK = 3;
 
 const ANALYSE_MS = 1400;
 const RECALC_MS = 1500;
@@ -27,6 +24,12 @@ function storedLang(): Lang {
 
 export function useApp() {
   const [screen, setScreen] = useState<ScreenKey>('today');
+
+  /* Where the plan is. Defaults to the real date, clamped into the plan's
+     span; the settings sheet lets you move it to walk the thirty weeks. */
+  const [date, setDate] = useState(() => db.positionDuPlan(db.aujourdhuiISO()).date);
+  const semaine = useMemo(() => db.positionDuPlan(date).semaine, [date]);
+
   const [lang, setLangState] = useState<Lang>(storedLang);
   const [stravaOn, setStravaOn] = useState(false);
 
@@ -98,9 +101,14 @@ export function useApp() {
     setApplied((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
+  const allerA = useCallback((iso: string) => setDate(db.positionDuPlan(iso).date), []);
+
   return {
     screen,
     setScreen,
+    date,
+    semaine,
+    allerA,
     lang,
     setLang,
     stravaOn,

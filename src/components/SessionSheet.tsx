@@ -31,12 +31,11 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
   const type = db.type(session.type);
   const chat = CHAT[lang];
 
-  const paces = (session.zones ?? []).map((code) =>
-    db.mustOne('msc_zone', (r) => r.code === code && r.bloc === session.bloc),
-  );
-  const steps = db
-    .select('msc_session_step', (r) => r.session_id === session.id)
-    .sort((a, b) => a.ordre - b.ordre);
+  /* Paces are derived for the session's block, not stored on the session. */
+  const paces = session.zones.map((code) => ({
+    zone: db.zone(code),
+    valeur: db.allure(code, session.bloc),
+  }));
 
   return (
     <Sheet
@@ -57,13 +56,19 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
         trailing={<GainPill>{type.gain[lang]}</GainPill>}
       />
 
-      <IconLine icon="target">{type.why[lang]}</IconLine>
+      <IconLine icon="target">{session.detail[lang]}</IconLine>
+
+      {session.consigne && (
+        <IconLine icon="circle-check" iconColor={C.inkSecondary} color={C.inkMuted}>
+          {session.consigne[lang]}
+        </IconLine>
+      )}
 
       {paces.length > 0 && (
         <Grid cols={3} gap={10}>
-          {paces.map((z) => (
+          {paces.map(({ zone, valeur }) => (
             <div
-              key={z.code}
+              key={zone.code}
               style={{
                 borderRadius: 12,
                 border: `1px solid ${C.border}`,
@@ -74,34 +79,30 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.inkSecondary }}>
-                <Icon name={z.icon} size={13} />
-                <div style={{ fontSize: 10 }}>{z.label[lang]}</div>
+                <Icon name={zone.icon} size={13} />
+                <div style={{ fontSize: 10 }}>{zone.label[lang]}</div>
               </div>
               <Mono size={14} color={C.ink}>
-                {z.allure}
+                {valeur}
               </Mono>
             </div>
           ))}
         </Grid>
       )}
 
-      {steps.length > 0 && (
-        <Card background={C.page} padding={14} gap={9} style={{ borderRadius: 12, boxShadow: 'none' }}>
-          {steps.map((s) => (
-            <IconLine
-              key={s.ordre}
-              icon={s.icon}
-              iconSize={15}
-              lead={s.duree}
-              leadSize={11}
-              fontSize={13}
-              lineHeight={1.45}
-            >
-              {s.detail[lang]}
-            </IconLine>
-          ))}
-        </Card>
-      )}
+      <Card background={C.page} padding={14} gap={6} style={{ borderRadius: 12, boxShadow: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Mono size={11} color={C.inkQuiet}>
+            {`${session.duree_min} min × RPE ${session.rpe_cible}`}
+          </Mono>
+          <Mono size={14} color={C.ink}>
+            {`${lang === 'fr' ? 'charge' : 'obciążenie'} ${session.charge}`}
+          </Mono>
+        </div>
+        <Mono size={11} color={C.inkQuiet}>
+          {`${session.jour_long} ${session.date} · ${session.phase}`}
+        </Mono>
+      </Card>
 
       <ChatBar placeholder={chat.placeholder} />
 

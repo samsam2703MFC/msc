@@ -16,23 +16,32 @@ import {
   TypeSquare,
 } from '../components/primitives';
 import type { App } from '../state/useApp';
-import { WEEK } from '../state/useApp';
 
 export function CoachScreen({ app }: { app: App }) {
   const lang = app.lang;
   const ui = db.ui(lang);
 
-  const weekly = db.mustOne('msc_analyse', (r) => r.type === 'hebdo' && r.semaine === WEEK);
-  const ecart = db.mustOne('msc_ecart', (r) => r.semaine === WEEK);
+  const weekly = db.one('msc_analyse', (r) => r.type === 'hebdo' && r.semaine === app.semaine);
+  const ecart = db.one('msc_ecart', (r) => r.semaine === app.semaine);
   const excuses = db.select('msc_excuse');
   const picked = app.excuse ? db.mustOne('msc_excuse', (r) => r.code === app.excuse) : null;
-  const adjustments = db.select('msc_ajustement', (r) => r.analyse_id === weekly.id);
+  const adjustments = weekly ? db.select('msc_ajustement', (r) => r.analyse_id === weekly.id) : [];
+
+  /* The rules are evaluated, not narrated: these are the signals the app has
+     for the current week, and `evaluer` decides which rules fire. */
+  const signaux = {
+    rpe_qualite: app.rpe,
+    derive_longue: db.athlete.derive_reference_pct,
+    fc_repos_delta: 0,
+  };
+  const declenchees = db.evaluer(signaux);
+  const codesDeclenches = new Set(declenchees.map((r) => r.code));
 
   const recRunning = app.recalc === 'running';
   const recDone = app.recalc === 'done';
 
-  /* '2026-09-03' → '03/09' */
-  const stamp = `${weekly.date.slice(8)}/${weekly.date.slice(5, 7)} · ${weekly.modele}`;
+  /* '2026-10-18' → '18/10' */
+  const stamp = weekly ? `${weekly.date.slice(8)}/${weekly.date.slice(5, 7)} · ${weekly.modele}` : '—';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -113,8 +122,10 @@ export function CoachScreen({ app }: { app: App }) {
         )}
       </Card>
 
+      <ReglesCard app={app} declenchees={codesDeclenches} />
+
       {/* the gap — recalculated, never made up for */}
-      <div
+      {ecart && <div
         style={{
           borderRadius: R.card,
           background: C.warningBg,
@@ -146,9 +157,9 @@ export function CoachScreen({ app }: { app: App }) {
           active={recRunning || recDone}
           onClick={app.runRecalc}
         />
-      </div>
+      </div>}
 
-      {recDone && (
+      {recDone && ecart && (
         <Card featured padding="16px 18px" gap={10}>
           {ecart.recalcul.map((r) => (
             <IconLine
@@ -168,7 +179,7 @@ export function CoachScreen({ app }: { app: App }) {
       )}
 
       {/* the weekly verdict */}
-      <Card gap={10}>
+      {weekly && <Card gap={10}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <SectionLabel icon="message-square-quote" color={C.teal}>
             {ui.verdictLabel}
@@ -180,10 +191,10 @@ export function CoachScreen({ app }: { app: App }) {
         <div style={{ fontSize: 14, lineHeight: 1.5, color: C.inkBody }}>
           {weekly.verdict[lang]}
         </div>
-      </Card>
+      </Card>}
 
       <Grid cols={2} gap={10}>
-        {(weekly.blocs ?? []).map((b) => (
+        {(weekly?.blocs ?? []).map((b) => (
           <Card key={b.icon} padding={14} gap={8}>
             <Icon name={b.icon} size={18} color={b.couleur} />
             {b.items[lang].map((item) => (
@@ -249,6 +260,64 @@ export function CoachScreen({ app }: { app: App }) {
 
       <ChatBar placeholder={ui.askPlaceholder} />
     </div>
+  );
+}
+
+/** The adjustment rules, and which of them the week's signals currently fire.
+    This is the mechanic itself: each rule names a signal and a threshold, so
+    the app evaluates them rather than reciting them. */
+function ReglesCard({ app, declenchees }: { app: App; declenchees: ReadonlySet<string> }) {
+  const lang = app.lang;
+  const gravites: Record<string, string> = {
+    stop: C.negative,
+    allege: C.warning,
+    ajuste: C.accentDeep,
+  };
+  return (
+    <Card padding="16px 18px" gap={10}>
+      <SectionLabel icon="scale">
+        {lang === 'fr' ? "Règles d'ajustement" : 'Reguły dostosowania'}
+      </SectionLabel>
+      {db.select('msc_regle').map((r) => {
+        const on = declenchees.has(r.code);
+        return (
+          <div
+            key={r.code}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              padding: '10px 12px',
+              borderRadius: 10,
+              border: `1px solid ${on ? C.accent : C.border}`,
+              background: on ? C.accentSoft : 'transparent',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: gravites[r.gravite],
+                  flexShrink: 0,
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: C.ink }}>
+                {r.si[lang]}
+              </div>
+              {on && <Icon name="circle-check" size={14} color={C.accentDeep} />}
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.4, color: C.inkBody, paddingLeft: 14 }}>
+              {r.alors[lang]}
+            </div>
+            <div style={{ fontSize: 11, lineHeight: 1.4, color: C.inkQuiet, paddingLeft: 14 }}>
+              {r.pourquoi[lang]}
+            </div>
+          </div>
+        );
+      })}
+    </Card>
   );
 }
 

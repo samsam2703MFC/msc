@@ -1,0 +1,244 @@
+/* The training mechanic.
+
+   Nothing in the plan stores a pace. The engine derives every pace from two
+   numbers on the athlete — the current 10 km reference and the target one —
+   and slides them block by block. Change `ref_actuelle_s` (which is what the
+   week-5 time trial does) and all thirty weeks recalibrate.
+
+       référence(bloc) = actuelle − (actuelle − cible) × part(bloc)
+       allure(zone, bloc) = référence(bloc) + écart(zone)
+
+   Load is Foster's session-RPE, the workbook's own metric:
+
+       charge = durée (min) × RPE
+
+   The adjustment rules are data, not prose: each names the signal it watches
+   and the threshold that fires it, so `evaluer` can run them. */
+
+import { msc_athlete, msc_bloc, msc_regle, msc_zone } from './reference';
+import { msc_session, msc_week } from './plan.generated';
+import type {
+  MscAthlete,
+  MscBloc,
+  MscPlanSession,
+  MscPlanWeek,
+  MscRegle,
+  MscSignal,
+  MscZoneDef,
+  ZoneCode,
+} from './types';
+
+export const athlete: MscAthlete = msc_athlete[0];
+
+/* ------------------------------------------------------------------ allures */
+
+/** mm:ss from a number of seconds per km.
+
+    Fractional seconds are truncated, not rounded, so the paces match the
+    workbook the athlete already has — block C interpolates to x.6 s/km and the
+    spreadsheet displays 5:44, not 5:45. */
+export function formatAllure(secondes: number): string {
+  const s = Math.floor(secondes);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}/km`;
+}
+
+/** mm:ss for a 10 km at this pace — how the workbook states each block. */
+export function format10k(secondesParKm: number): string {
+  const total = Math.floor(secondesParKm * 10);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+export function bloc(code: string): MscBloc {
+  const found = msc_bloc.find((b) => b.code === code);
+  if (!found) throw new Error(`msc_bloc: unknown block "${code}"`);
+  return found;
+}
+
+export function blocDeSemaine(semaine: number): MscBloc {
+  const week = Math.max(semaine, 1);
+  return msc_bloc.find((b) => week >= b.de && week <= b.a) ?? msc_bloc[0];
+}
+
+/** The block's 10 km reference pace, in seconds per km. */
+export function reference(blocCode: string, who: MscAthlete = athlete): number {
+  const b = bloc(blocCode);
+  return who.ref_actuelle_s - (who.ref_actuelle_s - who.ref_cible_s) * b.part;
+}
+
+export function zone(code: ZoneCode): MscZoneDef {
+  const found = msc_zone.find((z) => z.code === code);
+  if (!found) throw new Error(`msc_zone: unknown zone "${code}"`);
+  return found;
+}
+
+/** The training pace for a zone in a block, in seconds per km. */
+export function allureSecondes(
+  zoneCode: ZoneCode,
+  blocCode: string,
+  who: MscAthlete = athlete,
+): number {
+  return reference(blocCode, who) + zone(zoneCode).ecart_s;
+}
+
+export function allure(
+  zoneCode: ZoneCode,
+  blocCode: string,
+  who: MscAthlete = athlete,
+): string {
+  return formatAllure(allureSecondes(zoneCode, blocCode, who));
+}
+
+/** Every zone for a block — the Allures sheet, one column of it. */
+export function grilleAllures(blocCode: string, who: MscAthlete = athlete) {
+  return msc_zone.map((z) => ({
+    zone: z,
+    secondes: allureSecondes(z.code, blocCode, who),
+    allure: allure(z.code, blocCode, who),
+  }));
+}
+
+/* -------------------------------------------------------------------- plan */
+
+export function sessionsDeSemaine(semaine: number): MscPlanSession[] {
+  return msc_session.filter((s) => s.semaine === semaine);
+}
+
+export function sessionDuJour(date: string): MscPlanSession | undefined {
+  /* Several sessions can share a day (swim in the morning, bike at night);
+     the one that carries the day is the longest. */
+  const jour = msc_session.filter((s) => s.date === date);
+  return jour.sort((a, b) => b.duree_min - a.duree_min)[0];
+}
+
+/** Where the plan is on a given date, clamped to its first and last day. */
+export function positionDuPlan(date: string): { date: string; semaine: number } {
+  const first = msc_session[0];
+  const last = msc_session[msc_session.length - 1];
+  if (date < first.date) return { date: first.date, semaine: first.semaine };
+  if (date > last.date) return { date: last.date, semaine: last.semaine };
+  const exact = msc_session.find((s) => s.date === date);
+  if (exact) return { date, semaine: exact.semaine };
+  /* A gap day — fall through to the next session in the plan. */
+  const next = msc_session.find((s) => s.date > date) ?? last;
+  return { date: next.date, semaine: next.semaine };
+}
+
+export function semaine(n: number): MscPlanWeek | undefined {
+  return msc_week.find((w) => w.semaine === n);
+}
+
+export const premiereSemaine = msc_week[0]?.semaine ?? 0;
+export const derniereSemaine = msc_week[msc_week.length - 1]?.semaine ?? 0;
+
+/* ------------------------------------------------------------------- charge */
+
+/** Foster's session-RPE. Read week over week, never in absolute. */
+export function charge(dureeMin: number, rpe: number): number {
+  return Math.round(dureeMin * rpe);
+}
+
+export interface Realise {
+  session_id: number;
+  duree_min: number;
+  rpe: number;
+}
+
+/** Planned versus done for a week, in the shape the Semaine screen reads. */
+export function bilanSemaine(n: number, realise: Realise[] = []) {
+  const plan = sessionsDeSemaine(n);
+  const faites = new Set(realise.map((r) => r.session_id));
+  const done = plan.filter((s) => faites.has(s.id));
+  const sum = (rows: MscPlanSession[], pick: (s: MscPlanSession) => number) =>
+    rows.reduce((total, s) => total + pick(s), 0);
+
+  return {
+    semaine: n,
+    prevu: {
+      minutes: sum(plan, (s) => s.duree_min),
+      km: sum(plan, (s) => s.distance_km ?? 0),
+      metres: sum(plan, (s) => s.natation_m ?? 0),
+      charge: sum(plan, (s) => s.charge),
+    },
+    realise: {
+      minutes: sum(done, (s) => s.duree_min),
+      km: sum(done, (s) => s.distance_km ?? 0),
+      metres: sum(done, (s) => s.natation_m ?? 0),
+      charge: realise.reduce((total, r) => total + charge(r.duree_min, r.rpe), 0),
+    },
+    seances: { prevu: plan.length, realise: done.length },
+  };
+}
+
+/** Acute (7 day) over chronic (28 day) load. Above 1.5 is the alarm. */
+export function acwr(chargesParJour: number[]): number | null {
+  if (chargesParJour.length < 28) return null;
+  const tail = (n: number) => chargesParJour.slice(-n);
+  const moyenne = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const chronique = moyenne(tail(28)) * 7;
+  if (chronique === 0) return null;
+  return (moyenne(tail(7)) * 7) / chronique;
+}
+
+/* ------------------------------------------------------------------- règles */
+
+/** What the athlete's week actually looked like, in the terms the rules use. */
+export type Signaux = Partial<Record<MscSignal, number>>;
+
+function franchi(regle: MscRegle, valeur: number): boolean {
+  switch (regle.op) {
+    case '>':
+      return valeur > regle.seuil;
+    case '>=':
+      return valeur >= regle.seuil;
+    case '<=':
+      return valeur <= regle.seuil;
+    case '<':
+      return valeur < regle.seuil;
+  }
+}
+
+/** The rules that fire, worst first — stop before lighten before adjust. */
+export function evaluer(signaux: Signaux): MscRegle[] {
+  const ordre = { stop: 0, allege: 1, ajuste: 2 };
+  return msc_regle
+    .filter((r) => {
+      const valeur = signaux[r.signal];
+      return valeur !== undefined && franchi(r, valeur);
+    })
+    .sort((a, b) => ordre[a.gravite] - ordre[b.gravite]);
+}
+
+/** The pace a session should be run at once the fired rules are applied. */
+export function allureCorrigee(
+  zoneCode: ZoneCode,
+  blocCode: string,
+  regles: MscRegle[],
+  who: MscAthlete = athlete,
+): string {
+  const base = allureSecondes(zoneCode, blocCode, who);
+  const delta = regles.reduce((total, r) => {
+    if (r.effet.type !== 'allure') return total;
+    if (r.effet.zone && r.effet.zone !== zoneCode) return total;
+    return total + r.effet.secondes;
+  }, 0);
+  return formatAllure(base + delta);
+}
+
+/* ------------------------------------------------------------------ statuts */
+
+/** A session's state is derived, not stored: done, today, rest, or ahead. */
+export function statutDe(
+  session: MscPlanSession,
+  aujourdhui: string,
+  faites: ReadonlySet<number>,
+): 'repos' | 'fait' | 'aujourdhui' | 'prevu' {
+  if (faites.has(session.id)) return 'fait';
+  if (session.type === 'repos') return 'repos';
+  if (session.date === aujourdhui) return 'aujourdhui';
+  return 'prevu';
+}
+
+/** Today, as an ISO date. Split out so a fixed date can be substituted. */
+export function aujourdhuiISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}

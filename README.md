@@ -35,23 +35,86 @@ src/
   screens/    one file per tab
 ```
 
-**The database is the point.** No screen holds data of its own: paces are
-selected out of `msc_zone` for the session's block, labels out of `msc_ui`,
-statuses out of `msc_statut`. Screens go through `src/data/db.ts` (`select`,
-`one`, `mustOne`, `type`, `ui`) and never import `tables.ts` directly — that
-module is the seam a real backend replaces, and it is the only file that has to
-change when it does.
+**The database is the point.** No screen holds data of its own — and no screen
+holds a pace, because paces are computed. Screens go through `src/data/db.ts`
+(`select`, `one`, `mustOne`, `type`, `ui`, plus the engine) and never import the
+table modules directly.
 
-The tables were ported one-for-one from the handoff's `msc-db.js`, comments
-included, and typed in `src/data/types.ts`.
+## The training mechanic
+
+The plan is not a list of sessions with paces written on them. It is 243
+sessions plus **two numbers**, and every pace is derived from those two.
+
+```
+référence(bloc) = actuelle − (actuelle − cible) × part(bloc)
+allure(zone, bloc) = référence(bloc) + écart(zone)
+charge = durée (min) × RPE                     ← Foster's session-RPE
+```
+
+**The two references** live on `msc_athlete`: the current 10 km pace
+(`ref_actuelle_s`, 312 s/km = 52:00) and the target (`ref_cible_s`, 216 s/km =
+36:00). **The four blocks** (`msc_bloc`) each carry a `part` — how far along the
+way from one to the other they sit: A 0 · B 0,28 · C 0,65 · D 1,0. **The eight
+zones** (`msc_zone`) are offsets in seconds per km from the block's 10 km
+reference: Récup +95, EF +75, End. active +55, Marathon +30, Semi +14, Seuil +10,
+10 km 0, VMA −10.
+
+That is the whole pace engine. It means the week-5 time trial recalibrates all
+thirty weeks by rewriting one field: change `ref_actuelle_s` and every session in
+the plan slides with it.
+
+`npm run check:engine` verifies the engine against the workbook cell for cell —
+all 32 paces of the "Allures" sheet, the four block references, and the load
+formula.
+
+**The adjustment rules** (`msc_regle`) are data, not prose. Each names the signal
+it watches, the comparator and the threshold that fires it, and the effect —
+so `evaluer(signaux)` runs them instead of a human reading them off a page:
+
+| Si | Alors | Gravité |
+|---|---|---|
+| RPE du mercredi > 8 | −10 s/km sur la séance suivante | ajuste |
+| RPE du mercredi ≤ 6 | +5 s/km | ajuste |
+| Dérive cardiaque > 8 % sur la longue | endurance −15 s/km pendant 2 semaines | ajuste |
+| FC repos +5 bpm sur 3 jours | semaine allégée, on coupe vélo et Hyrox n°2 | allège |
+| Sensation « dur » 2 semaines de suite | décharge anticipée | allège |
+| Douleur tendineuse 2 jours de suite | STOP course 5 jours | stop |
+| Deux nuits courtes | la qualité devient un footing | ajuste |
+| Une séance saute | jamais rattrapée — sacrifice : vélo, Hyrox n°2, nage | ajuste |
+
+Fired rules are shown live on the Coach screen; the block's full pace grid is on
+the Semaine screen; the two references are in the settings sheet.
+
+## Reference data
+
+`reference/Plan30semainessemi10kmhyroxnatation.xlsx` is the source of truth and
+is committed. `python3 scripts/import_plan.py` regenerates
+`src/data/plan.generated.ts` from it — 243 sessions across 30 weeks, with their
+phase, block, discipline, type, duration, target RPE, planned load, zones and
+the full session prose.
+
+Everything the workbook computes, the app now computes: the four block
+references (52:00 → 47:31 → 41:36 → 36:00), the eight zones per block, the
+planned load per session and per week. Fractional seconds are truncated rather
+than rounded, because that is what the spreadsheet displays — without it block C
+comes out 1 s/km fast on every zone.
+
+The four races are in `msc_objectif`: semi 22/11/2026 (1h45–1h52), 10 km
+29/11/2026 (46–48), 10 km 14/02/2027 (40–42), and the objective, 10 km
+21/03/2027 (36:00–36:30).
 
 | Filled how | Tables |
 |---|---|
 | by the Strava webhook | `msc_activity`, `msc_daily` |
+| computed by the engine | paces, per-session and per-week load, week totals, session status |
 | computed on the backend | `msc_metric` |
 | returned by the Anthropic API | `msc_analyse`, `msc_adaptation`, `msc_ajustement` |
-| loaded once | `msc_session`, `msc_zone`, `msc_type` |
+| imported from the workbook | `msc_session`, `msc_week` |
+| set once, per athlete | `msc_athlete`, `msc_bloc`, `msc_zone`, `msc_objectif`, `msc_regle` |
 | by hand, each day | `msc_journal` (RPE + note, on the Aujourd'hui screen) |
+
+The app resolves "today" from the real date, clamped into the plan's span. The
+settings sheet carries a date control so you can walk the thirty weeks.
 
 ## What is simulated
 
@@ -67,10 +130,16 @@ buttons work, the states change — but nothing leaves the device:
 - The two chat bars (Coach, and the one on each session) render but have no send
   handler yet.
 
-Still open from the design conversation, and deliberately not invented here: the
-import of `Plan30semainessemi10kmhyroxnatation.xlsx` (the ~245 `msc_session`
-rows — the app currently carries the week-3 sample), and the "Données" admin
-screen for filling the tables by hand.
+The seeded `msc_analyse` / `msc_adaptation` / `msc_ajustement` rows are an
+example of what the API writes back. They are anchored on session 1052 — the
+plan's first quality session, semaine 7, "CAP · Seuil — 5 × 3'" — and their
+figures follow the worked example in the workbook's "Suivi & ajustement" sheet.
+
+Still open: the admin screen for creating an athlete and their objectives (today
+`msc_athlete` and `msc_objectif` are seeded from the workbook, not editable in
+the app), and generating a plan for a *new* athlete — the engine computes paces,
+load and adjustments from a plan, but the 243 sessions themselves still come from
+the workbook rather than from a generator.
 
 ## Deviations from the prototype
 
@@ -87,6 +156,10 @@ rather than the intent:
    and focus rings, rather than divs with click handlers.
 4. **`circle-help` is aliased to `circle-question-mark`** — Lucide renamed the
    glyph after the design was made. Same icon.
+
+The prototype's `msc_zone` also had the block-A threshold pace at 5:12, which is
+in fact the 10 km reference pace; the workbook puts the threshold at 5:22. The
+engine follows the workbook.
 
 The language choice persists to `localStorage`; the RPE and the note do not,
 because they belong in `msc_journal` on a backend rather than in this device's
