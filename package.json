@@ -8,12 +8,16 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "check:engine": "npx esbuild scripts/check-engine.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-engine.mjs --log-level=error && node node_modules/.tmp/check-engine.mjs"
+    "check:engine": "npx esbuild scripts/check-engine.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-engine.mjs --log-level=error && node node_modules/.tmp/check-engine.mjs",
+    "server": "node server/index.mjs",
+    "check:plan": "npx esbuild scripts/check-generateur.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-plan.mjs --log-level=error && node node_modules/.tmp/check-plan.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
     "lucide-react": "^0.549.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

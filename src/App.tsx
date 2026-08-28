@@ -10,18 +10,20 @@ import { IOSDevice } from './components/IOSDevice';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TypeSheet } from './components/TypeSheet';
+import { AdminScreen } from './screens/AdminScreen';
 import { CoachScreen } from './screens/CoachScreen';
 import { FormScreen } from './screens/FormScreen';
 import { TodayScreen } from './screens/TodayScreen';
 import { WeekScreen } from './screens/WeekScreen';
 import { useApp } from './state/useApp';
 
-const ORDER: ScreenKey[] = ['today', 'week', 'form', 'coach'];
+const ORDER: ScreenKey[] = ['today', 'week', 'form', 'coach', 'admin'];
 const TAB_ICONS: Record<ScreenKey, string> = {
   today: 'sun',
   week: 'calendar-days',
   form: 'heart-pulse',
   coach: 'bot',
+  admin: 'plus',
 };
 
 const MOIS_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
@@ -42,6 +44,8 @@ function eyebrow(app: ReturnType<typeof useApp>): string {
       return fr ? '28 jours' : '28 dni';
     case 'coach':
       return `${fr ? 'Hebdo' : 'Tygodniowa'} · ${s}${app.semaine}`;
+    case 'admin':
+      return fr ? 'Athlète · objectifs' : 'Zawodnik · cele';
   }
 }
 
@@ -71,6 +75,8 @@ function Screen({ app }: { app: ReturnType<typeof useApp> }) {
       return <FormScreen lang={app.lang} />;
     case 'coach':
       return <CoachScreen app={app} />;
+    case 'admin':
+      return <AdminScreen app={app} />;
   }
 }
 
@@ -174,7 +180,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
         style={{
           flexShrink: 0,
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: `repeat(${ORDER.length}, 1fr)`,
           gap: 4,
           padding: framed
             ? '10px 12px 34px'

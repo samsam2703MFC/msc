@@ -1,0 +1,109 @@
+/* Generates a plan for Sam's own inputs and checks it against the rules and
+   against the reference workbook's shape. */
+import { genererPlan, verifierEcartQualite } from '../src/data/generateur';
+import type { Contraintes, Objectif, ProfilAthlete } from '../src/data/generateur';
+import { msc_week as REF } from '../src/data/plan.generated';
+import { msc_objectif as OBJECTIFS } from '../src/data/reference';
+
+const athlete: ProfilAthlete = {
+  nom: 'Sam',
+  ref_actuelle_s: 312,
+  ref_cible_s: 216,
+  debut: '2026-08-31',
+};
+
+/* The objectives as the database holds them, so the check exercises the same
+   inputs the app does. */
+const objectifs: Objectif[] = OBJECTIFS.map((o) => ({
+  date: o.date,
+  nom: o.nom.fr,
+  cible_s: o.cible_s,
+  cible_haute_s: o.cible_haute_s,
+  distance_km: o.distance_km,
+  principal: o.principal,
+}));
+
+const contraintes: Contraintes = {
+  plancher_heures: 8,
+  plancher_km_sortie: 10,
+  reamorcage_semaines: 6,
+  natation: true,
+  velo: true,
+  salle: true,
+  montagne_toutes_les: 3,
+};
+
+const plan = genererPlan(athlete, objectifs, contraintes);
+let fails = 0;
+const check = (nom: string, ok: boolean, detail = '') => {
+  if (!ok) fails++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'}  ${nom}${detail ? '  — ' + detail : ''}`);
+};
+
+console.log('=== blocs ===');
+for (const b of plan.blocs) {
+  const ref = 312 - (312 - 216) * b.part;
+  console.log(
+    `  ${b.code}  S${b.de}–S${b.a}  part ${b.part.toFixed(3)}  réf ${Math.floor(ref * 10 / 60)}:${String(Math.floor(ref * 10) % 60).padStart(2, '0')}  ${b.nom.fr}`,
+  );
+}
+
+console.log('\n=== volume hebdo (généré vs référence) ===');
+for (const w of plan.semaines) {
+  const r = REF.find((x) => x.semaine === w.semaine);
+  console.log(
+    String(w.semaine).padStart(2), w.bloc,
+    (w.heures.toFixed(1) + 'h').padStart(6),
+    '  réf ' + ((r?.heures ?? 0).toFixed(1) + 'h').padStart(6),
+    '  ' + '█'.repeat(Math.round(w.heures)),
+  );
+}
+
+console.log('\n=== contrôles ===');
+const semainesDeCourse = new Set(
+  objectifs.map((o) => plan.sessions.find((s) => s.date === o.date)?.semaine),
+);
+const horsCourse = plan.semaines.filter((w) => !semainesDeCourse.has(w.semaine) && w.semaine > 6);
+check('plancher de 8h tenu hors semaines de course',
+  horsCourse.every((w) => w.heures >= 7.9),
+  horsCourse.filter((w) => w.heures < 7.9).map((w) => `S${w.semaine}=${w.heures}h`).join(' '));
+
+const courses = plan.sessions.filter((s) => s.type === 'course');
+check('les 4 courses sont dans le plan', courses.length === 4,
+  courses.map((c) => `${c.date}`).join(' '));
+
+check('la dernière semaine finit sur l’objectif',
+  plan.sessions.some((s) => s.date === '2027-03-21' && s.type === 'course'));
+
+const ecarts = verifierEcartQualite(plan.sessions);
+check('aucune séance dure à moins de 48 h', ecarts.length === 0, ecarts.slice(0, 3).join(' | '));
+
+const courses10 = plan.sessions.filter(
+  (s) => s.discipline === 'Course à pied' && s.distance_km !== undefined,
+);
+check('plancher de 10 km par sortie tenu',
+  courses10.every((s) => (s.distance_km ?? 0) >= 9.9),
+  courses10.filter((s) => (s.distance_km ?? 0) < 9.9).slice(0, 3).map((s) => `${s.date}:${s.distance_km}km`).join(' '));
+
+const qualite = plan.sessions.filter((s) => ['seuil', 'allure10', 'vma'].includes(s.type));
+check('aucune qualité avant la fin du réamorçage',
+  qualite.every((s) => s.semaine > 6),
+  `première: S${qualite[0]?.semaine}`);
+
+console.log('\n=== références de bloc : généré vs classeur ===');
+const CLASSEUR: Record<string, string> = { A: '52:00', B: '47:31', C: '41:36', D: '36:00' };
+plan.blocs.forEach((b, i) => {
+  const ref = 312 - (312 - 216) * b.part;
+  const t = Math.floor(ref * 10);
+  const gen = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  const attendu = CLASSEUR[Object.keys(CLASSEUR)[i]] ?? '—';
+  console.log(`  bloc ${i + 1}  généré ${gen}   classeur ${attendu}`);
+});
+
+console.log(`\n${plan.sessions.length} séances · ${plan.semaines.length} semaines · ${plan.blocs.length} blocs`);
+if (plan.avertissements.length) {
+  console.log('\navertissements:');
+  for (const a of plan.avertissements) console.log('  -', a);
+}
+console.log(fails === 0 ? '\nOK' : `\n${fails} ÉCHECS`);
+process.exit(fails === 0 ? 0 : 1);

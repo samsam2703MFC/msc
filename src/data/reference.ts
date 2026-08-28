@@ -84,16 +84,16 @@ export const msc_zone: MscZoneDef[] = [
 /* --------------------------------------------------------------- objectifs */
 
 export const msc_objectif: MscObjectif[] = [
-  { id: 1, date: '2026-11-22', semaine: 12, principal: false,
+  { id: 1, date: '2026-11-22', semaine: 12, principal: false, distance_km: 21.1, cible_s: 6300, cible_haute_s: 6720,
     nom: l('Semi-marathon'), cible: l('1h45 à 1h52'),
     role: l("Course d'allure et repère. À la référence du bloc B, le semi se court vers 5:00/km.") },
-  { id: 2, date: '2026-11-29', semaine: 13, principal: false,
+  { id: 2, date: '2026-11-29', semaine: 13, principal: false, distance_km: 10, cible_s: 2760, cible_haute_s: 2880,
     nom: l('10 km n°1'), cible: l('46 à 48 min'),
     role: l('Reconnaissance.') },
-  { id: 3, date: '2027-02-14', semaine: 24, principal: false,
+  { id: 3, date: '2027-02-14', semaine: 24, principal: false, distance_km: 10, cible_s: 2400, cible_haute_s: 2520,
     nom: l('10 km n°2'), cible: l('40 à 42 min'),
     role: l("Juge de paix : sous 40 min ici, 36:30 en mars tient.") },
-  { id: 4, date: '2027-03-21', semaine: 29, principal: true,
+  { id: 4, date: '2027-03-21', semaine: 29, principal: true, distance_km: 10, cible_s: 2160, cible_haute_s: 2190,
     nom: l('10 km n°3'), cible: l('36:00 à 36:30'),
     role: l("L'objectif. Seize minutes gagnées en trente semaines : une reconstruction, pas une progression.") },
 ];

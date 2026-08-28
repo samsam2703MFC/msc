@@ -18,6 +18,10 @@ npm run dev        # dev server
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the build
 npm run typecheck
+npm run server     # the plan server — needs ANTHROPIC_API_KEY, see .env.example
+
+npm run check:engine   # paces against the workbook, cell for cell
+npm run check:plan     # the generator against its own rules
 ```
 
 On a desktop viewport the app renders inside an iPhone frame, the way the design
@@ -85,6 +89,72 @@ so `evaluer(signaux)` runs them instead of a human reading them off a page:
 Fired rules are shown live on the Coach screen; the block's full pace grid is on
 the Semaine screen; the two references are in the settings sheet.
 
+## Generating a plan for a new athlete
+
+The workbook plan is one athlete's. The **Créer** screen encodes a profile —
+name, the two 10 km references, the start date — plus objectives and
+constraints, and builds a plan from them. `src/data/generateur.ts` does it, in
+one pure function, with no network:
+
+```
+périodisation inverse   the plan is counted back from the main objective's date;
+                        each intermediate race closes a block
+référence de bloc       a block's 10 km reference is the target of the race that
+                        ends it, converted to a 10 km equivalent by Riegel
+                        (T2 = T1 × (D2/D1)^1.06) — a half-marathon pace is not a
+                        10 km pace, and treating it as one makes the block far
+                        too easy
+                        checkpoints use the middle of their target range; the
+                        main objective uses the fast end
+volume                  +6 %/semaine inside a block, ×0,80 every fourth week,
+                        ×0,55 on a race week, never below the athlete's floor
+                        except on race weeks
+qualité                 one quality run a week, never within 48 h of another hard
+                        run; the long run sits three days after it, and the day
+                        before a race is rest
+planchers               the weekly hours floor and the per-run km floor both hold
+```
+
+`npm run check:plan` generates the plan for the workbook's own athlete and
+asserts the rules hold. It also prints the block references it derives against
+the ones the workbook hand-set:
+
+| Bloc | Généré | Classeur |
+|---|---|---|
+| A | 52:00 | 52:00 |
+| B | 47:00 | 47:31 |
+| C | 41:00 | 41:36 |
+| D | 36:00 | 36:00 |
+
+Within 36 seconds on a 10 km, from the race targets alone — the periodisation
+model reproduces the workbook rather than approximating it.
+
+Anything the generator has to bend is surfaced, not swallowed: a block too short
+to train is folded into the one before it, and the screen shows what happened.
+
+## The methodology service
+
+The generator produces the skeleton — dates, blocks, volumes, placement. What
+each session actually *is* comes from Claude, through `server/methode.mjs`:
+
+1. **recherche** — `claude-opus-5` with adaptive thinking and the web search
+   tool, reading current endurance-training guidance for this athlete's shape of
+   problem, and citing what it used.
+2. **synthèse** — the same model with a Zod-validated output format, turning the
+   brief into the strict object the generator consumes.
+
+The split matters: **Claude never sets a pace, a volume or a date.** It is given
+the computed zones and writes prescriptions against them by zone name. Everything
+numeric stays in the deterministic half, where `check:engine` and `check:plan`
+can assert it.
+
+> **The API key never reaches the browser.** A key in a PWA bundle is a key
+> anyone can read and spend, so it lives in `server/`, and the app calls that.
+> Copy `.env.example`, set `ANTHROPIC_API_KEY`, then `npm run server` alongside
+> `npm run dev` — Vite proxies `/api` to it. Without a key the server answers
+> 401 with what to do about it, and the rest of the app is unaffected: the plan
+> still generates, because generating it needs nothing.
+
 ## Reference data
 
 `reference/Plan30semainessemi10kmhyroxnatation.xlsx` is the source of truth and
@@ -135,11 +205,15 @@ example of what the API writes back. They are anchored on session 1052 — the
 plan's first quality session, semaine 7, "CAP · Seuil — 5 × 3'" — and their
 figures follow the worked example in the workbook's "Suivi & ajustement" sheet.
 
-Still open: the admin screen for creating an athlete and their objectives (today
-`msc_athlete` and `msc_objectif` are seeded from the workbook, not editable in
-the app), and generating a plan for a *new* athlete — the engine computes paces,
-load and adjustments from a plan, but the 243 sessions themselves still come from
-the workbook rather than from a generator.
+Still open: the generated plan is previewed on the Créer screen but not yet
+persisted — the rest of the app still reads the imported workbook plan. Wiring
+"generate" through to `msc_session` is the next step, and it needs a decision
+about what happens to the journal and analyses attached to the plan being
+replaced.
+
+The methodology call has been written against the documented API surface but not
+executed end to end here — this environment has no Anthropic credential, so the
+401 path is tested and the success path is not.
 
 ## Deviations from the prototype
 

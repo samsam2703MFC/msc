@@ -227,7 +227,7 @@ export interface MscExcuse {
   remplacement: Localized;
 }
 
-export type ScreenKey = 'today' | 'week' | 'form' | 'coach';
+export type ScreenKey = 'today' | 'week' | 'form' | 'coach' | 'admin';
 
 export interface MscUiStrings {
   screens: Record<ScreenKey, string>;
@@ -309,6 +309,15 @@ export interface MscObjectif {
   semaine: number;
   /** The one race the plan is built backwards from. */
   principal: boolean;
+  /** Race distance in km — a target is only comparable to the plan's 10 km
+      reference once converted, which needs the distance it was run over. */
+  distance_km: number;
+  /** The fast end of the target range, in seconds. */
+  cible_s: number;
+  /** The slow end. Intermediate races are checkpoints, so the generator takes
+      the middle of the range for them; the main objective is the goal, so it
+      takes the fast end. `cible` carries the range as the athlete reads it. */
+  cible_haute_s: number;
   nom: Localized;
   cible: Localized;
   role: Localized;

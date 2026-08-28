@@ -3,6 +3,15 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  /* The plan server holds the Anthropic key; the browser never sees it. */
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.PLAN_SERVER ?? 'http://localhost:8787',
+        changeOrigin: true,
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
