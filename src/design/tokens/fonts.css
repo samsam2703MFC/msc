@@ -1,0 +1,13 @@
+/* ============================================================
+   FONTS — Franchise Generation
+   Display : Archivo (titres, monogramme typographique)
+   Body    : Inter   (texte courant, UI)
+   Mono    : JetBrains Mono (chiffres KPI, data)
+   ------------------------------------------------------------
+   NOTE: served from Google Fonts CDN. The franchise-generation-portal.css
+   referenced these three families by name only — no binaries were provided —
+   so they are loaded from Google Fonts here. Swap for self-hosted .woff2 if
+   you need offline / fully-branded delivery.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');

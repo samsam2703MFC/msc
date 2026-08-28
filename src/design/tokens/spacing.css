@@ -1,0 +1,33 @@
+/* ============================================================
+   SPACING, RADIUS, SHADOW, MOTION — Franchise Generation
+   ============================================================ */
+
+:root {
+
+  /* ---- Espacement (échelle issue de la portal CSS) ---- */
+  --space-1: 0.5rem;   /*  8px */
+  --space-2: 1rem;     /* 16px */
+  --space-3: 1.5rem;   /* 24px */
+  --space-4: 2.5rem;   /* 40px */
+  --space-5: 4rem;     /* 64px */
+
+  /* ---- Rayons ---- */
+  --radius-sm:   6px;   /* badges, petits champs */
+  --radius-md:   10px;  /* boutons, inputs */
+  --radius-lg:   16px;  /* cartes */
+  --radius-full: 999px; /* pastilles, pills, progress */
+
+  /* ---- Ombres (teintées navy, jamais noir pur) ---- */
+  --shadow-card:  0 1px 3px rgba(10, 28, 51, 0.07);
+  --shadow-md:    0 4px 14px rgba(10, 28, 51, 0.08);
+  --shadow-lg:    0 12px 32px rgba(10, 28, 51, 0.12);
+  --shadow-focus: 0 0 0 3px rgba(2, 156, 208, 0.25);
+
+  /* ---- Bordures ---- */
+  --border-width: 1px;
+
+  /* ---- Mouvement ---- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* @kind other */
+  --dur-fast: 0.15s; /* @kind other */
+  --dur-base: 0.25s; /* @kind other */
+}

@@ -1,0 +1,38 @@
+/* ============================================================
+   TYPOGRAPHY — Franchise Generation
+   Familles + échelle typographique fluide.
+   ============================================================ */
+
+:root {
+
+  /* ---- Familles ---- */
+  --font-display: "Archivo", "Inter", system-ui, sans-serif;
+  --font-body:    "Inter", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace; /* chiffres KPI */
+
+  /* ---- Graisses ---- */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ---- Échelle (fluide via clamp pour les titres) ---- */
+  --text-display: clamp(2rem, 5vw, 3.25rem);   /* h1 hero */
+  --text-h1:      clamp(1.75rem, 4vw, 2.5rem);
+  --text-h2:      clamp(1.5rem, 3vw, 2rem);
+  --text-h3:      1.2rem;
+  --text-lg:      1.125rem;
+  --text-base:    1rem;     /* 16px corps */
+  --text-sm:      0.875rem; /* 14px */
+  --text-xs:      0.75rem;  /* 12px labels, eyebrows */
+
+  /* ---- Interlignes ---- */
+  --leading-tight: 1.15;  /* titres */
+  --leading-snug:  1.4;
+  --leading-body:  1.65;  /* texte courant */
+
+  /* ---- Interlettrage ---- */
+  --tracking-tight:   -0.02em; /* gros titres, chiffres KPI */
+  --tracking-display: -0.01em;
+  --tracking-wide:     0.1em;  /* eyebrows, uppercase */
+}

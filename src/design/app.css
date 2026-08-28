@@ -1,0 +1,111 @@
+/* ============================================================
+   MySmartCoach — global stylesheet.
+   Tokens come from the Franchise Generation design system; everything
+   below is only what the app itself needs on top of them.
+   ============================================================ */
+
+@import url('./tokens/fonts.css');
+@import url('./tokens/colors.css');
+@import url('./tokens/typography.css');
+@import url('./tokens/spacing.css');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--neutral-100);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--cyan-500);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--cyan-600);
+  text-decoration: underline;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+input[type='range'] {
+  accent-color: var(--emerald-400);
+}
+
+/* Lucide is rendered by lucide-react; the stroke weight is set per icon,
+   this only covers any raw <svg class="lucide"> that slips through. */
+svg.lucide {
+  stroke-width: 1.75;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Scroll areas inside the phone keep their momentum but hide the bar,
+   the way an installed app would. */
+.msc-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.msc-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hover affordances that inline styles can't express. */
+.msc-hover-accent:hover {
+  border-color: var(--emerald-400);
+}
+
+.msc-hover-bright:hover {
+  filter: brightness(1.04);
+}
+
+.msc-hover-surface:hover {
+  background: var(--neutral-50);
+}
+
+.msc-hover-emerald:hover {
+  background: var(--emerald-300);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,98 @@
+/* ============================================================
+   COLORS — Franchise Generation
+   Palette dérivée du logo : émeraude → cyan (dégradé signature),
+   navy (autorité, fonds sombres). Neutres froids teintés vert-bleu,
+   jamais gris pur.
+   ============================================================ */
+
+:root {
+
+  /* ---- Navy — typo du logo · autorité, fonds sombres ---- */
+  --navy-50:  #EDF1F6;
+  --navy-100: #D2DCE8;
+  --navy-200: #A7BBD0;
+  --navy-300: #7C99B7;
+  --navy-400: #51789F;
+  --navy-500: #2F5479;
+  --navy-600: #1E3D5C;
+  --navy-700: #142C46;
+  --navy-800: #0A1C33;   /* ← couleur exacte du logo */
+  --navy-900: #051120;
+
+  /* ---- Émeraude — pôle vert du dégradé · action, croissance ---- */
+  --emerald-50:  #E6FBF5;
+  --emerald-100: #B8F4E3;
+  --emerald-200: #7DEACB;
+  --emerald-300: #3FDDB2;
+  --emerald-400: #02C9A0;  /* ← couleur exacte du logo */
+  --emerald-500: #02A988;
+  --emerald-600: #038870;
+  --emerald-700: #056253;
+  --emerald-800: #04453B;
+  --emerald-900: #022B25;
+
+  /* ---- Cyan — pôle bleu du dégradé · liens, data viz ---- */
+  --cyan-50:  #E8F6FC;
+  --cyan-100: #BCE6F5;
+  --cyan-200: #88D2EC;
+  --cyan-300: #4FBBE2;
+  --cyan-400: #029CD0;   /* ← couleur exacte du logo */
+  --cyan-500: #0284B2;
+  --cyan-600: #056B90;
+  --cyan-700: #06506C;
+  --cyan-800: #053749;
+  --cyan-900: #032230;
+
+  /* ---- Teal — cœur du dégradé · hover, surfaces intermédiaires ---- */
+  --teal-400: #0B8A92;
+  --teal-500: #05666F;   /* ← couleur exacte du logo */
+  --teal-600: #054E56;
+  --teal-700: #04383E;
+
+  /* ---- Neutres froids (teintés vert-bleu, jamais gris pur) ---- */
+  --neutral-0:   #FFFFFF;
+  --neutral-50:  #F6F9F8;  /* fond de page */
+  --neutral-100: #E3EEEC;  /* cartes, sections alternées */
+  --neutral-200: #C8D7D4;
+  --neutral-300: #A3B5B3;
+  --neutral-400: #7E9090;
+  --neutral-500: #5C6B7A;  /* texte secondaire */
+  --neutral-600: #44505C;
+  --neutral-700: #2E3842;
+
+  /* ---- Sémantique data (dashboards investisseurs) ---- */
+  --positive:    var(--emerald-400);
+  --positive-bg: var(--emerald-50);
+  --negative:    #E24B4A;
+  --negative-bg: #FCEBEB;
+  --warning:     #BA7517;
+  --warning-bg:  #FAEEDA;
+
+  /* ---- Marques filles (pastilles portfolio uniquement) ---- */
+  --brand-atelier: #8D1D2C;  /* L'Atelier By  */
+  --brand-antica:  #2E7D32;  /* L'Antica Roma */
+  --brand-capoue:  #C9A227;  /* Capoue        */
+  --brand-brazier: #D85A30;  /* Le Brazier    */
+
+  /* ---- Dégradé signature — usage limité : hero, barres de progression ---- */
+  --gradient-brand: linear-gradient(90deg, var(--emerald-400), var(--cyan-400));
+
+  /* ============================================================
+     RÔLES SÉMANTIQUES — alias fonctionnels (à privilégier)
+     ============================================================ */
+  --bg-page:            var(--neutral-50);
+  --bg-surface:         var(--neutral-0);
+  --bg-surface-alt:     var(--neutral-100);
+  --bg-dark:            var(--navy-800);
+  --bg-dark-card:       var(--navy-700);
+
+  --text-primary:       var(--navy-800);
+  --text-secondary:     var(--neutral-500);
+  --text-on-dark:       var(--neutral-50);
+  --text-muted-on-dark: var(--navy-200);
+
+  --accent:             var(--emerald-400);
+  --link:               var(--cyan-500);
+  --border:             var(--neutral-200);
+  --focus-ring:         var(--cyan-400);
+}
