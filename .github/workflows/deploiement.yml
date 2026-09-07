@@ -81,6 +81,32 @@ jobs:
           fi
           CIBLE="$RACINE/releases/${{ github.sha }}"
           SSH="ssh -i ~/.ssh/id_deploy -p $PORT"
+
+          # « Host key verification failed » est l'échec le plus opaque du
+          # déploiement : il ne dit ni ce que le serveur présente, ni ce qui
+          # est posé, ni lequel des deux est en cause. Les empreintes sont
+          # publiques — les afficher côte à côte coûte trois lignes et évite
+          # de relancer un déploiement pour deviner.
+          if ! $SSH -o BatchMode=yes -o ConnectTimeout=10 \
+                 "$UTILISATEUR@$HOTE" true 2>/tmp/ssh.log; then
+            echo "--- ce que ssh a dit ---"
+            cat /tmp/ssh.log
+            echo "--- les empreintes posées (DEPLOY_KNOWN_HOSTS) ---"
+            ssh-keygen -lf ~/.ssh/known_hosts 2>/dev/null || echo "(aucune lisible)"
+            echo "--- celles que le serveur présente à l'adresse visée ---"
+            ssh-keyscan -T 10 -p "$PORT" "$HOTE" 2>/dev/null \
+              | ssh-keygen -lf - 2>/dev/null || echo "(injoignable sur ce port)"
+            echo
+            echo "Si les empreintes coïncident, c'est le NOM qui diffère :"
+            echo "ssh-keyscan -H hache le nom d'hôte, donc l'entrée ne vaut que"
+            echo "pour la chaîne EXACTE passée au scan. Rescanne avec la valeur"
+            echo "de DEPLOY_HOST, au caractère près."
+            echo "Si elles diffèrent, ce n'est pas le même serveur."
+            echo "Si ssh a dit « Permission denied », l'empreinte est bonne et"
+            echo "c'est la clé publique qui manque dans authorized_keys."
+            exit 1
+          fi
+
           $SSH "$UTILISATEUR@$HOTE" "mkdir -p '$CIBLE' '$RACINE/var'"
           # Ce qui part : le build, le serveur, le schéma, les scripts. Pas src/,
           # pas les tests, pas le classeur — le serveur n'en a pas l'usage.
