@@ -65,6 +65,37 @@ if ! command -v mysql > /dev/null; then
   echo "   apt install -y mariadb-server"
   exit 1
 fi
+
+# L'accès administrateur, sans jamais poser le mot de passe sur une ligne de
+# commande : `ps` est lisible par tout le monde, et un mot de passe qui passe
+# par là est un mot de passe publié. Un fichier temporaire en 600 le porte.
+CNF=$(mktemp); chmod 600 "$CNF"
+trap 'rm -f "$CNF"' EXIT
+admin() { mysql --defaults-extra-file="$CNF" "$@"; }
+identifiants() { printf '[client]\nuser=root\npassword=%s\n' "$1" > "$CNF"; }
+
+printf '[client]\n' > "$CNF"      # socket d'abord : c'est le cas Debian/Ubuntu
+if admin -e 'SELECT 1' > /dev/null 2>&1; then
+  echo "   accès administrateur par socket"
+elif [ -n "${MYSQL_ROOT_PASSWORD:-}" ] \
+     && identifiants "$MYSQL_ROOT_PASSWORD" && admin -e 'SELECT 1' > /dev/null 2>&1; then
+  echo "   accès administrateur par MYSQL_ROOT_PASSWORD"
+elif [ -t 0 ]; then
+  echo "   le root MySQL de cette machine demande un mot de passe."
+  read -rsp "   mot de passe root MySQL : " mdp_root; echo
+  identifiants "$mdp_root"; unset mdp_root
+  admin -e 'SELECT 1' > /dev/null 2>&1 || {
+    echo "   refusé."
+    echo "   Relance avec : MYSQL_ROOT_PASSWORD='…' bash $0"
+    exit 1
+  }
+  echo "   accès administrateur accordé"
+else
+  echo "   pas d'accès administrateur MySQL, et pas de terminal pour le demander."
+  echo "   Relance avec : MYSQL_ROOT_PASSWORD='…' bash $0"
+  exit 1
+fi
+
 ENV="$RACINE/.env"
 if [ -f "$ENV" ]; then
   deja "$ENV — mot de passe de base et clé de scellement conservés"
@@ -72,7 +103,7 @@ if [ -f "$ENV" ]; then
 else
   MDP=$(openssl rand -base64 24)
 fi
-mysql -e "CREATE DATABASE IF NOT EXISTS \`$BASE\`
+admin -e "CREATE DATABASE IF NOT EXISTS \`$BASE\`
             CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
           CREATE USER IF NOT EXISTS '$UTILISATEUR'@'localhost' IDENTIFIED BY '$MDP';
           ALTER USER '$UTILISATEUR'@'localhost' IDENTIFIED BY '$MDP';
