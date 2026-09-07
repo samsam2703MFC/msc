@@ -10,6 +10,7 @@
      /api/db/instantane           toute la base d'un athlète, en une fois
      /api/journal, /api/mesure    ce que l'application écrit
      /api/activites               les activités appariées par le navigateur
+     /api/photo, /api/mesure      la photo de la balance, et ce qu'on en tire
      /api/competitions            le back office
      /api/analyse, /api/recalcul  ce que Claude fait d'une séance, d'une semaine
      /api/coach                   les barres de chat
@@ -30,6 +31,7 @@ import { AuthError, athleteDe, athletesVisibles, connecter, cookieSession, ident
 import { BdError, scellementPret } from './bd.mjs';
 import * as depots from './depots.mjs';
 import { construireMethode } from './methode.mjs';
+import * as photo from './photo.mjs';
 import { analyserSeance, recalculerPlan, repondre } from './coach.mjs';
 import * as strava from './strava.mjs';
 
@@ -129,6 +131,17 @@ async function lireCorps(req, maxOctets = 256_000) {
     morceaux.push(morceau);
   }
   return JSON.parse(Buffer.concat(morceaux).toString('utf8') || '{}');
+}
+
+async function lireOctets(req, maxOctets) {
+  const morceaux = [];
+  let total = 0;
+  for await (const morceau of req) {
+    total += morceau.length;
+    if (total > maxOctets) throw new photo.PhotoError('Photo trop lourde.', 413);
+    morceaux.push(morceau);
+  }
+  return Buffer.concat(morceaux);
 }
 
 function echapper(v) {
@@ -326,6 +339,41 @@ async function router(req, res, url) {
       depots.ecrireActivites(athlete_id, corps.activites, cnx)));
   }
 
+  /* La photo arrive en octets bruts avec son content-type, pas en multipart :
+     un seul fichier par requête, et pas d'analyseur multipart à embarquer pour
+     ça. Le navigateur envoie l'objet File tel quel. */
+  if (chemin === '/api/photo' && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const octets = await lireOctets(req, 13 * 1024 * 1024);
+    return json(res, 200, await photo.recevoir(athlete_id, {
+      octets,
+      mime: (req.headers['content-type'] ?? '').split(';')[0].trim(),
+      date: url.searchParams.get('date') ?? undefined,
+    }));
+  }
+
+  const image = chemin.match(/^\/api\/photo\/(\d+)$/);
+  if (image && req.method === 'GET') {
+    const { athlete_id } = await athleteDe(req, url);
+    const { absolu, mime } = await photo.chemin(athlete_id, image[1]);
+    const infos = await stat(absolu);
+    res.writeHead(200, {
+      'content-type': mime,
+      'content-length': infos.size,
+      /* Une photo ne change jamais sous son identifiant, et elle est privée :
+         le cache du navigateur, pas celui d'un intermédiaire. */
+      'cache-control': 'private, max-age=31536000, immutable',
+    });
+    return createReadStream(absolu).pipe(res);
+  }
+
+  if (chemin === '/api/mesure/confirmer' && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const corps = await lireCorps(req, 8_000);
+    return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'mesure.confirmer',
+      () => photo.confirmer(athlete_id, corps)));
+  }
+
   if (chemin === '/api/proposition' && req.method === 'POST') {
     const { athlete_id } = await athleteDe(req, url, 'ecriture');
     const { table, id, applique } = await lireCorps(req, 4_000);
@@ -450,6 +498,7 @@ const server = createServer(async (req, res) => {
     if (res.headersSent) return undefined;
     if (e instanceof AuthError) return json(res, e.code, { erreur: e.message });
     if (e instanceof strava.StravaError) return json(res, e.code, { erreur: e.message });
+    if (e instanceof photo.PhotoError) return json(res, e.code, { erreur: e.message });
     if (e instanceof BdError) return json(res, 500, { erreur: e.message });
 
     /* Le SDK lève avant la requête quand il ne résout aucun credential, donc
@@ -491,6 +540,7 @@ server.listen(PORT, () => {
         '   node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"',
     );
   }
+  console.log(`photos → ${photo.racinePhotos()}`);
   if (process.env.MSC_ATHLETE_ID) {
     console.warn(
       `⚠  MSC_ATHLETE_ID=${process.env.MSC_ATHLETE_ID} : l'authentification est court-circuitée. ` +

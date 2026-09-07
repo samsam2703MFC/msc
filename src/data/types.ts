@@ -259,6 +259,30 @@ export interface MscExcuse {
   remplacement: Localized;
 }
 
+/** Le poids et la FC d'un jour, une fois confirmés. */
+export interface MscMesure {
+  date: string;
+  poids_kg?: number;
+  fc_repos?: number;
+  source: 'photo' | 'saisie' | 'import';
+  etat: 'propose' | 'confirme' | 'rejete';
+}
+
+/** Ce qu'un modèle a lu sur une photo, et que l'athlète n'a pas encore vu.
+    Tant que ce n'est pas confirmé, ça ne compte dans aucune métrique. */
+export interface MesureAttente {
+  date: string;
+  poids_kg?: number;
+  fc_repos?: number;
+  photo_id: number;
+  confiance?: 'haute' | 'moyenne' | 'basse';
+  /** Ce que le modèle dit avoir lu, mot pour mot. */
+  lu?: string;
+  /** Vrai quand la lecture a échoué : la photo est là, les chiffres non. Le
+      détail reste en base — l'écran n'a besoin que de proposer la saisie. */
+  echec?: boolean;
+}
+
 /** Ce qu'une course a donné. L'allure n'est pas stockée : temps ÷ distance, et
     la distance est sur la compétition. */
 export interface MscResultat {

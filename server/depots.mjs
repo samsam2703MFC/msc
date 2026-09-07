@@ -159,7 +159,7 @@ async function lePlan(planId) {
 }
 
 async function leVecu(athleteId) {
-  const [activites, blocs, journal, douleurs, mesures] = await Promise.all([
+  const [activites, blocs, journal, douleurs, mesures, attente] = await Promise.all([
     lignes('SELECT * FROM msc_activity WHERE athlete_id = :a ORDER BY date, id', { a: athleteId }),
     lignes(
       `SELECT b.* FROM msc_activity_bloc b JOIN msc_activity a ON a.id = b.activity_id
@@ -170,6 +170,11 @@ async function leVecu(athleteId) {
        WHERE j.athlete_id = :a`, { a: athleteId }),
     lignes(
       "SELECT * FROM msc_mesure WHERE athlete_id = :a AND etat = 'confirme' ORDER BY date",
+      { a: athleteId }),
+    lignes(
+      `SELECT m.date, m.poids_kg, m.fc_repos, m.photo_id, e.confiance, e.lu, e.echec
+       FROM msc_mesure m LEFT JOIN msc_extraction e ON e.id = m.extraction_id
+       WHERE m.athlete_id = :a AND m.etat = 'propose' ORDER BY m.date DESC`,
       { a: athleteId }),
   ]);
 
@@ -210,6 +215,17 @@ async function leVecu(athleteId) {
     msc_mesure: mesures.map((m) => ({
       date: m.date, poids_kg: nombre(m.poids_kg), fc_repos: nombre(m.fc_repos),
       source: m.source, etat: m.etat,
+    })),
+    /* Ce qu'un modèle a lu et que l'athlète n'a pas encore vu. Séparé des
+       mesures confirmées : tant que ce n'est pas confirmé, ça ne compte dans
+       aucune métrique et ça ne s'affiche que comme une question. */
+    mesures_attente: attente.map((m) => ({
+      date: m.date, poids_kg: nombre(m.poids_kg), fc_repos: nombre(m.fc_repos),
+      photo_id: m.photo_id, confiance: m.confiance ?? undefined,
+      lu: m.lu ?? undefined,
+      /* Le détail de l'échec reste en base ; l'écran a seulement besoin de
+         savoir qu'il y en a eu un pour proposer la saisie à la main. */
+      echec: m.echec ? true : undefined,
     })),
   };
 }

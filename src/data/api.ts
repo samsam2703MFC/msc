@@ -163,6 +163,52 @@ export function proposition(
   });
 }
 
+/* ------------------------------------------------------------- la photo */
+
+export interface LecturePhoto {
+  photo_id: number;
+  date: string;
+  poids_kg: number | null;
+  fc_repos: number | null;
+  confiance: 'haute' | 'moyenne' | 'basse' | null;
+  lu: string | null;
+  cout_eur: number;
+  /** Renseigné quand le modèle n'a rien pu lire — la photo est rangée quand même. */
+  echec: string | null;
+}
+
+/**
+ * Envoie la photo telle quelle, en octets bruts.
+ *
+ * Pas de multipart : un seul fichier par requête, et le serveur n'a donc pas
+ * d'analyseur multipart à embarquer pour ça. Le type vient de l'en-tête.
+ */
+export async function envoyerPhoto(fichier: File, date?: string): Promise<LecturePhoto> {
+  const q = date ? `?date=${date}` : '';
+  return appeler<LecturePhoto>(`/photo${q}`, {
+    method: 'POST',
+    headers: { 'content-type': fichier.type },
+    body: fichier,
+  });
+}
+
+/** L'URL d'une photo rangée. Authentifiée : elle ne s'ouvre qu'avec le cookie. */
+export function urlPhoto(id: number): string {
+  return `${BASE}/photo/${id}`;
+}
+
+export function confirmerMesure(corps: {
+  date: string;
+  poids_kg?: number | null;
+  fc_repos?: number | null;
+  rejeter?: boolean;
+}): Promise<{ date: string; etat: string; corrige?: boolean }> {
+  return appeler('/mesure/confirmer', {
+    method: 'POST',
+    body: JSON.stringify({ ...corps, mutation_id: idMutation() }),
+  });
+}
+
 /* ------------------------------------------------------- le back office */
 
 export function competitions(): Promise<{ competitions: MscCompetition[] }> {

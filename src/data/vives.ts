@@ -14,8 +14,8 @@
 import type {
   Lang, MscActivity, MscAdaptation, MscAjustement, MscAnalyse, MscAthlete, MscBloc,
   MscCompetition, MscDaily, MscEcart, MscExcuse, MscJournal, MscMetric, MscObjectif,
-  MscPlanSession, MscPlanWeek, MscRegle, MscRpe, MscSource, MscStatut, MscType,
-  MscUiStrings, MscZoneDef,
+  MesureAttente, MscMesure, MscPlanSession, MscPlanWeek, MscRegle, MscRpe, MscSource,
+  MscStatut, MscType, MscUiStrings, MscZoneDef,
 } from './types';
 
 /* L'ordre est celui dans lequel la feuille de réglages liste les tables. */
@@ -33,6 +33,8 @@ export const tables = {
   msc_activity: [] as MscActivity[],
   msc_journal: [] as MscJournal[],
   msc_daily: [] as MscDaily[],
+  msc_mesure: [] as MscMesure[],
+  mesures_attente: [] as MesureAttente[],
   msc_metric: [] as MscMetric[],
   msc_analyse: [] as MscAnalyse[],
   msc_adaptation: [] as MscAdaptation[],

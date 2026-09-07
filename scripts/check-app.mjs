@@ -118,6 +118,34 @@ try {
   check('une métrique sans données le dit au lieu d’inventer un chiffre',
     /Pas encore assez de données|—/.test(await page.locator('body').innerText()));
 
+  /* La photo, de bout en bout, dans le navigateur : l'entrée fichier est
+     cachée derrière un bouton, la carte de proposition apparaît, l'athlète
+     corrige, et la mesure rejoint la série. Sans clé Anthropic la lecture
+     échoue — c'est le chemin dégradé, et c'est celui qu'il faut voir marcher. */
+  console.log('\n=== la photo ===');
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=',
+    'base64',
+  );
+  await page.setInputFiles('input[type=file]', {
+    name: 'balance.png', mimeType: 'image/png', buffer: png,
+  });
+  await page.waitForSelector('text=Lu sur la photo', { timeout: 30000 });
+  check('la proposition apparaît après l’envoi', true);
+  check('la photo envoyée est affichée en vignette',
+    await page.locator('img[src*="/api/photo/"]').isVisible());
+
+  const champs = page.locator('input[inputmode]');
+  await champs.nth(0).fill('74,5');
+  await champs.nth(1).fill('46');
+  await page.click('text=Confirmer');
+  await page.waitForTimeout(1500);
+  const forme = await page.locator('body').innerText();
+  check('une fois confirmée, elle s’affiche comme la mesure du jour',
+    forme.includes('74.5 kg') || forme.includes('74,5 kg'),
+    forme.split('\n').find((l) => /kg/.test(l)) ?? '');
+  check('et la carte de proposition a disparu', !forme.includes('Lu sur la photo'));
+
   await page.click('text=Coach');
   await page.waitForTimeout(600);
   check("l'écart de la semaine est calculé",

@@ -73,7 +73,7 @@ function Screen({ app }: { app: ReturnType<typeof useApp> }) {
     case 'week':
       return <WeekScreen app={app} />;
     case 'form':
-      return <FormScreen lang={app.lang} />;
+      return <FormScreen app={app} />;
     case 'coach':
       return <CoachScreen app={app} />;
     case 'admin':

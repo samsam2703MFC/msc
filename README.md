@@ -670,12 +670,49 @@ device.
 
 ### What is not built yet
 
-1. **The photo pipeline** — upload, storage, the vision call, the confirmation.
-2. **The offline cache and the sync queue** — `maj_le` and `msc_mutation` are in
+1. **The offline cache and the sync queue** — `maj_le` and `msc_mutation` are in
    the schema for it, and every write already carries a `mutation_id` the server
    deduplicates on. The service worker and the outbox are not written.
 3. **The back office screens** — the API has competitions and results; nothing
    renders them, and the evolution charts do not exist.
+
+## The photo
+
+The athlete photographs their scale or their watch; Claude reads the weight and
+the resting heart rate off it. `server/photo.mjs` and the card at the top of the
+État de forme screen.
+
+**What a model reads does not become the athlete's weight before they have seen
+it.** An extraction creates a measurement in state `propose`; it counts for
+nothing until confirmed. A blurry scale, a reflection, a comma taken for a
+period — those happen, and a wrong training figure entered in silence is worse
+than one that is missing.
+
+Three tables, because they are three different facts:
+
+| | |
+|---|---|
+| `msc_photo` | the file received, keyed by its SHA-256 so the same photo twice is one row |
+| `msc_extraction` | what a model believed it read — including **failures**, which are recorded rather than deleted: what the model gets wrong is worth keeping |
+| `msc_mesure` | the measurement of record, and whether the athlete has confirmed it |
+
+**The photo is stored before the reading is attempted.** If the model fails, or
+the key is missing, the image is still there and the athlete types the numbers
+in — the card says so and offers the fields. The other order would lose the
+photo on every incident. `check:api` and `check:app` both run precisely that
+path, because this checkout has no Anthropic credential: what is exercised is
+the degraded one, and the vision call itself is not.
+
+The upload is raw bytes with a content-type, not multipart — one file per
+request, and no multipart parser to carry for it. HEIC is refused with a
+sentence saying what to do about it, since an iPhone sometimes sends it.
+
+Correcting the numbers before confirming flips the measurement's source from
+`photo` to `saisie`, so what the model gets corrected on can be measured later
+rather than guessed at.
+
+Photos are served from `/api/photo/:id`, authenticated and athlete-scoped:
+`check:api` asserts that one does not open without the cookie.
 
 ## Reference data
 

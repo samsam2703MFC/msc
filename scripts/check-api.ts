@@ -219,6 +219,62 @@ try {
     method: 'POST', body: JSON.stringify({ date: jour, poids_kg: 900 }),
   }).then((r) => check('un poids absurde est refusé par la base', r.statut >= 400, String(r.statut)));
 
+  console.log('\n=== la photo ===');
+
+  /* Un PNG minuscule mais valide. Sans clé Anthropic la lecture échoue, et
+     c'est justement le chemin qui compte : la photo doit être rangée quand
+     même, sinon un incident du modèle la perd. */
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=',
+    'base64',
+  );
+  const envoi = await fetch(`${BASE}/api/photo?date=2030-02-02`, {
+    method: 'POST',
+    headers: { 'content-type': 'image/png', cookie: c.cookie },
+    body: png,
+  });
+  const lue = (await envoi.json()) as any;
+  check('une photo est acceptée', envoi.status === 200 && lue.photo_id > 0, String(envoi.status));
+  check('elle est rangée même quand la lecture échoue',
+    lue.photo_id > 0 && (lue.echec === null || typeof lue.echec === 'string'));
+  check("aucun détail interne ne remonte au navigateur",
+    !JSON.stringify(lue).includes('resolve authentication'),
+    String(lue.echec).slice(0, 40));
+
+  const heic = await fetch(`${BASE}/api/photo`, {
+    method: 'POST',
+    headers: { 'content-type': 'image/heic', cookie: c.cookie },
+    body: png,
+  });
+  check('un format que l’API ne lit pas est refusé et le dit',
+    heic.status === 400 && /HEIC/.test(((await heic.json()) as any).erreur ?? ''));
+
+  const attente = await c.appel('/api/db/instantane');
+  check('la mesure attend la confirmation de l’athlète',
+    attente.corps.mesures_attente?.some((m: any) => m.date === '2030-02-02'),
+    JSON.stringify(attente.corps.mesures_attente?.[0] ?? {}).slice(0, 60));
+  check('et elle ne compte dans aucune série avant',
+    !attente.corps.msc_daily.some((d: any) => d.date === '2030-02-02'));
+
+  const sansCookie = await fetch(`${BASE}/api/photo/${lue.photo_id}`);
+  check('une photo ne s’ouvre pas sans cookie', sansCookie.status === 401,
+    String(sansCookie.status));
+
+  const confirmee = await c.appel('/api/mesure/confirmer', {
+    method: 'POST',
+    body: JSON.stringify({ date: '2030-02-02', poids_kg: 74.5, fc_repos: 46 }),
+  });
+  check('la confirmation la fait compter', confirmee.corps.etat === 'confirme');
+  /* L'athlète a saisi ce que le modèle n'avait pas lu : la source le dit, pour
+     qu'on puisse un jour mesurer ce que le modèle se fait corriger. */
+  check('une correction est notée comme telle', confirmee.corps.corrige === true);
+
+  const apresPhoto = await c.appel('/api/db/instantane');
+  check('la FC rejoint la série une fois confirmée',
+    apresPhoto.corps.msc_daily.some((d: any) => d.date === '2030-02-02' && d.fc_repos === 46));
+  check('et elle ne figure plus en attente',
+    !apresPhoto.corps.mesures_attente?.some((m: any) => m.date === '2030-02-02'));
+
   console.log('\n=== le back office ===');
   const creee = await c.appel('/api/competitions', {
     method: 'POST',
@@ -310,6 +366,13 @@ try {
 } finally {
   serveur.kill('SIGTERM');
   await bd().execute('DELETE FROM msc_journal WHERE date = ?', ['2026-10-20']);
+  await bd().execute('DELETE FROM msc_mesure WHERE date = ?', ['2030-02-02']);
+  /* Les photos que ce contrôle a envoyées, et rien d'autre : celles auxquelles
+     plus aucune mesure ne renvoie. */
+  await bd().execute(
+    `DELETE FROM msc_photo WHERE athlete_id = 1
+       AND id NOT IN (SELECT photo_id FROM msc_mesure WHERE photo_id IS NOT NULL)`,
+  );
   await bd().execute('DELETE FROM msc_mesure WHERE date = ?', ['2026-10-20']);
   await bd().execute('DELETE FROM msc_mutation WHERE id = ?', ['00000000-0000-4000-8000-00000000cafe']);
   await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `autre-${EMAIL}`]);

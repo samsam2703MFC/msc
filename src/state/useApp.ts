@@ -469,6 +469,44 @@ export function useApp() {
     [recharger],
   );
 
+  /* ------------------------------------------------------------- la photo */
+
+  const [photoJob, setPhotoJob] = useState<'idle' | 'envoi'>('idle');
+  const [photoErreur, setPhotoErreur] = useState<string | null>(null);
+
+  /* La photo part telle quelle et revient lue. Ce que Claude en tire n'est pas
+     encore le poids de l'athlète : c'est une proposition, et `confirmerMesure`
+     est le seul chemin qui la fait compter. */
+  const envoyerPhoto = useCallback(
+    async (fichier: File) => {
+      if (photoJob === 'envoi') return;
+      setPhotoJob('envoi');
+      setPhotoErreur(null);
+      try {
+        await api.envoyerPhoto(fichier, date);
+        await recharger(db.athleteId);
+      } catch (e) {
+        if (monte.current) setPhotoErreur(message(e));
+      } finally {
+        if (monte.current) setPhotoJob('idle');
+      }
+    },
+    [date, photoJob, recharger],
+  );
+
+  const confirmerMesure = useCallback(
+    async (corps: { date: string; poids_kg?: number | null; fc_repos?: number | null; rejeter?: boolean }) => {
+      setPhotoErreur(null);
+      try {
+        await api.confirmerMesure(corps);
+        await recharger(db.athleteId);
+      } catch (e) {
+        if (monte.current) setPhotoErreur(message(e));
+      }
+    },
+    [recharger],
+  );
+
   /* ------------------------------------------------------------ le reste */
 
   /* Claude reads the session back and answers.
@@ -627,6 +665,11 @@ export function useApp() {
     toggleAdjustment,
     enregistrerJournal,
     accepter,
+
+    photoJob,
+    photoErreur,
+    envoyerPhoto,
+    confirmerMesure,
 
     settingsOpen,
     openSettings: useCallback(() => setSettingsOpen(true), []),
