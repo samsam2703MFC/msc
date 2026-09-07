@@ -102,7 +102,11 @@ jobs:
             chmod 600 ~/.ssh/id_deploy
             echo "DEPLOY_SSH_KEY n'est pas une clé privée exploitable,"
             echo "et ni l'enveloppe ni le repli des lignes ne l'ont réparée."
-            echo "Reçu : $(wc -l < ~/.ssh/id_deploy.recu) ligne(s)."
+            # La longueur tranche là où la forme ne dit rien : une clé ed25519
+            # fait ~400 octets, ~540 en base64. Vingt caractères, ce n'est pas
+            # une clé abîmée — c'est autre chose qui a été collé.
+            echo "Reçu : $(wc -l < ~/.ssh/id_deploy.recu) ligne(s), $(wc -c < ~/.ssh/id_deploy.recu) caractères."
+            echo "Attendu : ~540 caractères en base64, ~400 lignes de PEM sur ~10 lignes."
             case "$(head -1 ~/.ssh/id_deploy.recu | cut -d' ' -f1)" in
               ssh-*|ecdsa-*|sk-*)
                 echo "→ c'est une clé PUBLIQUE (.pub). Il faut la privée :"
