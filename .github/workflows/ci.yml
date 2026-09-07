@@ -41,7 +41,9 @@ jobs:
       MSC_DB_PASSWORD: controle
       MSC_DB_NAME: msc
       # Une clé jetable : elle ne chiffre ici que des jetons de contrôle.
-      MSC_SECRET_KEY: Y29udHJvbGUtc2V1bGVtZW50LTMyLW9jdGV0cy1pY2kh
+      # Exactement 32 octets — le serveur refuse toute autre longueur, et la
+      # première version de cette ligne en faisait 33.
+      MSC_SECRET_KEY: Y29udHJvbGUtc2V1bGVtZW50LTMyLW9jdGV0cy1pY2k=
 
     steps:
       - uses: actions/checkout@v4

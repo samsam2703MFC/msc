@@ -274,6 +274,15 @@ const restant = un<{ n: number }>(await lignes("SELECT COUNT(*) AS n FROM msc_pl
 check('l’essai n’a rien laissé', restant.n === 0);
 
 
+/* Le classeur reprend un identifiant de plan neuf à chaque `db:seed` — la table
+   est vidée, l'auto-incrément non. L'écrire en dur ferait passer ce contrôle sur
+   une base fraîche et échouer sur toutes les autres, ce qui est la pire des deux
+   façons de se tromper. */
+const ATHLETE = 1;
+const planActif = un<{ id: number }>(await lignes(
+  'SELECT id FROM msc_plan WHERE athlete_id = :a AND actif = 1 ORDER BY debut DESC LIMIT 1',
+  { a: ATHLETE })).id;
+
 console.log('\n=== enregistrer un plan généré ===');
 
 /* Le générateur produit un plan entier sans rien appeler ; ce qui se vérifie
@@ -288,7 +297,7 @@ const genere = genererPlan(
 
 await transaction(async (cnx) => {
   const range = (await depots.enregistrerPlan(
-    1,
+    ATHLETE,
     { nom: 'jetable-genere', ...genere, objectifs: [
       { date: '2030-04-14', nom: 'Essai — semi', cible_s: 5400, distance_km: 21.1, principal: true },
     ] },
@@ -338,13 +347,13 @@ await transaction(async (cnx) => {
     String(dates[0].debut) === genere.sessions[0].date, `${dates[0].debut}`);
 
   const [actifs] = (await cnx.query(
-    'SELECT COUNT(*) AS n FROM msc_plan WHERE athlete_id = 1 AND actif = 1')) as any;
+    'SELECT COUNT(*) AS n FROM msc_plan WHERE athlete_id = ? AND actif = 1', [ATHLETE])) as any;
   check('un seul plan actif à la fois', actifs[0].n === 1, `${actifs[0].n}`);
 
   /* Le plan d'avant n'est pas supprimé : c'est toute la réponse à la question
      du journal. Ses séances sont là, et ce qui les vise aussi. */
   const [ancien] = (await cnx.query(
-    'SELECT COUNT(*) AS n FROM msc_session WHERE plan_id = 1')) as any;
+    'SELECT COUNT(*) AS n FROM msc_session WHERE plan_id = ?', [planActif])) as any;
   check('le plan remplacé garde ses séances', ancien[0].n === msc_session.length, `${ancien[0].n}`);
 
   check('l’objectif retrouve sa semaine dans le plan écrit', range.objectifs === 1);
@@ -370,20 +379,20 @@ await transaction(async (cnx) => {
   const seance = un<{ id: number; duree_min: number; charge: number; semaine: number }>(
     (await cnx.query(
       `SELECT s.id, s.duree_min, s.charge, s.semaine FROM msc_session s
-       WHERE s.plan_id = 1 AND s.type_code = 'seuil' AND s.duree_min > 0
+       WHERE s.plan_id = ? AND s.type_code = 'seuil' AND s.duree_min > 0
          AND NOT EXISTS (SELECT 1 FROM msc_analyse a WHERE a.session_id = s.id)
-       LIMIT 1`))[0]);
+       LIMIT 1`, [planActif]))[0]);
   const heuresAvant = un<{ heures: string }>((await cnx.query(
-    'SELECT heures FROM msc_week WHERE plan_id = 1 AND semaine = ?', [seance.semaine]))[0]).heures;
+    'SELECT heures FROM msc_week WHERE plan_id = ? AND semaine = ?', [planActif, seance.semaine]))[0]).heures;
 
   const [an] = (await cnx.query(
     `INSERT INTO msc_analyse (athlete_id, type, session_id, date, modele, verdict_fr, verdict_pl)
-     VALUES (1, 'seance', ?, '2026-10-14', 'essai', 'x', 'x')`, [seance.id])) as any;
+     VALUES (?, 'seance', ?, '2026-10-14', 'essai', 'x', 'x')`, [ATHLETE, seance.id])) as any;
   const [ad] = (await cnx.query(
     `INSERT INTO msc_adaptation (analyse_id, session_id, zone_code, part_duree, pourquoi_fr, pourquoi_pl)
      VALUES (?, ?, 'ef', 0.750, 'x', 'x')`, [an.insertId, seance.id])) as any;
 
-  await depots.appliquer(1, 'msc_adaptation', ad.insertId, true, cnx);
+  await depots.appliquer(ATHLETE, 'msc_adaptation', ad.insertId, true, cnx);
   const apres = un<{ duree_min: number; charge: number; adapte_par: string }>((await cnx.query(
     'SELECT duree_min, charge, adapte_par FROM msc_session WHERE id = ?', [seance.id]))[0]);
 
@@ -399,7 +408,7 @@ await transaction(async (cnx) => {
     zonesApres.length === 1 && zonesApres[0] === 'ef', zonesApres.join('+'));
 
   const heuresApres = un<{ heures: string }>((await cnx.query(
-    'SELECT heures FROM msc_week WHERE plan_id = 1 AND semaine = ?', [seance.semaine]))[0]).heures;
+    'SELECT heures FROM msc_week WHERE plan_id = ? AND semaine = ?', [planActif, seance.semaine]))[0]).heures;
   check('les heures de la semaine suivent', Number(heuresApres) < Number(heuresAvant),
     `${heuresAvant} → ${heuresApres}`);
 
@@ -408,15 +417,15 @@ await transaction(async (cnx) => {
     `INSERT INTO msc_adaptation (analyse_id, session_id, zone_code, part_duree, pourquoi_fr, pourquoi_pl)
      VALUES (?, ?, NULL, 0.900, 'x', 'x')`, [an.insertId, seance.id])) as any;
   await refuse('une seconde proposition sur la même séance est refusée',
-    () => depots.appliquer(1, 'msc_adaptation', ad2.insertId, true, cnx));
+    () => depots.appliquer(ATHLETE, 'msc_adaptation', ad2.insertId, true, cnx));
 
   /* Accepter deux fois ne raccourcit pas deux fois. */
-  await depots.appliquer(1, 'msc_adaptation', ad.insertId, true, cnx);
+  await depots.appliquer(ATHLETE, 'msc_adaptation', ad.insertId, true, cnx);
   const rebelote = un<{ duree_min: number }>((await cnx.query(
     'SELECT duree_min FROM msc_session WHERE id = ?', [seance.id]))[0]);
   check('accepter deux fois ne raccourcit qu’une', rebelote.duree_min === apres.duree_min);
 
-  await depots.appliquer(1, 'msc_adaptation', ad.insertId, false, cnx);
+  await depots.appliquer(ATHLETE, 'msc_adaptation', ad.insertId, false, cnx);
   const rendue = un<{ duree_min: number; charge: number; adapte_par: string | null }>(
     (await cnx.query(
       'SELECT duree_min, charge, adapte_par FROM msc_session WHERE id = ?', [seance.id]))[0]);
@@ -426,7 +435,7 @@ await transaction(async (cnx) => {
     `${rendue.duree_min} min · ${rendue.charge}`);
 
   const heuresRendues = un<{ heures: string }>((await cnx.query(
-    'SELECT heures FROM msc_week WHERE plan_id = 1 AND semaine = ?', [seance.semaine]))[0]).heures;
+    'SELECT heures FROM msc_week WHERE plan_id = ? AND semaine = ?', [planActif, seance.semaine]))[0]).heures;
   check('et les heures de la semaine avec', heuresRendues === heuresAvant,
     `${heuresRendues} / ${heuresAvant}`);
 
@@ -446,9 +455,9 @@ console.log('\n=== le garde-fou de zone ===');
 {
   const seance = un<{ id: number }>(await lignes(
     `SELECT s.id FROM msc_session s
-     WHERE s.plan_id = 1 AND s.type_code = 'seuil'
+     WHERE s.plan_id = :p AND s.type_code = 'seuil'
        AND EXISTS (SELECT 1 FROM msc_session_zone z WHERE z.session_id = s.id AND z.zone_code = 'seuil')
-     LIMIT 1`));
+     LIMIT 1`, { p: planActif }));
   const cnx = bd();
   const zone = (propose: string | null) => depots.zoneAdmissible(cnx, seance.id, propose);
 
@@ -459,8 +468,9 @@ console.log('\n=== le garde-fou de zone ===');
   check('pas de zone proposée, pas de zone rangée', (await zone(null)) === null);
 
   const nage = un<{ id: number }>(await lignes(
-    `SELECT s.id FROM msc_session s WHERE s.plan_id = 1 AND s.discipline = 'Natation'
-       AND NOT EXISTS (SELECT 1 FROM msc_session_zone z WHERE z.session_id = s.id) LIMIT 1`));
+    `SELECT s.id FROM msc_session s WHERE s.plan_id = :p AND s.discipline = 'Natation'
+       AND NOT EXISTS (SELECT 1 FROM msc_session_zone z WHERE z.session_id = s.id) LIMIT 1`,
+    { p: planActif }));
   check('une séance que le plan n’écrit pas en allures n’en reçoit pas',
     (await depots.zoneAdmissible(cnx, nage.id, 'ef')) === null);
 }
