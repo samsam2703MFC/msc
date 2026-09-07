@@ -81,7 +81,14 @@ jobs:
                          echo "  elle va dans DEPLOY_SSH_KEY, et nulle part ailleurs." ;;
               [0-9]*)    echo "→ on dirait une liste d'empreintes (ssh-keygen -l)."
                          echo "  Il faut la sortie brute du scan, pas ses empreintes." ;;
-              *)         echo "→ premier mot inattendu ; ce n'est pas une sortie de scan." ;;
+              *)         echo "→ premier mot inattendu ; ce n'est pas une sortie de scan."
+                         # Une clé d'hôte est publique par construction — c'est
+                         # tout l'objet de la publier. En montrer le début quand
+                         # rien d'autre n'a marché ne divulgue rien, et c'est le
+                         # seul moyen de nommer ce qui a été collé.
+                         echo "  Début de la ligne : $(head -1 ~/.ssh/known_hosts | cut -c1-12)"
+                         echo "  Longueur : $(head -1 ~/.ssh/known_hosts | wc -c) caractères"
+                         echo "  (une entrée valide en fait ~100 à 600)" ;;
             esac
             exit 1
           fi
