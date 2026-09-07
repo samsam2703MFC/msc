@@ -158,6 +158,28 @@ try {
   check("l'écart de la semaine est calculé",
     /réalisation|Semaine tenue|Écart détecté/i.test(await page.locator('body').innerText()));
 
+  /* Le générateur : le plan se fabrique dans le navigateur, et le bouton qui
+     l'enregistre dit ce qu'il remplace AVANT qu'on appuie.
+
+     Ce contrôle ne l'enfonce pas : appuyer remplacerait le plan de l'athlète 1,
+     que les autres sections lisent. Que la route écrive vraiment, `check:api`
+     le prouve — sur un second athlète, justement pour ça. */
+  console.log('\n=== enregistrer un plan ===');
+  await page.locator('nav button').last().click();
+  await page.waitForTimeout(700);
+  const createur = await page.locator('body').innerText();
+  check('l’écran Créer montre le plan généré',
+    /Plan généré/i.test(createur) && /semaines/i.test(createur));
+  check('et propose de l’enregistrer',
+    /Enregistrer et activer/i.test(createur),
+    createur.split('\n').find((l) => /Enregistrer/i.test(l)) ?? '');
+  check('en disant ce que ça remplace',
+    /L'ancien n'est pas supprimé|L’ancien n’est pas supprimé/.test(createur),
+    createur.split('\n').find((l) => /ancien/i.test(l))?.slice(0, 80) ?? '');
+  check('et combien de séances deviennent actives',
+    /\d+ séances du \d{4}-\d{2}-\d{2} au \d{4}-\d{2}-\d{2}/.test(createur),
+    createur.split('\n').find((l) => /séances du/.test(l))?.slice(0, 80) ?? '');
+
   /* Le vrai test du hors-ligne : couper, relire, écrire, remettre, vérifier que
      ce qui a été tapé est arrivé. Sans ça, « ça marche hors ligne » n'est
      qu'une intention. */

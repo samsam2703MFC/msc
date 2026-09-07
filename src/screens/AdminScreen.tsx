@@ -428,6 +428,47 @@ function Generateur({ app }: { app: App }) {
             {methode && <Resultat methode={methode} />}
           </Card>
 
+          {/* Enregistrer. C'est le geste qui fait exister le plan ailleurs que
+              dans cet onglet — et il remplace celui qui servait jusque-là, donc
+              il le dit avant, pas après. */}
+          <Card padding="16px 18px" gap={10}>
+            <SectionLabel icon="database" color={C.accentDeep}>
+              {fr ? 'Enregistrer ce plan' : 'Zapisz ten plan'}
+            </SectionLabel>
+            <div style={{ fontSize: 12, lineHeight: 1.45, color: C.inkQuiet }}>
+              {fr
+                ? `Le plan actif devient celui-ci : ${sessions.length} séances du ${plan.sessions[0]?.date} au ${plan.sessions[plan.sessions.length - 1]?.date}. L'ancien n'est pas supprimé — ses séances restent, et le journal comme les activités qui les visent avec.`
+                : `Ten plan staje się aktywny: ${sessions.length} treningów od ${plan.sessions[0]?.date} do ${plan.sessions[plan.sessions.length - 1]?.date}. Poprzedni nie znika — jego treningi zostają, a z nimi dziennik i aktywności.`}
+            </div>
+            <AccentButton
+              label={
+                app.planJob === 'envoi'
+                  ? fr ? 'Enregistrement…' : 'Zapisywanie…'
+                  : app.planJob === 'fait'
+                    ? fr ? 'Plan actif' : 'Plan aktywny'
+                    : fr ? 'Enregistrer et activer' : 'Zapisz i aktywuj'
+              }
+              icon={app.planJob === 'envoi' ? 'loader' : app.planJob === 'fait' ? 'check' : 'database'}
+              active={app.planJob !== 'idle'}
+              onClick={() => {
+                if (app.planJob === 'envoi') return;
+                void app.enregistrerPlan({
+                  nom: `${objectifs.find((o) => o.principal)?.nom ?? 'Plan'} — ${nom}`,
+                  methode: methode ?? undefined,
+                  blocs: plan.blocs,
+                  semaines: plan.semaines,
+                  sessions,
+                  objectifs: objectifs.filter((o) => o.date),
+                });
+              }}
+            />
+            {app.planErreur && (
+              <div style={{ fontSize: 12, lineHeight: 1.45, color: C.negative }}>
+                {app.planErreur}
+              </div>
+            )}
+          </Card>
+
           <Card padding={0} gap={0} style={{ overflow: 'hidden' }}>
             {sessions.slice(0, 14).map((s) => {
               const t = db.type(s.type);

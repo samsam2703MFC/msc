@@ -298,6 +298,43 @@ export function confirmerMesure(corps: {
   );
 }
 
+/* ---------------------------------------------------------- le plan */
+
+export interface PlanEnregistre {
+  plan_id: number;
+  seances: number;
+  semaines: number;
+  blocs: number;
+  objectifs: number;
+  debut: string;
+  fin: string;
+}
+
+/**
+ * Range un plan généré, et le rend actif.
+ *
+ * Le générateur tourne dans le navigateur : il est déterministe, il n'appelle
+ * rien, et le serveur écrit ce qu'il a produit — en dérivant lui-même ce qui se
+ * dérive (la charge, les totaux de semaine).
+ *
+ * Celui-ci ne va PAS dans la file hors-ligne. Un plan est une décision, pas une
+ * saisie : le rejouer une heure plus tard remplacerait le plan actif d'alors,
+ * qui n'est peut-être plus celui qu'on regardait en appuyant.
+ */
+export function enregistrerPlan(corps: {
+  nom: string;
+  methode?: unknown;
+  blocs: unknown[];
+  semaines: unknown[];
+  sessions: unknown[];
+  objectifs?: unknown[];
+}): Promise<PlanEnregistre> {
+  return appeler('/plan', {
+    method: 'POST',
+    body: JSON.stringify({ ...corps, mutation_id: idMutation() }),
+  });
+}
+
 /* ------------------------------------------------------- le back office */
 
 export function competitions(): Promise<{ competitions: MscCompetition[] }> {

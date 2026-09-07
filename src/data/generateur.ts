@@ -413,7 +413,7 @@ export function genererPlan(
           id++, s, bloc, date, creneau, type, duree,
           estJourDeCourse ? ['allure10'] : creneau.zones,
           contraintes,
-          l(titreDe(type, duree, course?.nom)),
+          l(titreDe(type, course?.nom)),
           l(detailDe(type)),
         ),
       );
@@ -490,22 +490,29 @@ function seance(
   };
 }
 
-function titreDe(type: TypeCode, duree: number, nomCourse?: string): string {
+/* Le titre ne porte pas de chiffre.
+
+   « Sortie longue 97 min » et `meta` « 97 min · 16,2 km · RPE 5 » disaient la
+   même durée à deux endroits — et le titre devenait faux à la minute où un
+   ajustement accepté raccourcissait la séance. Le classeur, lui, écrit
+   « Seuil — 5 × 3' » et laisse les chiffres à `meta` : c'est la bonne règle,
+   le générateur la suit. */
+function titreDe(type: TypeCode, nomCourse?: string): string {
   switch (type) {
     case 'course': return nomCourse ?? 'Course';
     case 'repos': return 'Repos complet';
-    case 'longue': return `Sortie longue ${duree} min`;
-    case 'montagne': return `Sortie montagne ${duree} min`;
-    case 'seuil': return `Seuil ${duree} min`;
-    case 'allure10': return `Fractionné allure 10 km ${duree} min`;
-    case 'vma': return `VMA ${duree} min`;
-    case 'recup': return `Footing de récupération ${duree} min`;
-    case 'ef': return `Footing d'endurance ${duree} min`;
-    case 'nage': return `Natation ${duree} min`;
-    case 'velo': return `Vélo Z2 ${duree} min`;
-    case 'force': return `Force ${duree} min`;
-    case 'compromis': return `Circuit + course dégradée ${duree} min`;
-    default: return `${type} ${duree} min`;
+    case 'longue': return 'Sortie longue';
+    case 'montagne': return 'Sortie montagne';
+    case 'seuil': return 'Seuil';
+    case 'allure10': return 'Fractionné allure 10 km';
+    case 'vma': return 'VMA';
+    case 'recup': return 'Footing de récupération';
+    case 'ef': return "Footing d'endurance";
+    case 'nage': return 'Natation';
+    case 'velo': return 'Vélo Z2';
+    case 'force': return 'Force';
+    case 'compromis': return 'Circuit + course dégradée';
+    default: return type;
   }
 }
 

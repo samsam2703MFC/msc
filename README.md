@@ -27,7 +27,7 @@ npm run check:db       # the round trip through MySQL, and its guard rails
 npm run check:api      # the API over HTTP, cookie and access control included
 npm run check:app      # the app itself, in a real browser
 
-npm run db:migrate     # create the database and apply db/schema.sql
+npm run db:migrate     # create the database, apply db/schema.sql, add later columns
 npm run db:seed        # load the workbook into it
 npm run compte -- lister          # the accounts, and who sees which athlete
 npm run strava:webhook -- etat      # the push subscription, see « Strava »
@@ -147,6 +147,39 @@ model reproduces the workbook rather than approximating it.
 
 Anything the generator has to bend is surfaced, not swallowed: a block too short
 to train is folded into the one before it, and the screen shows what happened.
+
+### Saving it
+
+**« Enregistrer et activer » writes the plan into `msc_session`,** and the app is
+on it from the next reload. `POST /api/plan` → `depots.enregistrerPlan`, one
+transaction: `msc_plan` (origine `genere`, active), its blocks, its weeks, its
+sessions and their zones, and the objectives — each one finding or creating the
+athlete's competition, so regenerating a plan does not seed duplicates in the
+back office.
+
+Two things the server refuses to take from the browser even though the browser
+sent them: **the load**, which is `duree × RPE` and is therefore derived, and
+**the weekly totals**, which are the sum of the week's sessions. The generator's
+own numbers for those would be a second truth, and `check:db` asserts the server
+wins — no session where `charge <> duree_min * rpe_cible`, no week whose hours
+disagree with its sessions.
+
+**The plan that was active is deactivated, not deleted.** That is the whole
+answer to the question this README carried open for a long time: nothing is
+lost. The old plan keeps its sessions, and the journal entries and activities
+that point at them keep pointing. `check:db` writes a real generated plan next
+to the workbook's, checks the workbook's 243 sessions are still there, and rolls
+the whole thing back.
+
+The button says what it replaces **before** it is pressed — how many sessions,
+between which dates, and that the old plan survives. `check:app` asserts that
+sentence is on the screen.
+
+One thing the generator lost on the way: **its titles no longer carry a
+duration.** « Sortie longue 97 min » said the same number as `meta`
+(« 97 min · 16,2 km · RPE 5 ») and became false the minute an accepted
+adjustment shortened the session. The workbook writes « Seuil — 5 × 3' » and
+leaves the figures to `meta`; the generator does the same now.
 
 ## The methodology service
 
@@ -401,11 +434,48 @@ observations — carry **no figure at all**. The prototype's seeded text said
 number lives on the adjustment card next to it, where it is computed. One place
 per figure.
 
-**The plan itself is not rewritten.** The adjustments are proposals the athlete
-accepts one at a time, which is what the Coach screen always did with them.
-Persisting a recalculated plan back into `msc_session` is the open item below,
-and it needs a decision about the journal and the analyses attached to what
-would be replaced.
+### Accepting one moves the session
+
+The adjustments are proposals the athlete accepts one at a time — and accepting
+one now **writes the session**. Until it did, the screen said « accepté » above a
+session that had not moved a minute, and the next morning the plan asked again
+for the 68 minutes the coach had just brought down to 54.
+
+What moves is the session's quantity: its duration, and with it the distance,
+the metres and the load, which are the same quantity in three units — a session
+at 80 % is at 80 % of each. And, for a session-scoped adaptation, the zone it is
+run in. No pace is written: the engine derives it from the zone and the block,
+here as everywhere else.
+
+What is kept is `avant` — the session as it stood immediately before. It is the
+one fact of the operation that cannot be recomputed, because the session was
+overwritten, and it is what keeps « 68 min → 54 min » true *after* acceptance
+and what makes withdrawal exact. It is read whole and never filtered, so it is
+JSON, by the schema's own rule.
+
+Four things that only look like details:
+
+- **the zone guard rail moved to where the proposal is written**, not where it is
+  displayed. `zoneAdmissible` reads `msc_zone.ordre` — slowest to fastest — so
+  what is stored is already what will be shown *and* what will be written on the
+  session. There is no displayable version and a stored version;
+- **the zone is only rewritten if it changes.** Otherwise accepting an
+  adaptation that keeps the planned zone would reduce « EF warm-up then
+  threshold » to « threshold », and the session would lose its warm-up for
+  nothing;
+- **two accepted proposals cannot share a session.** The second would start from
+  what the first wrote, and withdrawing the first would erase the second.
+  `msc_session.adapte_par` names the one that holds, and the second is refused
+  with a sentence the athlete can read — that is what `DepotError` is for, since
+  the server otherwise answers « la requête a échoué » and keeps the reason in
+  its logs;
+- **accepting twice does not shorten twice.** A double click, or an offline
+  queue replaying, finds the proposal already in the state it asks for and does
+  nothing.
+
+The week's stored totals follow, because a week with a moved session in it has
+stale totals by construction — and `ecartDeSemaine` would otherwise measure the
+gap against a volume that no longer exists.
 
 ### Why OAuth *and* MCP
 
@@ -481,7 +551,7 @@ a dump.
 
 ### What `check:db` asserts
 
-Thirty assertions, in two halves. The round trip: the 243 sessions, the four
+Fifty-four assertions, in four parts. The round trip: the 243 sessions, the four
 block `part` values at the thousandth, the eight zone offsets with their signs,
 the accents and the Polish. Then the block-B reference recomputed **in SQL** from
 what the database holds — if MySQL and the workbook ever disagree, that is where
@@ -493,6 +563,11 @@ weight, an RPE of 12, the same session done twice, an adaptation that doubles th
 next session, an analysis of a session with no session, and the same offline
 mutation replayed twice — the one that stops a queue from recording the same RPE
 twice after a reconnection.
+
+Then the two writes that change the plan itself: a generated plan written next to
+the workbook's and checked line for line, and a proposal accepted, re-accepted,
+refused a second holder and withdrawn — each inside a transaction it rolls back,
+so the workbook is exactly where it was when the check ends.
 
 It found a real defect on its first run: deleting a plan failed, because sessions
 held their block and the block FK had no cascade.
@@ -506,8 +581,12 @@ schema's rules meet a caller.
 
 `server/index.mjs` routes, `server/depots.mjs` reads and writes, `server/auth.mjs`
 says who is asking. `check:api` boots the server and talks to it over HTTP —
-thirty-four assertions, because what breaks an API is the layers a direct call
+seventy-one assertions, because what breaks an API is the layers a direct call
 skips: the cookie, the access check, the JSON shape, the status code.
+
+The plan and proposal routes are exercised on a **second athlete** created for
+the run — writing a plan and shortening a session must not touch the workbook the
+other sections read, and everything goes away with the athlete at teardown.
 
 ### One snapshot, not one endpoint per table
 
@@ -670,11 +749,13 @@ device.
 
 ### What is not built yet
 
-1. **The offline cache and the sync queue** — `maj_le` and `msc_mutation` are in
-   the schema for it, and every write already carries a `mutation_id` the server
-   deduplicates on. The service worker and the outbox are not written.
-3. **The back office screens** — the API has competitions and results; nothing
-   renders them, and the evolution charts do not exist.
+Nothing on the app's side of the API. The offline cache, the back office and the
+photo all landed; a generated plan persists, and an accepted proposal moves the
+session it names.
+
+What is still only exercised against its failure paths, for want of credentials
+in this checkout: the Anthropic success paths (methodology, coach, photo
+reading) and the Strava consent round-trip.
 
 ## The photo
 
@@ -848,7 +929,7 @@ and all three are gone:
   card has six states now instead of a boolean, because a boolean could only
   say "connected" and mean nothing by it.
 
-Three things are still seed data, for three different reasons.
+Two things are still seed data, for two different reasons.
 
 **`msc_daily`** — resting heart rate, which two adjustment rules watch — because
 Strava does not carry it. That one needs the wearable, not the platform.
@@ -860,15 +941,13 @@ session, semaine 7, "CAP · Seuil — 5 × 3'" — and their figures follow the 
 example in the workbook's "Suivi & ajustement" sheet. A real analysis replaces
 the one for its own session or its own week, and takes its proposals with it.
 
-**The plan itself.** The generated plan is previewed on the Créer screen but not
-persisted, and the recalculation proposes adjustments without applying them.
-
-That was the same open question in both cases — what happens to the journal
-attached to the plan being replaced — and the schema answers it: nothing is
-lost, because a plan is an entity and the journal points at sessions rather than
-belonging to them. What remains is the wiring: a generated plan needs an
-endpoint that writes it, and an accepted adjustment needs to move a session
-rather than only be marked accepted.
+**The plan is no longer one of them.** A generated plan is written into
+`msc_session` and becomes the active one; an accepted proposal moves the session
+it names, and withdrawing it puts the session back exactly. Both were the same
+open question — what happens to the journal attached to what is being replaced —
+and the answer the schema gave holds in practice: nothing is lost. A plan is an
+entity, the journal points at sessions rather than belonging to them, and the
+plan that steps aside keeps everything it had.
 
 The methodology call has been written against the documented API surface but not
 executed end to end here — this environment has no Anthropic credential, so the
@@ -881,7 +960,7 @@ application behind this checkout, so what has actually been exercised is every
 route the server exposes — health, state, the authorisation URL, the webhook
 handshake with a good and a bad verify token, an event POST, a forged
 revocation naming another athlete, and the 400 / 401 / 409 / 501 paths on all
-three coach routes — plus the 49 assertions in `check:strava`, which hold the
+three coach routes — plus the 57 assertions in `check:strava`, which hold the
 matcher, every computed figure and every branch of both guard rails against the
 real plan. What has not is the round-trip through Strava's own consent screen,
 the shape of a live activity payload, and any call that reaches Claude.

@@ -37,6 +37,13 @@ charger({
 import type { ActiviteDetaillee, ActiviteStrava } from '../src/data/strava';
 import { msc_session as PLAN } from '../src/data/plan.generated';
 
+/** « 200 » → « 3h20 ». Le même format que celui des libellés d'ajustement. */
+function hm(minutes: number): string {
+  const m = Math.round(Math.abs(minutes));
+  const h = Math.floor(m / 60);
+  return h ? `${h}h${String(m % 60).padStart(2, '0')}` : `${m} min`;
+}
+
 let fails = 0;
 const check = (nom: string, ok: boolean, detail = '') => {
   if (!ok) fails++;
@@ -249,6 +256,26 @@ check('une fraction dérisoire est ramenée à la moitié',
 check('une fraction absente ne casse rien',
   applique(zonePrevue, Number.NaN).duree_min === suivanteCourse.duree_min);
 
+/* Une fois la proposition acceptée, la séance PORTE la nouvelle durée : c'est
+   ce que « accepter déplace vraiment la séance » veut dire. Il n'y a alors plus
+   rien à calculer, et `avant` est le seul endroit qui sache d'où elle vient —
+   sans lui la carte écrirait « 54 min → 54 min ». */
+const acceptee = appliquerAdaptation(
+  {
+    zone: zonePrevue,
+    part_duree: 0.75,
+    applique: true,
+    avant: { duree_min: 100, distance_km: null, natation_m: null, charge: 700, zones: [zonePrevue] },
+  },
+  suivanteCourse,
+);
+check('acceptée, la flèche part de ce que la séance était',
+  acceptee.session_avant === '100 min', acceptee.session_avant);
+check('et arrive à ce qu’elle est devenue',
+  acceptee.duree_min === suivanteCourse.duree_min, acceptee.session_apres);
+check('pas encore acceptée, la flèche part de la séance telle qu’elle est',
+  applique(zonePrevue, 0.75).session_avant === `${suivanteCourse.duree_min} min`);
+
 /* The weekly half. The gap is arithmetic and only counts what has come due —
    walking to a week that has not happened yet must not report it as skipped. */
 console.log('\n=== l’écart de la semaine ===');
@@ -315,6 +342,24 @@ check('un ajustement de semaine porte sa phrase',
   rendu({ semaine: 9, texte: { fr: 'Test décalé', pl: 'x' } })?.quand === 'Semaine 9');
 check('un ajustement de semaine sans phrase ne rend rien',
   rendu({ semaine: 9 }) === undefined);
+
+const acceptee2 = rendu({
+  session_id: longue.id,
+  part: 0.8,
+  applique: true,
+  avant: { duree_min: 200, distance_km: null, natation_m: null, charge: 1000, zones: [] },
+});
+check('un ajustement accepté part de ce que la séance était',
+  acceptee2?.quoi.includes(`3h20 → ${hm(longue.duree_min)}`) === true, acceptee2?.quoi);
+
+const nageeAcceptee = rendu({
+  session_id: seanceNage.id,
+  part: 1.2,
+  applique: true,
+  avant: { duree_min: 40, distance_km: null, natation_m: 1000, charge: 200, zones: [] },
+});
+check('une nage acceptée aussi, en mètres',
+  nageeAcceptee?.quoi.includes('1 000 →') === true, nageeAcceptee?.quoi);
 
 console.log(`\n${PLAN.length} séances au plan`);
 console.log(fails === 0 ? '\nOK' : `\n${fails} ÉCHECS`);

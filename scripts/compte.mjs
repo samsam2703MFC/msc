@@ -26,13 +26,30 @@ const USAGE = `usage :
   npm run compte -- acces <email> <athlete_id> [lecture|ecriture]`;
 
 async function demanderMotDePasse() {
+  /* Sans terminal — un pipe, un script de déploiement — les deux questions
+     posées l'une après l'autre ne se répondent jamais : readline a déjà vidé le
+     flux. On lit alors les deux lignes d'un coup, au lieu d'attendre à jamais
+     sur une entrée qui est déjà arrivée. */
+  const [a, b] = stdin.isTTY ? await demanderDeuxFois() : await deuxLignes();
+  if (a !== b) throw new Error('Les deux saisies diffèrent.');
+  if (a.length < 12) throw new Error('Douze caractères au moins.');
+  return a;
+}
+
+async function demanderDeuxFois() {
   const rl = createInterface({ input: stdin, output: stdout });
   const a = await rl.question('Mot de passe : ');
   const b = await rl.question('Encore une fois : ');
   rl.close();
-  if (a !== b) throw new Error('Les deux saisies diffèrent.');
-  if (a.length < 12) throw new Error('Douze caractères au moins.');
-  return a;
+  return [a, b];
+}
+
+async function deuxLignes() {
+  let brut = '';
+  for await (const morceau of stdin) brut += morceau;
+  const lignes = brut.split('\n');
+  /* Une seule ligne : le mot de passe n'est pas confirmé, il est donné. */
+  return lignes.length > 1 && lignes[1] !== '' ? [lignes[0], lignes[1]] : [lignes[0], lignes[0]];
 }
 
 try {

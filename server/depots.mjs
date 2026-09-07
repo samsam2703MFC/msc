@@ -23,6 +23,21 @@
 
 import { lignes, ligne, transaction } from './bd.mjs';
 
+/**
+ * Un refus que l'athlète doit lire.
+ *
+ * Le serveur masque le détail de ce qui casse — un message d'erreur peut porter
+ * une requête — et ne rend que la forme. Une proposition déjà appliquée sur la
+ * séance, un plan sans séance : ce ne sont pas des pannes, ce sont des réponses,
+ * et elles sont écrites pour être lues.
+ */
+export class DepotError extends Error {
+  constructor(message, code = 400) {
+    super(message);
+    this.code = code;
+  }
+}
+
 const L = (r, prefixe) => ({ fr: r[`${prefixe}_fr`], pl: r[`${prefixe}_pl`] });
 const Lnul = (r, prefixe) =>
   r[`${prefixe}_fr`] === null && r[`${prefixe}_pl`] === null ? undefined : L(r, prefixe);
@@ -270,12 +285,17 @@ async function leCoach(athleteId, planId) {
       id: d.id, analyse_id: d.analyse_id, session_id: d.session_id,
       zone: d.zone_code ?? undefined, part_duree: Number(d.part_duree),
       pourquoi: L(d, 'pourquoi'), applique: Boolean(d.applique_le),
+      /* Ce que la séance était avant l'acceptation. La séance, elle, porte
+         maintenant ce que la proposition en a fait : sans ce souvenir, la carte
+         écrirait « 54 min → 54 min ». */
+      avant: d.applique_le ? json(d.avant) : undefined,
     })),
     msc_ajustement: ajustements.map((j) => ({
       id: j.id, analyse_id: j.analyse_id,
       session_id: j.session_id ?? undefined, semaine: nombre(j.semaine),
       type: j.type_code, part: nombre(j.part), texte: Lnul(j, 'texte'),
       applique: Boolean(j.applique_le),
+      avant: j.applique_le ? json(j.avant) : undefined,
     })),
     msc_ecart: ecarts.map((e) => ({
       semaine: e.semaine, texte: L(e, 'texte'), recalcul: json(e.recalcul),
@@ -510,19 +530,243 @@ function secondesDAllure(allure) {
   return min * 60 + (sec || 0);
 }
 
-/** Accepter ou retirer une proposition du coach. */
-export async function appliquer(athleteId, table, id, applique) {
-  if (table !== 'msc_adaptation' && table !== 'msc_ajustement') {
-    throw new Error('table inconnue');
-  }
-  const { bd } = await import('./bd.mjs');
-  const [r] = await bd().execute(
-    `UPDATE ${table} p JOIN msc_analyse n ON n.id = p.analyse_id
-     SET p.applique_le = ? WHERE p.id = ? AND n.athlete_id = ?`,
-    [applique ? new Date() : null, id, athleteId],
+/* ------------------------------------- accepter, et déplacer la séance */
+
+/* Une proposition acceptée déplace la séance.
+
+   C'est tout le point. Tant qu'accepter ne posait qu'une date sur la
+   proposition, l'écran disait « accepté » au-dessus d'une séance qui n'avait
+   pas bougé d'une minute — et le lendemain le plan redemandait les 68 minutes
+   que le coach venait de ramener à 54.
+
+   Ce qui bouge : la quantité de la séance. Sa durée, et avec elle la distance,
+   les mètres et la charge, qui sont la même quantité dite dans trois unités —
+   une séance à 80 % est à 80 % de chacune. Et, pour une adaptation, la zone
+   dans laquelle elle se court. Aucune allure n'est écrite : le moteur la dérive
+   de la zone et du bloc, ici comme partout ailleurs.
+
+   Ce qui est gardé : `avant`, la séance telle qu'elle était juste avant. C'est
+   le seul fait de cette opération qui ne se recalcule pas — la séance a été
+   écrasée — et c'est lui qui rend le retrait exact et qui garde le
+   « 68 min → 54 min » vrai une fois la proposition acceptée. */
+
+const PART_MIN = 0.5;
+const PART_MAX = 1.25;
+
+/** La ligne « 68 min · 12 km · RPE 7 », recomposée. Le classeur l'écrit ainsi,
+    le générateur aussi ; c'est le seul endroit qui la fabrique. */
+function composerMeta(duree, distance, metres, rpe) {
+  return (
+    [
+      duree ? `${duree} min` : '',
+      distance ? `${Number(distance)} km` : '',
+      metres ? `${metres} m` : '',
+      rpe ? `RPE ${rpe}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ') || 'repos'
   );
-  if (r.affectedRows === 0) throw new Error('proposition inconnue');
-  return { id, applique: Boolean(applique) };
+}
+
+/* Les totaux d'une semaine sont la somme de ses séances. Dès qu'une séance
+   bouge ils sont périmés par construction, alors ils suivent — sans quoi
+   l'écart de la semaine se mesurerait contre un volume qui n'existe plus.
+
+   Sans `semaine`, toutes celles du plan : c'est ce qu'un plan qu'on vient
+   d'écrire demande. */
+async function recalculerSemaines(cnx, planId, semaine = null) {
+  const filtre = semaine === null ? '' : ' AND semaine = ?';
+  await cnx.execute(
+    `UPDATE msc_week w
+       JOIN (SELECT plan_id, semaine,
+                    ROUND(SUM(duree_min) / 60, 1)          AS heures,
+                    NULLIF(ROUND(SUM(COALESCE(distance_km, 0)), 1), 0) AS km,
+                    NULLIF(SUM(COALESCE(natation_m, 0)), 0) AS metres,
+                    SUM(charge)                             AS charge
+             FROM msc_session WHERE plan_id = ?${filtre}
+             GROUP BY plan_id, semaine) t
+         ON t.plan_id = w.plan_id AND t.semaine = w.semaine
+     SET w.heures = t.heures, w.km = t.km, w.natation_m = t.metres, w.charge = t.charge`,
+    semaine === null ? [planId] : [planId, semaine],
+  );
+}
+
+async function zonesDe(cnx, sessionId) {
+  const [rows] = await cnx.execute(
+    `SELECT z.code, z.ordre FROM msc_session_zone s JOIN msc_zone z ON z.code = s.zone_code
+     WHERE s.session_id = ? ORDER BY s.ordre`,
+    [sessionId],
+  );
+  return rows;
+}
+
+/**
+ * Le garde-fou de zone, tenu là où la proposition s'écrit.
+ *
+ * Une zone que la base ne connaît pas, ou une zone *plus rapide* que celle
+ * prévue, retombe sur celle de la séance : une adaptation faite après une
+ * séance dure protège, elle n'aiguise pas, et décider quand aller vite est le
+ * travail du plan — il l'a déjà fait. `msc_zone.ordre` va de la plus lente à la
+ * plus rapide, donc c'est une comparaison d'entiers.
+ *
+ * Le tenir à l'écriture plutôt qu'à l'affichage a une conséquence qui vaut la
+ * peine : ce qui est rangé est déjà ce qui sera montré, et ce qui sera
+ * appliqué. Il n'y a pas une version affichable et une version stockée.
+ */
+export async function zoneAdmissible(cnx, sessionId, propose) {
+  if (!propose) return null;
+  const zones = await zonesDe(cnx, sessionId);
+  const prevue = zones[zones.length - 1];
+  /* Hyrox, nage, vélo : le plan n'écrit pas d'allure dessus, l'adaptation n'en
+     reçoit pas non plus. */
+  if (!prevue) return null;
+  const [[p]] = await cnx.execute('SELECT code, ordre FROM msc_zone WHERE code = ?', [propose]);
+  if (!p) return prevue.code;
+  return p.ordre > prevue.ordre ? prevue.code : p.code;
+}
+
+/** Écrit la séance, et rend ce qu'elle était. */
+async function deplacerSeance(cnx, sessionId, { part, zone, source }) {
+  const [[s]] = await cnx.execute(
+    `SELECT id, plan_id, semaine, duree_min, rpe_cible, charge, distance_km, natation_m,
+            meta_fr, meta_pl, adapte_par
+     FROM msc_session WHERE id = ? FOR UPDATE`,
+    [sessionId],
+  );
+  if (!s) throw new DepotError('Séance inconnue.', 404);
+  /* Deux propositions acceptées sur la même séance se marcheraient dessus : la
+     seconde partirait de ce que la première a écrit, et retirer la première
+     effacerait la seconde. Une à la fois, et on dit laquelle tient. */
+  if (s.adapte_par && s.adapte_par !== source) {
+    throw new DepotError('Cette séance porte déjà une autre proposition acceptée.', 409);
+  }
+
+  const zonesAvant = await zonesDe(cnx, sessionId);
+  const avant = {
+    duree_min: s.duree_min,
+    distance_km: s.distance_km === null ? null : Number(s.distance_km),
+    natation_m: s.natation_m === null ? null : Number(s.natation_m),
+    charge: s.charge,
+    meta_fr: s.meta_fr,
+    meta_pl: s.meta_pl,
+    zones: zonesAvant.map((z) => z.code),
+  };
+
+  const f = Number.isFinite(part) ? Math.min(PART_MAX, Math.max(PART_MIN, part)) : 1;
+  const duree = s.duree_min ? Math.max(1, Math.round(s.duree_min * f)) : 0;
+  const distance = avant.distance_km === null ? null : Math.round(avant.distance_km * f * 10) / 10;
+  /* Une nage s'écrit en centaines de mètres, dans le classeur comme dans le
+     générateur. 2 400 × 0,8 = 1 920 se range à 1 900, pas à 1 920. */
+  const metres = avant.natation_m === null ? null : Math.round((avant.natation_m * f) / 100) * 100;
+  const meta = composerMeta(duree, distance, metres, s.rpe_cible);
+
+  await cnx.execute(
+    `UPDATE msc_session SET duree_min = ?, distance_km = ?, natation_m = ?, charge = ?,
+       meta_fr = ?, meta_pl = ?, adapte_par = ? WHERE id = ?`,
+    [duree, distance, metres, duree * s.rpe_cible, meta, meta, source, sessionId],
+  );
+
+  /* La zone n'est réécrite que si elle change. Sans ça, accepter une adaptation
+     qui garde la zone prévue réduirait « échauffement EF puis seuil » à
+     « seuil » — la séance perdrait son échauffement pour rien. */
+  const principale = avant.zones[avant.zones.length - 1];
+  if (zone && zone !== principale) {
+    await cnx.execute('DELETE FROM msc_session_zone WHERE session_id = ?', [sessionId]);
+    await cnx.execute(
+      'INSERT INTO msc_session_zone (session_id, zone_code, ordre) VALUES (?, ?, 0)',
+      [sessionId, zone],
+    );
+  }
+
+  await recalculerSemaines(cnx, s.plan_id, s.semaine);
+  return avant;
+}
+
+/** Remet la séance comme elle était. Rend faux si elle a changé de main depuis. */
+async function restaurerSeance(cnx, sessionId, avant, source) {
+  const [[s]] = await cnx.execute(
+    'SELECT id, plan_id, semaine, adapte_par FROM msc_session WHERE id = ? FOR UPDATE',
+    [sessionId],
+  );
+  /* La séance n'est plus celle que cette proposition a écrite — un plan
+     regénéré, une autre proposition. On retire l'acceptation sans toucher à la
+     séance : restaurer écraserait le travail de quelqu'un d'autre. */
+  if (!s || !avant || s.adapte_par !== source) return false;
+
+  await cnx.execute(
+    `UPDATE msc_session SET duree_min = ?, distance_km = ?, natation_m = ?, charge = ?,
+       meta_fr = ?, meta_pl = ?, adapte_par = NULL WHERE id = ?`,
+    [avant.duree_min, avant.distance_km ?? null, avant.natation_m ?? null, avant.charge,
+     avant.meta_fr, avant.meta_pl, sessionId],
+  );
+  await cnx.execute('DELETE FROM msc_session_zone WHERE session_id = ?', [sessionId]);
+  for (const [i, z] of (avant.zones ?? []).entries()) {
+    await cnx.execute(
+      'INSERT INTO msc_session_zone (session_id, zone_code, ordre) VALUES (?, ?, ?)',
+      [sessionId, z, i],
+    );
+  }
+  await recalculerSemaines(cnx, s.plan_id, s.semaine);
+  return true;
+}
+
+/** Accepter ou retirer une proposition du coach. */
+export async function appliquer(athleteId, table, id, applique, cnx) {
+  if (table !== 'msc_adaptation' && table !== 'msc_ajustement') {
+    throw new DepotError('Table de proposition inconnue.', 400);
+  }
+  return cnx
+    ? faireAppliquer(cnx, athleteId, table, id, applique)
+    : transaction((c) => faireAppliquer(c, athleteId, table, id, applique));
+}
+
+async function faireAppliquer(cnx, athleteId, table, id, applique) {
+  const source = `${table}:${id}`;
+
+  {
+    const [[p]] = await cnx.execute(
+      `SELECT p.* FROM ${table} p JOIN msc_analyse n ON n.id = p.analyse_id
+       WHERE p.id = ? AND n.athlete_id = ? FOR UPDATE`,
+      [id, athleteId],
+    );
+    if (!p) throw new DepotError('Proposition inconnue.', 404);
+
+    /* Déjà dans l'état demandé : ne rien faire. Un double clic, ou un rejeu de
+       la file hors-ligne, ne doit pas raccourcir la séance deux fois. */
+    const deja = p.applique_le !== null;
+    if (Boolean(applique) === deja) return { id, applique: deja, seance: false };
+
+    const part =
+      table === 'msc_adaptation'
+        ? Number(p.part_duree)
+        : p.part === null || p.part === undefined
+          ? 1
+          : Number(p.part);
+
+    if (!applique) {
+      /* Un ajustement de semaine n'a pas de séance : il porte sa phrase, et
+         l'accepter n'est qu'une décision notée. */
+      const rendue = p.session_id
+        ? await restaurerSeance(cnx, p.session_id, json(p.avant), source)
+        : false;
+      await cnx.execute(`UPDATE ${table} SET applique_le = NULL WHERE id = ?`, [id]);
+      return { id, applique: false, seance: rendue };
+    }
+
+    const avant = p.session_id
+      ? await deplacerSeance(cnx, p.session_id, {
+          part,
+          zone: table === 'msc_adaptation' ? p.zone_code : null,
+          source,
+        })
+      : null;
+    await cnx.execute(`UPDATE ${table} SET applique_le = ?, avant = ? WHERE id = ?`, [
+      new Date(),
+      avant ? JSON.stringify(avant) : null,
+      id,
+    ]);
+    return { id, applique: true, seance: Boolean(avant) };
+  }
 }
 
 /* ------------------------------------------------- ce que le coach produit */
@@ -550,7 +794,11 @@ export async function enregistrerAnalyse(athleteId, { session_id, date, modele, 
       await cnx.execute(
         `INSERT INTO msc_adaptation (analyse_id, session_id, zone_code, part_duree, pourquoi_fr, pourquoi_pl)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [r.insertId, suivante_id, adaptation.zone ?? null,
+        [r.insertId, suivante_id,
+         /* La zone passe le garde-fou avant d'être rangée, pas au moment de
+            l'afficher : ce qui est en base est déjà ce qui sera montré, et ce
+            qui sera écrit sur la séance le jour où l'athlète accepte. */
+         await zoneAdmissible(cnx, suivante_id, adaptation.zone),
          borner(adaptation.part_duree, 0.5, 1), ...deuxLangues(adaptation.pourquoi, langue)],
       );
     }
@@ -626,6 +874,188 @@ export async function ajouterAuChat(athleteId, fil, tours) {
 
 /* --------------------------------------------- le back office : compétitions */
 
+/* --------------------------------------------- enregistrer un plan généré */
+
+/* Le générateur produit un plan entier — blocs, semaines, séances — sans appeler
+   quoi que ce soit. Jusqu'ici il s'affichait et disparaissait avec l'onglet.
+
+   Ce qui est écrit ici est ce que le générateur a décidé : les dates, les
+   durées, les zones, les titres. Ce qui NE l'est pas : la charge, qui est
+   durée × RPE et se dérive donc plutôt que de se croire, et les totaux
+   hebdomadaires, qui sont la somme des séances de la semaine. Le serveur range
+   ce qu'on lui remet, mais il ne range pas deux fois le même nombre.
+
+   Le plan d'avant est désactivé, pas supprimé, et rien de ce que l'athlète a
+   vécu ne bouge : le journal et les activités appartiennent à l'athlète et
+   pointent vers des séances. Un plan neuf, ce sont des séances neuves ; les
+   anciennes restent, et leur histoire avec. C'est la réponse que le schéma
+   donnait déjà, et c'est ici qu'elle se vérifie. */
+
+const MAX_BLOCS = 12;
+const MAX_SEMAINES = 120;
+const MAX_SEANCES = 1200;
+
+function texte(v, max) {
+  return String(v ?? '').slice(0, max);
+}
+
+function entier(v, min, max, defaut = 0) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return defaut;
+  return Math.min(max, Math.max(min, n));
+}
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function enregistrerPlan(athleteId, plan, cnx) {
+  /* Sur la connexion de `mutation()` quand il y en a une : la réservation de
+     l'identifiant et l'écriture du plan sont alors la même transaction, et un
+     rejeu de la file hors-ligne ne peut pas semer un second plan. */
+  return cnx
+    ? ecrirePlan(cnx, athleteId, plan)
+    : transaction((c) => ecrirePlan(c, athleteId, plan));
+}
+
+async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessions, objectifs = [] }) {
+  if (!Array.isArray(blocs) || blocs.length === 0) throw new DepotError('Plan sans bloc.');
+  if (!Array.isArray(sessions) || sessions.length === 0) throw new DepotError('Plan sans séance.');
+  if (blocs.length > MAX_BLOCS) throw new DepotError(`Plus de ${MAX_BLOCS} blocs.`);
+  if ((semaines?.length ?? 0) > MAX_SEMAINES) throw new DepotError(`Plus de ${MAX_SEMAINES} semaines.`);
+  if (sessions.length > MAX_SEANCES) throw new DepotError(`Plus de ${MAX_SEANCES} séances.`);
+  for (const x of sessions) {
+    if (!ISO.test(String(x.date))) throw new DepotError(`Date de séance illisible : ${x.date}`);
+  }
+
+  const dates = sessions.map((x) => x.date).sort();
+
+  {
+    /* Un seul plan actif à la fois. Les autres restent lisibles en base ; ils
+       ne sont simplement plus celui que l'application sert. */
+    await cnx.execute('UPDATE msc_plan SET actif = 0 WHERE athlete_id = ?', [athleteId]);
+    const [r] = await cnx.execute(
+      `INSERT INTO msc_plan (athlete_id, nom, origine, debut, fin, actif, methode)
+       VALUES (?, ?, 'genere', ?, ?, 1, ?)`,
+      [athleteId, texte(nom || 'Plan généré', 160), dates[0], dates[dates.length - 1],
+       methode ? JSON.stringify(methode) : null],
+    );
+    const planId = r.insertId;
+
+    const idDeBloc = new Map();
+    for (const b of blocs) {
+      const [rb] = await cnx.execute(
+        `INSERT INTO msc_bloc (plan_id, code, part, semaine_de, semaine_a,
+           nom_fr, nom_pl, focus_fr, focus_pl)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [planId, texte(b.code, 4), Math.min(1, Math.max(0, Number(b.part) || 0)),
+         entier(b.de, 0, 999), entier(b.a, 0, 999),
+         texte(b.nom?.fr, 120), texte(b.nom?.pl ?? b.nom?.fr, 120),
+         b.quoi?.fr ? texte(b.quoi.fr, 190) : null,
+         b.quoi?.fr ? texte(b.quoi.pl ?? b.quoi.fr, 190) : null],
+      );
+      idDeBloc.set(b.code, rb.insertId);
+    }
+
+    /* Une séance dont le bloc n'existe pas n'est pas devinée : elle est
+       rattachée au dernier, et le plan reste cohérent plutôt que troué. */
+    const dernierBloc = idDeBloc.get(blocs[blocs.length - 1].code);
+    const blocDe = (code) => idDeBloc.get(code) ?? dernierBloc;
+
+    for (const w of semaines ?? []) {
+      await cnx.execute(
+        `INSERT INTO msc_week (plan_id, semaine, bloc_id, phase, heures, km, natation_m, charge)
+         VALUES (?, ?, ?, ?, 0, NULL, NULL, NULL)`,
+        [planId, entier(w.semaine, 0, 999), blocDe(w.bloc), texte(w.phase, 120)],
+      );
+    }
+
+    /* `ordre` départage deux séances du même jour — la nage du matin et le vélo
+       du soir. Il se compte ici : c'est une propriété du plan écrit, pas une
+       donnée que le navigateur aurait à tenir. */
+    const parJour = new Map();
+    for (const x of sessions) {
+      const ordre = parJour.get(x.date) ?? 0;
+      parJour.set(x.date, ordre + 1);
+
+      const duree = entier(x.duree_min, 0, 600);
+      const rpe = entier(x.rpe_cible, 0, 10);
+      const [rs] = await cnx.execute(
+        `INSERT INTO msc_session (plan_id, semaine, bloc_id, date, ordre, jour_long, jour_fr,
+           jour_pl, phase, discipline, type_code, duree_min, rpe_cible, charge, distance_km,
+           natation_m, titre_fr, titre_pl, titre_court_fr, titre_court_pl, meta_fr, meta_pl,
+           detail_fr, detail_pl, consigne_fr, consigne_pl, but_fr, but_pl, reussite_fr, reussite_pl)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [planId, entier(x.semaine, 0, 999), blocDe(x.bloc), x.date, ordre,
+         texte(x.jour_long, 48), texte(x.jour?.fr, 8), texte(x.jour?.pl ?? x.jour?.fr, 8),
+         texte(x.phase, 120), texte(x.discipline, 32), texte(x.type, 16),
+         duree, rpe,
+         /* La charge est durée × RPE. Elle se dérive, donc elle ne se croit pas. */
+         duree * rpe,
+         x.distance_km === undefined || x.distance_km === null ? null : Number(x.distance_km),
+         x.natation_m === undefined || x.natation_m === null ? null : entier(x.natation_m, 0, 100000),
+         texte(x.titre?.fr, 190), texte(x.titre?.pl ?? x.titre?.fr, 190),
+         texte(x.titre_court?.fr, 120), texte(x.titre_court?.pl ?? x.titre_court?.fr, 120),
+         texte(x.meta?.fr, 120), texte(x.meta?.pl ?? x.meta?.fr, 120),
+         String(x.detail?.fr ?? ''), String(x.detail?.pl ?? x.detail?.fr ?? ''),
+         x.consigne?.fr ? texte(x.consigne.fr, 190) : null,
+         x.consigne?.fr ? texte(x.consigne.pl ?? x.consigne.fr, 190) : null,
+         x.but?.fr ? texte(x.but.fr, 190) : null,
+         x.but?.fr ? texte(x.but.pl ?? x.but.fr, 190) : null,
+         x.reussite?.fr ? texte(x.reussite.fr, 190) : null,
+         x.reussite?.fr ? texte(x.reussite.pl ?? x.reussite.fr, 190) : null],
+      );
+
+      for (const [i, z] of (x.zones ?? []).slice(0, 8).entries()) {
+        await cnx.execute(
+          'INSERT INTO msc_session_zone (session_id, zone_code, ordre) VALUES (?, ?, ?)',
+          [rs.insertId, texte(z, 16), i],
+        );
+      }
+    }
+
+    await recalculerSemaines(cnx, planId);
+
+    /* Les objectifs suivent le plan, les compétitions non : une course
+       appartient à l'athlète. On retrouve la sienne à la date et au nom, et on
+       ne la crée que si elle manque — sinon regénérer un plan sèmerait des
+       doublons dans le back office. */
+    const semaineDe = new Map(sessions.map((x) => [x.date, entier(x.semaine, 0, 999)]));
+    let vises = 0;
+    for (const o of objectifs) {
+      if (!ISO.test(String(o.date)) || !o.nom) continue;
+      let [[c]] = await cnx.execute(
+        'SELECT id FROM msc_competition WHERE athlete_id = ? AND date = ? AND nom = ?',
+        [athleteId, o.date, texte(o.nom, 160)],
+      );
+      if (!c) {
+        const [rc] = await cnx.execute(
+          `INSERT INTO msc_competition (athlete_id, date, nom, discipline, distance_km, officielle)
+           VALUES (?, ?, ?, 'Course à pied', ?, 1)`,
+          [athleteId, o.date, texte(o.nom, 160), Number(o.distance_km) || 10],
+        );
+        c = { id: rc.insertId };
+      }
+      const basse = entier(o.cible_s, 1, 86400, 3600);
+      const haute = Math.max(basse, entier(o.cible_haute_s ?? o.cible_s, 1, 86400, basse));
+      const libelle = `${Math.floor(basse / 60)}:${String(basse % 60).padStart(2, '0')}`;
+      await cnx.execute(
+        `INSERT INTO msc_objectif (plan_id, competition_id, semaine, principal,
+           cible_s, cible_haute_s, cible_fr, cible_pl)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE semaine = VALUES(semaine)`,
+        /* La semaine de l'objectif est celle de la séance qui tombe ce jour-là.
+           Elle se déduit du plan qu'on vient d'écrire ; la demander au
+           formulaire serait demander un nombre qu'on connaît déjà. */
+        [planId, c.id, semaineDe.get(o.date) ?? 0, o.principal ? 1 : 0,
+         basse, haute, libelle, libelle],
+      );
+      vises += 1;
+    }
+
+    return { plan_id: planId, seances: sessions.length, semaines: semaines?.length ?? 0,
+             blocs: blocs.length, objectifs: vises, debut: dates[0], fin: dates[dates.length - 1] };
+  }
+}
+
 export async function ecrireCompetition(athleteId, c) {
   return transaction(async (cnx) => {
     let id = c.id;
@@ -638,7 +1068,7 @@ export async function ecrireCompetition(athleteId, c) {
          c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null,
          id, athleteId],
       );
-      if (r.affectedRows === 0) throw new Error('compétition inconnue');
+      if (r.affectedRows === 0) throw new DepotError('Compétition inconnue.', 404);
     } else {
       const [r] = await cnx.execute(
         `INSERT INTO msc_competition (athlete_id, date, nom, lieu, pays, discipline,
@@ -676,7 +1106,7 @@ export async function supprimerCompetition(athleteId, id) {
   const [r] = await bd().execute(
     'DELETE FROM msc_competition WHERE id = ? AND athlete_id = ?', [id, athleteId],
   );
-  if (r.affectedRows === 0) throw new Error('compétition inconnue');
+  if (r.affectedRows === 0) throw new DepotError('Compétition inconnue.', 404);
   return { id };
 }
 

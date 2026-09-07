@@ -171,6 +171,23 @@ export interface MscAdaptation {
   part_duree: number;
   pourquoi: Localized;
   applique: boolean;
+  /** Renseigné une fois la proposition acceptée. Voir `SeanceAvant`. */
+  avant?: SeanceAvant;
+}
+
+/** Ce qu'une séance était juste avant qu'une proposition acceptée l'écrive.
+
+    Accepter déplace vraiment la séance : `msc_session` porte désormais la durée
+    et la zone que le coach a proposées. Ce souvenir est le seul fait de
+    l'opération qui ne se recalcule pas — la séance a été écrasée — et c'est lui
+    qui garde « 68 min → 54 min » vrai après l'acceptation, et le retrait
+    exact. */
+export interface SeanceAvant {
+  duree_min: number;
+  distance_km: number | null;
+  natation_m: number | null;
+  charge: number;
+  zones: ZoneCode[];
 }
 
 /** Un ajustement du réétalonnage hebdomadaire, accepté un par un. Soit une
@@ -186,6 +203,7 @@ export interface MscAjustement {
   part?: number;
   texte?: Localized;
   applique: boolean;
+  avant?: SeanceAvant;
 }
 
 export interface MscEcartStat {

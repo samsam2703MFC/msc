@@ -285,6 +285,9 @@ function Analyse({
   const visee = adaptation
     ? db.one('msc_session', (s) => s.id === adaptation.session_id)
     : undefined;
+  /* La proposition est une zone et une part ; ce que ça donne — la ligne barrée
+     et celle qui la remplace — se calcule ici, avec le moteur. */
+  const applique = adaptation && visee ? appliquerAdaptation(adaptation, visee) : undefined;
   /* Bars are read against the target pace, so the drift is the story. */
   const base = cible ?? Math.min(...splits);
   const top = Math.max(...splits, base + 1);
@@ -319,7 +322,7 @@ function Analyse({
 
       {/* La proposition est une zone et une part ; les minutes et l'allure se
           calculent ici, avec le moteur, donc elles suivent la référence. */}
-      {adaptation && visee && (
+      {adaptation && visee && applique && (
         <div
           style={{
             borderRadius: 12,
@@ -336,8 +339,11 @@ function Analyse({
           </SectionLabel>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Le « avant » vient de la proposition, pas de la séance : une fois
+                acceptée, la séance PORTE la nouvelle durée, et lire `visee` ici
+                écrirait « 54 min → 54 min ». */}
             <Mono size={11} color={C.inkQuiet} style={{ textDecoration: 'line-through' }}>
-              {`${visee.titre_court[lang]} · ${visee.duree_min} min`}
+              {`${visee.titre_court[lang]} · ${applique.session_avant}`}
             </Mono>
             <Icon name="arrow-right" size={14} color={C.accentDeep} />
           </div>
@@ -351,7 +357,7 @@ function Analyse({
               compact
             />
             <Mono size={13} color={C.ink}>
-              {appliquerAdaptation(adaptation, visee).session_apres}
+              {applique.session_apres}
             </Mono>
           </div>
 

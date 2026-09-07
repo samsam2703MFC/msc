@@ -23,6 +23,7 @@ import type {
   MscEcartStat,
   MscJournal,
   MscPlanSession,
+  SeanceAvant,
   Lang,
   ZoneCode,
 } from './types';
@@ -221,26 +222,44 @@ const PART_MAX = 1;
  * choose among the ones the engine is willing to compute.
  */
 export function appliquerAdaptation(
-  adaptation: { zone?: string; part_duree: number },
+  adaptation: { zone?: string; part_duree: number; applique?: boolean; avant?: SeanceAvant },
   suivante: MscPlanSession,
-): { session_apres: string; zone?: ZoneCode; duree_min: number } {
+): { session_avant: string; session_apres: string; zone?: ZoneCode; duree_min: number } {
+  /* Une fois la proposition acceptée, il n'y a plus rien à calculer : la séance
+     PORTE la durée et la zone proposées, et `avant` dit ce qu'elle était. La
+     recalculer ici la réduirait une seconde fois à chaque affichage. */
+  const avant = adaptation.applique ? adaptation.avant : undefined;
+  if (avant) {
+    const zone = zonePrincipale(suivante);
+    return {
+      session_avant: `${avant.duree_min} min`,
+      session_apres: zone
+        ? `${suivante.duree_min} min · ${db.allure(zone, suivante.bloc)}`
+        : `${suivante.duree_min} min`,
+      zone,
+      duree_min: suivante.duree_min,
+    };
+  }
+
   const part = Number.isFinite(adaptation.part_duree)
     ? Math.min(PART_MAX, Math.max(PART_MIN, adaptation.part_duree))
     : PART_MAX;
   const duree_min = Math.round(suivante.duree_min * part);
+  const session_avant = `${suivante.duree_min} min`;
 
   /* A Hyrox session, a swim, a ride: the plan writes no zone on them because
      they are not run in paces. The adjustment is then a duration and nothing
      else — printing "6:00/km" under a Hyrox circuit would be the same lie as
      putting a pace on a swim. */
   const planifiee = zonePrincipale(suivante);
-  if (!planifiee) return { session_apres: `${duree_min} min`, duree_min };
+  if (!planifiee) return { session_avant, session_apres: `${duree_min} min`, duree_min };
 
   const propose = adaptation.zone ?? '';
   const connue = estZone(propose) ? propose : planifiee;
   const zone = ZONES.indexOf(connue) > ZONES.indexOf(planifiee) ? planifiee : connue;
 
   return {
+    session_avant,
     session_apres: `${duree_min} min · ${db.allure(zone, suivante.bloc)}`,
     zone,
     duree_min,
@@ -487,15 +506,26 @@ export function libelleAjustement(
   const session = db.one('msc_session', (s) => s.id === a.session_id);
   if (!session) return undefined;
 
+  /* Accepté : la séance porte déjà la nouvelle quantité, et `avant` dit d'où
+     elle vient. Pas accepté : la quantité proposée se calcule. Dans les deux
+     cas la flèche dit vrai — c'est tout ce qu'on lui demande. */
+  const avant = a.applique ? a.avant : undefined;
   const part = Number.isFinite(a.part)
     ? Math.min(PART_SEMAINE_MAX, Math.max(PART_SEMAINE_MIN, a.part as number))
     : 1;
 
   /* Une nage est écrite en mètres et une course en minutes : chacune parle du
      nombre dont elle est faite. */
-  const quoi = session.natation_m
-    ? `${session.titre_court[lang]} ${milliers(session.natation_m)} → ${milliers(session.natation_m * part)} m`
-    : `${session.titre_court[lang]} ${hm(session.duree_min)} → ${hm(session.duree_min * part)}`;
+  const enMetres = Boolean(session.natation_m ?? avant?.natation_m);
+  const quantite = (s: { duree_min: number; natation_m?: number | null }) =>
+    enMetres ? (s.natation_m ?? 0) : s.duree_min;
+
+  const de = quantite(avant ?? session);
+  const vers = avant ? quantite(session) : quantite(session) * part;
+
+  const quoi = enMetres
+    ? `${session.titre_court[lang]} ${milliers(de)} → ${milliers(vers)} m`
+    : `${session.titre_court[lang]} ${hm(de)} → ${hm(vers)}`;
 
   return {
     quoi,

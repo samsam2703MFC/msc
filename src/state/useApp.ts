@@ -552,6 +552,34 @@ export function useApp() {
     [recharger],
   );
 
+  /* --------------------------------------------------------------- le plan */
+
+  const [planJob, setPlanJob] = useState<'idle' | 'envoi' | 'fait'>('idle');
+  const [planErreur, setPlanErreur] = useState<string | null>(null);
+
+  /* Enregistrer un plan généré. Le rechargement qui suit n'est pas un
+     rafraîchissement de confort : l'application entière lit le plan actif, et
+     ce n'est plus le même. */
+  const enregistrerPlan = useCallback(
+    async (corps: Parameters<typeof api.enregistrerPlan>[0]) => {
+      setPlanJob('envoi');
+      setPlanErreur(null);
+      try {
+        const r = await api.enregistrerPlan(corps);
+        await recharger(db.athleteId);
+        if (monte.current) setPlanJob('fait');
+        return r;
+      } catch (e) {
+        if (monte.current) {
+          setPlanErreur(message(e));
+          setPlanJob('idle');
+        }
+        return null;
+      }
+    },
+    [recharger],
+  );
+
   /* --------------------------------------------------------- le back office */
 
   const [coursesErreur, setCoursesErreur] = useState<string | null>(null);
@@ -784,6 +812,10 @@ export function useApp() {
     toggleAdjustment,
     enregistrerJournal,
     accepter,
+
+    planJob,
+    planErreur,
+    enregistrerPlan,
 
     coursesErreur,
     enregistrerCompetition,

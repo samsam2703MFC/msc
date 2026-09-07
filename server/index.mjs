@@ -374,6 +374,17 @@ async function router(req, res, url) {
       () => photo.confirmer(athlete_id, corps)));
   }
 
+  /* Un plan généré, rangé. Le générateur tourne dans le navigateur — il est
+     déterministe et n'appelle rien — et le serveur écrit ce qu'il a produit.
+     Le plan d'avant est désactivé, pas supprimé : le journal et les activités
+     qui visent ses séances restent entiers. */
+  if (chemin === '/api/plan' && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const corps = await lireCorps(req, 4_000_000);
+    return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'plan', (cnx) =>
+      depots.enregistrerPlan(athlete_id, corps, cnx)));
+  }
+
   if (chemin === '/api/proposition' && req.method === 'POST') {
     const { athlete_id } = await athleteDe(req, url, 'ecriture');
     const { table, id, applique } = await lireCorps(req, 4_000);
@@ -499,6 +510,7 @@ const server = createServer(async (req, res) => {
     if (e instanceof AuthError) return json(res, e.code, { erreur: e.message });
     if (e instanceof strava.StravaError) return json(res, e.code, { erreur: e.message });
     if (e instanceof photo.PhotoError) return json(res, e.code, { erreur: e.message });
+    if (e instanceof depots.DepotError) return json(res, e.code, { erreur: e.message });
     if (e instanceof BdError) return json(res, 500, { erreur: e.message });
 
     /* Le SDK lève avant la requête quand il ne résout aucun credential, donc

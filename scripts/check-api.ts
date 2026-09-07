@@ -11,6 +11,7 @@
 
 import { spawn } from 'node:child_process';
 import { msc_session } from '../src/data/plan.generated';
+import { genererPlan } from '../src/data/generateur';
 import { bd, fermer } from '../server/bd.mjs';
 import { hacher } from '../server/auth.mjs';
 
@@ -324,6 +325,108 @@ try {
 
   const suppr = await c.appel(`/api/competitions?id=${creee.corps.id}`, { method: 'DELETE' });
   check('elle se supprime', suppr.statut === 200);
+
+  console.log('\n=== enregistrer un plan, et le déplacer ===');
+
+  /* Tout ce bloc se passe chez le second athlète. Il écrit un plan et raccourcit
+     une séance : rien de ça ne doit toucher au classeur que les autres sections
+     lisent, et tout part avec l'athlète au nettoyage. */
+  const c2c = client();
+  await c2c.appel('/api/connexion', {
+    method: 'POST',
+    body: JSON.stringify({ email: `autre-${EMAIL}`, mot_de_passe: MOT_DE_PASSE }),
+  });
+
+  const genere = genererPlan(
+    { nom: 'Contrôle', ref_actuelle_s: 336, ref_cible_s: 300, debut: '2031-01-06' },
+    [{ date: '2031-04-13', nom: 'Semi du contrôle', cible_s: 5400, distance_km: 21.1, principal: true }],
+    { plancher_heures: 8, plancher_km_sortie: 10, reamorcage_semaines: 6,
+      natation: true, velo: true, salle: true, montagne_toutes_les: 3 },
+  );
+
+  const pose = await c2c.appel('/api/plan', {
+    method: 'POST',
+    body: JSON.stringify({
+      nom: 'Plan du contrôle',
+      blocs: genere.blocs, semaines: genere.semaines, sessions: genere.sessions,
+      objectifs: [{ date: '2031-04-13', nom: 'Semi du contrôle', cible_s: 5400,
+        distance_km: 21.1, principal: true }],
+    }),
+  });
+  check('un plan généré s’enregistre',
+    pose.statut === 200 && pose.corps.seances === genere.sessions.length,
+    `${pose.statut} · ${pose.corps.seances ?? pose.corps.erreur}`);
+
+  const vu = await c2c.appel('/api/db/instantane');
+  check('et l’instantané le sert comme plan actif',
+    vu.corps.plan?.origine === 'genere' && vu.corps.msc_session.length === genere.sessions.length,
+    `${vu.corps.plan?.origine} · ${vu.corps.msc_session.length}`);
+  check('avec ses objectifs', vu.corps.msc_objectif.length === 1);
+
+  /* Un refus de forme est une réponse, pas une panne : il doit se lire. */
+  const vide = await c2c.appel('/api/plan', {
+    method: 'POST', body: JSON.stringify({ blocs: [], sessions: [] }),
+  });
+  check('un plan sans bloc est refusé, et le dit',
+    vide.statut === 400 && /bloc/i.test(String(vide.corps.erreur)),
+    `${vide.statut} · ${vide.corps.erreur}`);
+
+  /* Une proposition sur une séance de ce plan, posée en base comme le coach la
+     poserait, puis acceptée par HTTP. */
+  const cible = vu.corps.msc_session.find((x: any) => x.zones?.length > 0 && x.duree_min > 0);
+  await bd().execute(
+    `INSERT INTO msc_analyse (athlete_id, type, session_id, date, modele, verdict_fr, verdict_pl)
+     VALUES (?, 'seance', ?, '2031-01-08', 'controle', 'x', 'x')`,
+    [a2.insertId, cible.id],
+  );
+  const [an] = (await bd().execute('SELECT LAST_INSERT_ID() AS id')) as any;
+  await bd().execute(
+    `INSERT INTO msc_adaptation (analyse_id, session_id, zone_code, part_duree, pourquoi_fr, pourquoi_pl)
+     VALUES (?, ?, 'ef', 0.700, 'x', 'x')`,
+    [an[0].id, cible.id],
+  );
+
+  const avant = await c2c.appel('/api/db/instantane');
+  const prop = avant.corps.msc_adaptation[0];
+  check('la proposition remonte dans l’instantané', prop?.part_duree === 0.7, String(prop?.part_duree));
+
+  const acceptee = await c2c.appel('/api/proposition', {
+    method: 'POST',
+    body: JSON.stringify({ table: 'msc_adaptation', id: prop.id, applique: true }),
+  });
+  check('accepter répond que la séance a bougé',
+    acceptee.statut === 200 && acceptee.corps.seance === true,
+    `${acceptee.statut} · ${JSON.stringify(acceptee.corps)}`);
+
+  const apresAccept = await c2c.appel('/api/db/instantane');
+  const deplacee = apresAccept.corps.msc_session.find((x: any) => x.id === cible.id);
+  check('et la séance a vraiment bougé dans la base',
+    deplacee.duree_min === Math.round(cible.duree_min * 0.7),
+    `${cible.duree_min} → ${deplacee.duree_min}`);
+  check('la charge a suivi', deplacee.charge === deplacee.duree_min * deplacee.rpe_cible);
+  check('la proposition se souvient d’où elle vient',
+    apresAccept.corps.msc_adaptation[0].avant?.duree_min === cible.duree_min,
+    JSON.stringify(apresAccept.corps.msc_adaptation[0].avant));
+
+  /* La proposition d'un autre athlète : le premier client n'y touche pas. */
+  const vol = await c.appel('/api/proposition', {
+    method: 'POST',
+    body: JSON.stringify({ table: 'msc_adaptation', id: prop.id, applique: false }),
+  });
+  check('la proposition d’un autre athlète m’est refusée', vol.statut === 404, String(vol.statut));
+  const intacte = await c2c.appel('/api/db/instantane');
+  check('et elle n’a pas bougé pour autant',
+    intacte.corps.msc_session.find((x: any) => x.id === cible.id).duree_min === deplacee.duree_min);
+
+  const retiree = await c2c.appel('/api/proposition', {
+    method: 'POST',
+    body: JSON.stringify({ table: 'msc_adaptation', id: prop.id, applique: false }),
+  });
+  const rendue = await c2c.appel('/api/db/instantane');
+  check('le retrait rend la séance',
+    retiree.statut === 200
+      && rendue.corps.msc_session.find((x: any) => x.id === cible.id).duree_min === cible.duree_min,
+    String(rendue.corps.msc_session.find((x: any) => x.id === cible.id).duree_min));
 
   console.log('\n=== ce qui ne m’appartient pas ===');
   const autre = await c.appel(`/api/db/instantane?athlete=${a2.insertId}`);

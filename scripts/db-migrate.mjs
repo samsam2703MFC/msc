@@ -51,6 +51,28 @@ try {
   const schema = await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8');
   await cnx.query(schema);
 
+  /* `CREATE TABLE IF NOT EXISTS` ne voit pas une colonne ajoutée après coup : sur
+     une base déjà créée, le schéma passe et ne change rien. MySQL 8 n'accepte pas
+     `ADD COLUMN IF NOT EXISTS`, alors on demande à information_schema.
+
+     C'est le début du journal que le commentaire en tête promet : une ligne par
+     colonne ajoutée depuis, appliquée seulement si elle manque. */
+  const AJOUTS = [
+    ['msc_adaptation', 'avant', "ADD COLUMN avant JSON NULL AFTER applique_le"],
+    ['msc_ajustement', 'avant', "ADD COLUMN avant JSON NULL AFTER applique_le"],
+  ];
+  for (const [table, colonne, ddl] of AJOUTS) {
+    const [[{ n }]] = await cnx.query(
+      `SELECT COUNT(*) AS n FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = ? AND column_name = ?`,
+      [nom, table, colonne],
+    );
+    if (n === 0) {
+      await cnx.query(`ALTER TABLE \`${table}\` ${ddl}`);
+      console.log(`+ ${table}.${colonne}`);
+    }
+  }
+
   const [tables] = await cnx.query(
     'SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ?',
     [nom],
