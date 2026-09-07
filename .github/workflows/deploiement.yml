@@ -54,6 +54,23 @@ jobs:
           printf '%s\n' "$HOTES" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+          # Un secret non vide n'est pas un secret valide. `ssh-keyscan` écrit
+          # ses lignes de commentaire sur stderr (« # hôte:22 SSH-2.0-… ») et
+          # ses clés sur stdout ; coller les deux, ou une liste d'empreintes,
+          # donne un fichier que ssh lit sans y trouver de clé — et l'échec
+          # arrive alors à la connexion, sous la forme la plus opaque qui soit.
+          if ! ssh-keygen -lf ~/.ssh/known_hosts > /dev/null 2>&1; then
+            echo "DEPLOY_KNOWN_HOSTS ne contient aucune clé d'hôte lisible."
+            echo "Attendu : la sortie de « ssh-keyscan -H <hôte> 2>/dev/null »,"
+            echo "une clé par ligne, chacune commençant par |1| ou par l'hôte."
+            echo "Reçu : $(wc -l < ~/.ssh/known_hosts) ligne(s)."
+            exit 1
+          fi
+
+          # Deux empreintes, à comparer d'un coup d'œil quand ça se passe mal.
+          echo "Clé de déploiement : $(ssh-keygen -lf ~/.ssh/id_deploy | cut -d' ' -f1,2)"
+          echo "Hôtes connus       : $(ssh-keygen -lf ~/.ssh/known_hosts | wc -l) empreinte(s)"
+
       - name: envoyer
         env:
           # Une variable, ou un secret du même nom. Un nom d'hôte n'est pas un
