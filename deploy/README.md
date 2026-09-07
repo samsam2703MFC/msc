@@ -98,7 +98,25 @@ se tromper d'onglet est l'erreur qu'on fait une fois, et refuser de partir pour
 | Secrets | |
 |---|---|
 | `DEPLOY_SSH_KEY` | la clé privée de déploiement, en entier, `-----BEGIN` compris |
-| `DEPLOY_KNOWN_HOSTS` | la sortie de `ssh-keyscan` pour ton serveur |
+| `DEPLOY_KNOWN_HOSTS` | facultatif — `deploy/known_hosts` suffit, voir ci-dessous |
+
+**Les clés d'hôte sont dans le dépôt**, `deploy/known_hosts`. Ce n'est pas un
+oubli : une clé d'hôte est publique par construction, et l'épingler dans un
+fichier versionné vaut mieux que dans un secret. Elle se relit, donc une
+divergence se voit ; elle se versionne, donc un changement de serveur laisse
+une trace datée ; et elle ne passe plus par un collage, qui ampute le préfixe
+`|1|` d'une entrée hachée une fois sur deux.
+
+Pour un autre serveur, remplace le fichier :
+
+```sh
+ssh-keyscan -H <hôte> 2>/dev/null > deploy/known_hosts   # 2>/dev/null : les
+                                    # commentaires sortent sur stderr
+ssh-keygen -lf deploy/known_hosts                        # relis les empreintes
+```
+
+Le secret `DEPLOY_KNOWN_HOSTS` reste prioritaire s'il contient des clés
+lisibles, pour un serveur qu'on ne veut pas nommer dans le dépôt.
 
 | Variables | |
 |---|---|

@@ -51,7 +51,15 @@ jobs:
           # L'empreinte du serveur est vérifiée, elle n'est pas désactivée.
           # StrictHostKeyChecking=no offrirait la clé de déploiement à qui
           # sait se mettre sur le chemin du runner.
+          # Le secret d'abord, le fichier du dépôt ensuite. Un secret qui ne
+          # contient pas de clé n'est pas un secret qu'il faut préférer.
           printf '%s\n' "$HOTES" > ~/.ssh/known_hosts
+          if ! ssh-keygen -lf ~/.ssh/known_hosts > /dev/null 2>&1; then
+            if [ -s deploy/known_hosts ] && ssh-keygen -lf deploy/known_hosts > /dev/null 2>&1; then
+              echo "DEPLOY_KNOWN_HOSTS illisible — on épingle depuis deploy/known_hosts."
+              cp deploy/known_hosts ~/.ssh/known_hosts
+            fi
+          fi
           chmod 600 ~/.ssh/known_hosts
 
           # Un secret non vide n'est pas un secret valide. `ssh-keyscan` écrit
@@ -60,7 +68,7 @@ jobs:
           # donne un fichier que ssh lit sans y trouver de clé — et l'échec
           # arrive alors à la connexion, sous la forme la plus opaque qui soit.
           if ! ssh-keygen -lf ~/.ssh/known_hosts > /dev/null 2>&1; then
-            echo "DEPLOY_KNOWN_HOSTS ne contient aucune clé d'hôte lisible."
+            echo "Ni DEPLOY_KNOWN_HOSTS ni deploy/known_hosts ne contient de clé lisible."
             echo "Attendu : la sortie de « ssh-keyscan -H <hôte> 2>/dev/null »,"
             echo "une clé par ligne, chacune commençant par |1| ou par l'hôte."
             echo "Reçu : $(wc -l < ~/.ssh/known_hosts) ligne(s)."

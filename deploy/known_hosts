@@ -1,0 +1,25 @@
+# Les clés d'hôte du serveur de déploiement, épinglées.
+#
+# Ce n'est pas un secret : une clé d'hôte est publique par construction — c'est
+# tout l'objet de la publier. Elle vit ici plutôt que dans un secret GitHub pour
+# trois raisons. Elle se relit, donc une divergence se voit. Elle se versionne,
+# donc un changement de serveur laisse une trace datée. Et surtout elle ne passe
+# plus par un collage : le préfixe « |1| » d'une entrée hachée est précisément
+# ce qu'un terminal ou un champ de formulaire ampute, et six déploiements ont
+# échoué sur deux caractères perdus au début de la première ligne.
+#
+# Le secret DEPLOY_KNOWN_HOSTS reste prioritaire s'il contient des clés
+# lisibles ; ce fichier est ce sur quoi on retombe.
+#
+# Obtenues par « ssh-keyscan -H 185.180.206.46 » depuis le serveur lui-même, et
+# vérifiées contre ce que le runner GitHub observe indépendamment :
+#   ssh-rsa              SHA256:OTj4K0HUFX+TzRxa0JOCdtDvKa4hkrVcUZVo+ko07sg
+#   ecdsa-sha2-nistp256  SHA256:4LlwTITfK6rrz+S+PQz/vo0rC1MCMLm7VrTVeRqASHE
+#   ssh-ed25519          SHA256:YbIxH5BRA5prHWmxZJLtEWfxnoVyBsoD8ljLQiOK77M
+#
+# Deux chemins réseau qui donnent la même réponse : c'est ce qui rend
+# l'épinglage crédible. Le jour où le serveur change de clés, ces empreintes
+# doivent changer AVEC une raison connue — sinon c'est quelqu'un d'autre.
+|1|7qn4ExBvMCoGaJlo+iIH5PGpAdQ=|3pcpB0h1qhkQn1HbgfUsL2kJ2g8= ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCsBuQPnWNdL+OjtaiXVlEFILBmlopubdMLdfcZQ4JRl3TsW4ErKFQ3MmWAvBB6XfumVmOOvLSehjPjNPVXv692NVQgxIEQuy3TOlZJbdv1uCOOiGPfEv9lSDyIXxGF7yNPWNiGw9ADIm6YScxRKw2EBmMYrKlo14myL05EIs3eiPWuROhJCadeYb0t+N3T3EWLhFBmO+iAUJzHLSlgQJ/MZT17uCSYWT5rn645ZTNAWbA2hK67wbklX34mE8W34oCvXx+2yGVwnBuDmLsYy5zuZK3I3HONWJrTaRCyqbeDWYzGE9ONORRLG8Xyo89oA1bnMyEromdqIsTUz0ItNKwv1yg+N08PYLYiOCZ32DtueWGWeRfGzDLozdW/V3W6wjDzI+pSEmTH51KGncISvzLUlBnNGB8FxCSQ8z+NJWtN5HoW8gUpg/aC5/f4rXtTNkJRV/5JM4gJ9EkA20anCPeHvwrzfdfnkTgearD/n4tbN9kPvwOkCcgX1Puzg4+jGnM=
+|1|qdbCWoeJUwtBU677R+GXhqnKEm8=|6KZIqAMMqOrkUT18kX/JvCokHqw= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBDf8w0iaq/cxiF25b+/yKOwf0w1el7ejqJNHqD+CdwumeFaYlF2E6jApW9KmkTWC8qTl7FyscDVsZg152AgJe4Q=
+|1|2J48+B5Rfa2DkokH46npqrDtImA=|IkZJZD3I93IexKEybs4vAJom9rc= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINOBYG73MpO5Zmy4Em72Oo0VbgD5wi/HX6nQBsSljeuJ
