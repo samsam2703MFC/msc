@@ -12,10 +12,12 @@
     "check:plan": "npx esbuild scripts/check-generateur.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-plan.mjs --log-level=error && node node_modules/.tmp/check-plan.mjs",
     "check:strava": "npx esbuild scripts/check-strava.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-strava.mjs --log-level=error && node node_modules/.tmp/check-strava.mjs",
     "check:db": "npx esbuild scripts/check-db.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-db.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/check-db.mjs",
+    "check:api": "npx esbuild scripts/check-api.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-api.mjs --log-level=error --external:mysql2 --external:@anthropic-ai/sdk && node --env-file-if-exists=.env node_modules/.tmp/check-api.mjs",
     "server": "node --env-file-if-exists=.env server/index.mjs",
     "strava:webhook": "node --env-file-if-exists=.env scripts/strava-webhook.mjs",
     "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
-    "db:seed": "npx esbuild scripts/db-seed.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/db-seed.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/db-seed.mjs"
+    "db:seed": "npx esbuild scripts/db-seed.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/db-seed.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/db-seed.mjs",
+    "compte": "node --env-file-if-exists=.env scripts/compte.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

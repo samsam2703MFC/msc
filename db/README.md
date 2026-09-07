@@ -9,7 +9,16 @@ npm run db:migrate            # crée la base si besoin, applique le schéma
 npm run db:migrate -- --reset # détruit et recrée. Demande le nom de la base.
 npm run db:seed               # charge le classeur : 243 séances, 4 blocs, 8 zones
 npm run check:db              # l'aller-retour et les garde-fous
+npm run check:api             # l'API par HTTP, cookie et contrôle d'accès compris
+
+npm run compte -- lister                    # les comptes et leurs athlètes
+npm run compte -- creer <email> "<nom>"     # en créer un (mot de passe demandé)
+npm run compte -- acces <email> <athlete>   # lui donner un athlète
 ```
+
+Le seed crée un compte sans mot de passe utilisable (`⚠ sans mot de passe` dans
+`compte -- lister`) : donne-lui en un avec `compte -- motdepasse` avant de te
+connecter.
 
 Les quatre variables minimales sont dans `.env.example`. Le schéma est
 idempotent (`CREATE TABLE IF NOT EXISTS`), donc `db:migrate` se relance sans

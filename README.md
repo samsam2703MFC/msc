@@ -24,9 +24,11 @@ npm run check:engine   # paces against the workbook, cell for cell
 npm run check:plan     # the generator against its own rules
 npm run check:strava   # the session ↔ activity matcher against the real plan
 npm run check:db       # the round trip through MySQL, and its guard rails
+npm run check:api      # the API over HTTP, cookie and access control included
 
 npm run db:migrate     # create the database and apply db/schema.sql
 npm run db:seed        # load the workbook into it
+npm run compte -- lister          # the accounts, and who sees which athlete
 npm run strava:webhook -- etat      # the push subscription, see « Strava »
 ```
 
@@ -494,20 +496,106 @@ twice after a reconnection.
 It found a real defect on its first run: deleting a plan failed, because sessions
 held their block and the block FK had no cascade.
 
+### What sits on top of it
+
+The repositories and the API — see « The API » below, which is where the
+schema's rules meet a caller.
+
+## The API
+
+`server/index.mjs` routes, `server/depots.mjs` reads and writes, `server/auth.mjs`
+says who is asking. `check:api` boots the server and talks to it over HTTP —
+thirty-four assertions, because what breaks an API is the layers a direct call
+skips: the cookie, the access check, the JSON shape, the status code.
+
+### One snapshot, not one endpoint per table
+
+`GET /api/db/instantane` returns the whole of one athlete's database in the
+shapes `src/data/types.ts` already declares.
+
+That is deliberate. The app holds its tables in memory and its screens read them
+synchronously — `db.select('msc_session')`, `db.one(...)`. A snapshot fills them
+without a single screen changing, and it is exactly what an offline cache wants
+to store. Per-table endpoints would force every screen to become async for no
+gain: the plan is 243 sessions, not 243 000.
+
+```
+GET  /api/db/instantane    the lot, for one athlete
+POST /api/journal          the RPE and the note
+POST /api/mesure           the weight and the resting heart rate
+POST /api/proposition      accept or withdraw one of the coach's proposals
+     /api/competitions     GET · POST · DELETE — the back office
+POST /api/analyse          · /api/recalcul · /api/coach, which now persist
+```
+
+### The server does not compute a pace
+
+The same line as everywhere else, and the API is where it would have been
+easiest to cross. An adaptation comes back as **a zone and a fraction**, never
+`44 min · 6:20/km`: the browser renders it with the engine, which is why writing
+a new 10 km reference slides the coach's proposals along with the plan.
+
+`check:api` asserts it — no `mm:ss/km` anywhere in the structured fields of a
+session — and that assertion found something on its first run. The workbook
+carries a per-session `consigne` reading `EF 06:27`: a zone name and the pace
+that zone was worth **on the day of the import**. It was rendered on two screens
+and it would not have moved when the reference did. Where a session has zones it
+is now recomposed by the engine and the server does not serve it; where it has
+none it is prose (« À l'effort, pas à l'allure ») and passes through untouched.
+Six sessions out of the seventy-four that had one.
+
+### Who is asking
+
+The schema grew accounts when it grew a second athlete, so the API had to answer
+that question before answering any other.
+
+Passwords are **scrypt**, from Node's standard library. argon2id would be a
+notch better and needs a native dependency that builds badly; scrypt is
+memory-hard, it is already there, and it beats a mis-parameterised bcrypt.
+
+Sessions are a **signed token, with no table** — simpler and query-free, at the
+cost of one thing worth stating rather than discovering: a session cannot be
+revoked before it expires. The day that matters — a lost phone, a shared
+account — it needs a sessions table, and that sentence becomes false.
+
+An unknown email and a wrong password return **the same message**, and the
+unknown-email path still runs a hash, so the two take the same time. The
+difference would say who has an account here.
+
+The client may name an athlete (`?athlete=3`) — a coach's back office needs
+exactly that — but `msc_acces` decides, never the parameter. `check:api` creates
+a second athlete for the sole purpose of proving that one account cannot read
+the other's, because that is the only assertion in an access check that counts.
+
+In development, `MSC_ATHLETE_ID` short-circuits all of it. In production it is
+refused, loudly: a service door left open is an open door.
+
+### Writes replay safely
+
+Every write goes through `mutation()`, which deduplicates on an id the client
+generates before sending. Without it, an offline queue replaying after a
+reconnection records the same RPE twice and nobody notices. `check:api` sends
+the same mutation twice with different content and asserts the second one
+changed nothing.
+
+### The Strava tokens moved into the database
+
+`server/strava.mjs` kept them in a 0600 JSON file, which knew about exactly one
+athlete. Every function that touches an account now takes an `athleteId`, the
+tokens live in `msc_strava_compte` sealed by `server/bd.mjs`, and a webhook
+event finds its athlete through the table rather than through a single global.
+There is no token file any more.
+
 ### What is not built yet
 
-The database exists, holds the workbook, and is asserted. Four things sit on top
-of it and do not exist:
-
-1. **The API and the repositories** — `src/data/db.ts` still reads the
-   TypeScript arrays. The seam was built for exactly this swap, and it is one
-   file.
-2. **The photo pipeline** — upload, storage under `MSC_PHOTOS_DIR`, the vision
-   call, the confirmation step.
-3. **The offline cache and the sync queue** — `maj_le` and `msc_mutation` are in
-   the schema for it; the service worker and the outbox are not written.
-4. **The back office** — encoding competitions and results, and the evolution
-   charts that read them.
+1. **The app still reads the TypeScript arrays.** `src/data/db.ts` has not been
+   pointed at `/api/db/instantane`, and there is no login screen — so the API is
+   complete and unused. That is the next step, and the seam was built for it.
+2. **The photo pipeline** — upload, storage, the vision call, the confirmation.
+3. **The offline cache and the sync queue** — `maj_le` and `msc_mutation` are
+   there for it; the service worker and the outbox are not written.
+4. **The back office screens** — the API has the competitions and the results;
+   nothing renders them.
 
 ## Reference data
 

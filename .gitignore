@@ -7,7 +7,7 @@ dev-dist
 .env
 .env.local
 
-# the Strava tokens — a credential, never committed
+# l'ancien magasin de jetons Strava, d'avant la base — au cas où il traîne
 .strava.json
 
 # les photos reçues de l'app — des données d'athlète, pas du code

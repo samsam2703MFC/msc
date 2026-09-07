@@ -227,6 +227,24 @@ export function allureCorrigee(
 /* ------------------------------------------------------------------ statuts */
 
 /** A session's state is derived, not stored: done, today, rest, or ahead. */
+/**
+ * La ligne d'allures d'une séance : « EF 06:00 · Seuil 04:55 ».
+ *
+ * Le classeur la portait écrite, séance par séance. C'était la même chose que
+ * ses zones passées dans le moteur, figée le jour de l'import — donc fausse dès
+ * que le test de 30 minutes réécrit la référence. Elle est recomposée ici, et
+ * elle glisse avec tout le reste.
+ *
+ * Une séance sans zone garde la sienne : celle-là n'est pas une allure mais une
+ * consigne (« À l'effort, pas à l'allure — marche en côte assumée »).
+ */
+export function consigne(session: MscPlanSession, lang: 'fr' | 'pl'): string | undefined {
+  if (session.zones.length === 0) return session.consigne?.[lang];
+  return session.zones
+    .map((code) => `${zone(code).label[lang]} ${allure(code, session.bloc)}`)
+    .join(' · ');
+}
+
 export function statutDe(
   session: MscPlanSession,
   aujourdhui: string,

@@ -68,9 +68,9 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
 
       <IconLine icon="target">{session.detail[lang]}</IconLine>
 
-      {session.consigne && (
+      {db.consigne(session, lang) && (
         <IconLine icon="circle-check" iconColor={C.inkSecondary} color={C.inkMuted}>
-          {session.consigne[lang]}
+          {db.consigne(session, lang)}
         </IconLine>
       )}
 

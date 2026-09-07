@@ -13,11 +13,16 @@
 
    Aggregates only, never the raw streams: `msc_activity` is a handful of
    numbers per session, and pulling GPS traces we would not display is a cost
-   against the athlete's rate limit and their privacy both. */
+   against the athlete's rate limit and their privacy both.
+
+   Depuis que la base existe, les jetons y vivent — une ligne par athlète, dans
+   msc_strava_compte, chiffrée par `server/bd.mjs`. Toutes les fonctions qui
+   touchent à un compte prennent donc un `athleteId` : il y a plus d'un athlète
+   maintenant, et un module qui n'en connaît qu'un finit par mélanger leurs
+   activités. */
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { bd, desceller, ligne, sceller } from './bd.mjs';
 
 const AUTORISATION = 'https://www.strava.com/oauth/authorize';
 const JETON = 'https://www.strava.com/oauth/token';
@@ -54,7 +59,6 @@ export function config() {
     clientSecret: process.env.STRAVA_CLIENT_SECRET ?? '',
     redirectUri: process.env.STRAVA_REDIRECT_URI ?? 'http://localhost:8787/api/strava/callback',
     verifyToken: process.env.STRAVA_VERIFY_TOKEN ?? '',
-    magasin: resolve(process.env.STRAVA_TOKEN_STORE ?? '.strava.json'),
     /* Where to send the browser once the round-trip is done. */
     retour: process.env.STRAVA_APP_ORIGIN ?? process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   };
@@ -68,34 +72,60 @@ export function configure() {
 
 /* -------------------------------------------------------------- le magasin */
 
-/* The tokens live on disk so a server restart does not cost the athlete
-   another trip through Strava's consent screen. They are credentials: the file
-   is 0600 and gitignored, and nothing in it is ever returned to the browser. */
+/* Les jetons vivent en base, chiffrés, une ligne par athlète. Ils y sont mieux
+   qu'à côté du serveur : le compte suit l'athlète, pas la machine, et un second
+   serveur derrière un répartiteur voit les mêmes.
 
-let cache;
-
-export async function lire() {
-  if (cache !== undefined) return cache;
-  try {
-    cache = JSON.parse(await readFile(config().magasin, 'utf8'));
-  } catch {
-    cache = null;
-  }
-  return cache;
+   Ce qui sort d'ici n'a de sens que dedans — rien de ce que cette fonction rend
+   ne doit atterrir dans une réponse HTTP. */
+async function lire(athleteId) {
+  const r = await ligne(
+    'SELECT * FROM msc_strava_compte WHERE athlete_id = :a',
+    { a: athleteId },
+  );
+  if (!r) return null;
+  return {
+    athlete_id: r.athlete_id,
+    strava_athlete_id: Number(r.strava_athlete_id),
+    prenom: r.prenom ?? '',
+    nom: r.nom ?? '',
+    access_token: desceller(r.access_token),
+    refresh_token: desceller(r.refresh_token),
+    expires_at: Math.floor(new Date(r.expires_at).getTime() / 1000),
+    portee: r.portee,
+    lie_le: r.lie_le,
+    derniere_synchro: r.derniere_synchro,
+  };
 }
 
-async function ecrire(etat) {
-  const chemin = config().magasin;
-  await mkdir(dirname(chemin), { recursive: true });
-  await writeFile(chemin, JSON.stringify(etat, null, 2), { mode: 0o600 });
-  /* writeFile's mode only applies when it creates the file. */
-  await chmod(chemin, 0o600).catch(() => {});
-  cache = etat;
+async function ecrire(athleteId, etat) {
+  await bd().execute(
+    `INSERT INTO msc_strava_compte (athlete_id, strava_athlete_id, prenom, nom,
+       access_token, refresh_token, expires_at, portee, derniere_synchro)
+     VALUES (?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?)
+     ON DUPLICATE KEY UPDATE strava_athlete_id = VALUES(strava_athlete_id),
+       prenom = VALUES(prenom), nom = VALUES(nom),
+       access_token = VALUES(access_token), refresh_token = VALUES(refresh_token),
+       expires_at = VALUES(expires_at), portee = VALUES(portee),
+       derniere_synchro = VALUES(derniere_synchro)`,
+    [athleteId, etat.strava_athlete_id, etat.prenom, etat.nom,
+     sceller(etat.access_token), sceller(etat.refresh_token),
+     etat.expires_at, etat.portee, etat.derniere_synchro ?? null],
+  );
 }
 
-async function effacer() {
-  await rm(config().magasin, { force: true });
-  cache = null;
+async function effacer(athleteId) {
+  await bd().execute('DELETE FROM msc_strava_compte WHERE athlete_id = ?', [athleteId]);
+}
+
+/** L'athlète MSC derrière un identifiant Strava — c'est ainsi qu'un événement
+    de webhook trouve à qui il appartient. */
+async function athleteDeStrava(stravaAthleteId) {
+  const r = await ligne(
+    'SELECT athlete_id FROM msc_strava_compte WHERE strava_athlete_id = :s',
+    { s: stravaAthleteId },
+  );
+  return r?.athlete_id ?? null;
 }
 
 /* --------------------------------------------------------------- l'échange */
@@ -106,11 +136,13 @@ const etats = new Map();
 
 function purgerEtats() {
   const limite = Date.now() - ETAT_TTL_MS;
-  for (const [cle, ne] of etats) if (ne < limite) etats.delete(cle);
+  for (const [cle, v] of etats) if (v.ne < limite) etats.delete(cle);
 }
 
-/** The URL to send the athlete to. The `state` comes back with them. */
-export function lienAutorisation() {
+/** The URL to send the athlete to. The `state` comes back with them — et il
+    porte de quel athlète il s'agit, parce que le retour de Strava est une
+    navigation neuve, sans rien de la requête qui l'a demandée. */
+export function lienAutorisation(athleteId) {
   const c = config();
   if (!configure()) {
     throw new StravaError(
@@ -120,7 +152,7 @@ export function lienAutorisation() {
   }
   purgerEtats();
   const etat = randomBytes(16).toString('hex');
-  etats.set(etat, Date.now());
+  etats.set(etat, { athleteId, ne: Date.now() });
 
   const params = new URLSearchParams({
     client_id: c.clientId,
@@ -136,9 +168,12 @@ export function lienAutorisation() {
 
 function consommerEtat(etat) {
   purgerEtats();
-  if (!etat || !etats.delete(etat)) {
+  const v = etat ? etats.get(etat) : undefined;
+  if (!v) {
     throw new StravaError('Requête de liaison inconnue ou expirée. Relance la connexion.', 400);
   }
+  etats.delete(etat);
+  return v.athleteId;
 }
 
 async function postJeton(corps) {
@@ -165,7 +200,7 @@ async function postJeton(corps) {
 
 /** Exchanges the code Strava sent back for a token pair, and stores it. */
 export async function echangerCode(code, etat) {
-  consommerEtat(etat);
+  const athleteId = consommerEtat(etat);
   if (!code) throw new StravaError('Code d’autorisation absent.', 400);
   const c = config();
 
@@ -177,8 +212,9 @@ export async function echangerCode(code, etat) {
   });
 
   const athlete = data.athlete ?? {};
-  await ecrire({
-    athlete_id: athlete.id ?? null,
+  if (!athlete.id) throw new StravaError("Strava n'a pas renvoyé d'athlète.", 502);
+  await ecrire(athleteId, {
+    strava_athlete_id: athlete.id,
     prenom: athlete.firstname ?? '',
     nom: athlete.lastname ?? '',
     access_token: data.access_token,
@@ -187,15 +223,13 @@ export async function echangerCode(code, etat) {
     /* Strava returns the scopes it actually granted, which can be narrower
        than what we asked for if the athlete unticked a box. */
     portee: data.scope ?? PORTEE,
-    lie_le: new Date().toISOString(),
-    derniere_synchro: null,
   });
-  return { athlete_id: athlete.id ?? null, prenom: athlete.firstname ?? '' };
+  return { athlete_id: athleteId, strava_athlete_id: athlete.id, prenom: athlete.firstname ?? '' };
 }
 
 /** A valid access token, refreshed if it is about to expire. */
-async function jeton() {
-  const etat = await lire();
+async function jeton(athleteId) {
+  const etat = await lire(athleteId);
   if (!etat) throw new StravaError('Strava n’est pas connecté.', 409);
 
   const dans = (etat.expires_at ?? 0) - Math.floor(Date.now() / 1000);
@@ -210,7 +244,7 @@ async function jeton() {
   });
   /* Strava rotates the refresh token on some refreshes and not others; it
      returns whichever one is now current, so always take what it gives back. */
-  await ecrire({
+  await ecrire(athleteId, {
     ...etat,
     access_token: data.access_token,
     refresh_token: data.refresh_token ?? etat.refresh_token,
@@ -223,10 +257,10 @@ async function jeton() {
 
     The coach service needs it to hand to Strava's MCP server; nothing else
     outside this module may see it, and it never reaches an HTTP response. */
-export async function jetonCourant() {
-  if (!(await lire())) return null;
+export async function jetonCourant(athleteId) {
+  if (!(await lire(athleteId))) return null;
   try {
-    return await jeton();
+    return await jeton(athleteId);
   } catch (e) {
     console.warn('[strava] jeton indisponible :', e?.message ?? e);
     return null;
@@ -234,8 +268,8 @@ export async function jetonCourant() {
 }
 
 /** Revokes the token at Strava, then forgets it here. */
-export async function delier() {
-  const etat = await lire();
+export async function delier(athleteId) {
+  const etat = await lire(athleteId);
   if (!etat) return { lie: false };
   try {
     await fetch(DELIAISON, {
@@ -247,7 +281,7 @@ export async function delier() {
        reason to keep their token on our disk — drop it either way. */
     console.error('[strava] déliaison', e);
   }
-  await effacer();
+  await effacer(athleteId);
   return { lie: false };
 }
 
@@ -288,7 +322,7 @@ function quotaEpuise() {
   return q.fenetre.utilise >= q.fenetre.limite || q.jour.utilise >= q.jour.limite;
 }
 
-async function api(chemin, params) {
+async function api(athleteId, chemin, params) {
   if (quotaEpuise()) {
     throw new StravaError(
       'Quota Strava atteint. La fenêtre se rouvre dans moins de 15 minutes.',
@@ -299,7 +333,7 @@ async function api(chemin, params) {
   for (const [k, v] of Object.entries(params ?? {})) {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   }
-  const reponse = await fetch(url, { headers: { authorization: `Bearer ${await jeton()}` } });
+  const reponse = await fetch(url, { headers: { authorization: `Bearer ${await jeton(athleteId)}` } });
   noterQuotas(reponse);
 
   if (reponse.status === 429) {
@@ -372,19 +406,20 @@ function normaliser(a) {
  * The athlete's activities since `depuis` (an ISO date or an epoch in seconds).
  * Summaries only — one or two requests for a month of training.
  */
-export async function activites({ depuis, jusqua } = {}) {
+export async function activites(athleteId, { depuis, jusqua } = {}) {
   const after = epoch(depuis);
   const before = epoch(jusqua);
   const out = [];
   for (let page = 1; page <= PAGES_MAX; page += 1) {
-    const lot = await api('/athlete/activities', { after, before, page, per_page: PAGE });
+    const lot = await api(athleteId, '/athlete/activities', { after, before, page, per_page: PAGE });
     if (!Array.isArray(lot) || lot.length === 0) break;
     out.push(...lot.map(normaliser));
     if (lot.length < PAGE) break;
   }
 
-  const etat = await lire();
-  if (etat) await ecrire({ ...etat, derniere_synchro: new Date().toISOString() });
+  await bd().execute(
+    'UPDATE msc_strava_compte SET derniere_synchro = NOW(3) WHERE athlete_id = ?', [athleteId],
+  );
   return out;
 }
 
@@ -400,8 +435,8 @@ function epoch(valeur) {
  * read on. A separate call because it costs a request each, and only a
  * handful of sessions in a week are ones where the splits mean anything.
  */
-export async function activite(id) {
-  const a = await api(`/activities/${Number(id)}`, { include_all_efforts: false });
+export async function activite(athleteId, id) {
+  const a = await api(athleteId, `/activities/${Number(id)}`, { include_all_efforts: false });
   const laps = Array.isArray(a.laps) ? a.laps : [];
   return {
     ...normaliser(a),
@@ -462,42 +497,50 @@ export async function recevoirEvenement(corps) {
   };
 
   /* Strava does not sign its deliveries, so anyone who learns the callback URL
-     can post to it. An event that does not name the athlete whose token we
-     hold is not ours: recording it would spend their quota on a sync, and
-     acting on its revocation flag would drop a token that is still good. */
-  const etatCourant = await lire();
-  if (!etatCourant) return { ...e, ignore: true };
-  if (e.athlete_id !== null && etatCourant.athlete_id !== e.athlete_id) {
-    return { ...e, ignore: true };
-  }
+     can post to it. Un événement qui ne nomme aucun athlète que nous
+     connaissons n'est pas le nôtre : l'enregistrer dépenserait le quota de
+     quelqu'un sur une synchro, et honorer son drapeau de révocation jetterait
+     un jeton encore bon.
+
+     La table est la seule autorité ici : c'est elle qui dit si cet identifiant
+     Strava correspond à un athlète que nous suivons. */
+  const athleteId = e.athlete_id === null ? null : await athleteDeStrava(e.athlete_id);
+  if (!athleteId) return { ...e, ignore: true };
+  e.msc_athlete_id = athleteId;
 
   evenements = [e, ...evenements].slice(0, EVENEMENTS_MAX);
-  if (e.revoque) await effacer();
+  await bd().execute(
+    `INSERT INTO msc_strava_evenement (strava_athlete_id, objet, aspect, objet_id, revoque, charge_utile)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [e.athlete_id, e.type, e.aspect, e.id, e.revoque ? 1 : 0, JSON.stringify(corps ?? {})],
+  );
+  if (e.revoque) await effacer(athleteId);
   return e;
 }
 
 /** What the app polls: has anything landed since it last synced? */
-export function evenementsDepuis(iso) {
-  if (!iso) return evenements;
-  return evenements.filter((e) => e.recu_le > iso);
+export function evenementsDepuis(athleteId, iso) {
+  const siens = evenements.filter((e) => e.msc_athlete_id === athleteId);
+  return iso ? siens.filter((e) => e.recu_le > iso) : siens;
 }
 
 /* ------------------------------------------------------------- l'état */
 
 /** Everything the app is allowed to know. No token ever appears here. */
-export async function etat() {
+export async function etat(athleteId) {
   const c = config();
-  const s = await lire();
+  const s = await lire(athleteId);
   return {
     configure: configure(),
     webhook: Boolean(c.verifyToken),
     lie: Boolean(s),
-    athlete: s ? { id: s.athlete_id, prenom: s.prenom, nom: s.nom } : null,
+    athlete: s ? { id: s.strava_athlete_id, prenom: s.prenom, nom: s.nom } : null,
     portee: s?.portee ?? null,
     lie_le: s?.lie_le ?? null,
     derniere_synchro: s?.derniere_synchro ?? null,
-    evenements: evenements.length,
-    dernier_evenement: evenements[0]?.recu_le ?? null,
+    evenements: evenements.filter((e) => e.msc_athlete_id === athleteId).length,
+    dernier_evenement:
+      evenements.find((e) => e.msc_athlete_id === athleteId)?.recu_le ?? null,
     quotas,
   };
 }
