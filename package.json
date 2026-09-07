@@ -11,12 +11,16 @@
     "check:engine": "npx esbuild scripts/check-engine.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-engine.mjs --log-level=error && node node_modules/.tmp/check-engine.mjs",
     "check:plan": "npx esbuild scripts/check-generateur.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-plan.mjs --log-level=error && node node_modules/.tmp/check-plan.mjs",
     "check:strava": "npx esbuild scripts/check-strava.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-strava.mjs --log-level=error && node node_modules/.tmp/check-strava.mjs",
+    "check:db": "npx esbuild scripts/check-db.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-db.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/check-db.mjs",
     "server": "node --env-file-if-exists=.env server/index.mjs",
-    "strava:webhook": "node --env-file-if-exists=.env scripts/strava-webhook.mjs"
+    "strava:webhook": "node --env-file-if-exists=.env scripts/strava-webhook.mjs",
+    "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
+    "db:seed": "npx esbuild scripts/db-seed.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/db-seed.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/db-seed.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
     "lucide-react": "^0.549.0",
+    "mysql2": "^3.24.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^4.4.3"

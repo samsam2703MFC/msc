@@ -9,3 +9,6 @@ dev-dist
 
 # the Strava tokens — a credential, never committed
 .strava.json
+
+# les photos reçues de l'app — des données d'athlète, pas du code
+var/

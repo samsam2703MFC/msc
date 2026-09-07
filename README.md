@@ -23,7 +23,10 @@ npm run server     # the plan server — needs ANTHROPIC_API_KEY, see .env.examp
 npm run check:engine   # paces against the workbook, cell for cell
 npm run check:plan     # the generator against its own rules
 npm run check:strava   # the session ↔ activity matcher against the real plan
+npm run check:db       # the round trip through MySQL, and its guard rails
 
+npm run db:migrate     # create the database and apply db/schema.sql
+npm run db:seed        # load the workbook into it
 npm run strava:webhook -- etat      # the push subscription, see « Strava »
 ```
 
@@ -37,18 +40,22 @@ the installed PWA looks like an app rather than a picture of one.
 ## How it is put together
 
 ```
+db/           the MySQL schema — 37 tables, and its own README
+server/       the plan server: the secrets, Strava, the coach, the database
 src/
-  data/       the MSC database — 18 msc_ tables and the accessor seam
+  data/       the MSC database seam — accessors, the engine, the generator
   design/     design-system tokens + the global stylesheet
   state/      the app's state machine
   components/ the frame, the sheets, and the shapes every screen repeats
   screens/    one file per tab
+scripts/      the checks, the plan import, the database migrate and seed
 ```
 
 **The database is the point.** No screen holds data of its own — and no screen
 holds a pace, because paces are computed. Screens go through `src/data/db.ts`
 (`select`, `one`, `mustOne`, `type`, `ui`, plus the engine) and never import the
-table modules directly.
+table modules directly. That seam is why the move to MySQL is one file's worth
+of change rather than forty screens': it was built for it.
 
 ## The training mechanic
 
@@ -407,6 +414,101 @@ They are not the same job, and the split falls where the model belongs.
 | how | Strava's REST API, `server/strava.mjs` | Strava's MCP server, via the Messages API |
 | why not the other one | MCP is request-scoped — Claude connects during a call, so nothing pushes, and the webhook would disappear. And a model transcribing numbers the pace engine then computes against is a non-deterministic step in a path `check:engine` asserts to the second. | The REST aggregates are what one sync happened to keep. The coach wants the shape of the effort inside the session and the weeks before it. |
 
+## The database
+
+`db/schema.sql` — 37 tables, MySQL 8, validated on MariaDB 10.11 too. `db/README.md`
+is its own documentation; what follows is why it looks the way it does.
+
+Until now the MSC database was eighteen TypeScript arrays behind an accessor
+seam, which was the right shape for a prototype and the wrong one for four
+things that had arrived since: more than one athlete, photos the app uploads,
+competitions encoded in a back office, and a plan that can be regenerated.
+
+**Nothing is stored that can be computed.** The engine derives every pace from
+two numbers on the athlete, and `check:engine` holds it to the workbook cell for
+cell. A pace in the database would be a second truth, and it is the one that
+goes wrong the day the 30-minute time trial rewrites the reference. So what is
+stored is what was **measured** — an activity's average pace, its work blocks,
+a weight, a resting heart rate — or **decided**: the zone and the fraction the
+coach proposes, never the minutes and the pace they render to.
+
+**Relational for what gets filtered, JSON for what is only ever read whole.**
+"Which sessions are threshold sessions" and "which days had tendon pain" are
+questions the plan genuinely asks — those are tables (`msc_session_zone`,
+`msc_journal_douleur`), and `check:db` asks them in SQL. The display payloads
+Claude produces are only ever read entire; those are JSON.
+
+### The plan became an entity
+
+It was not one while there was a single athlete and a single workbook. An
+athlete can now have several plans — the workbook's, then whatever the generator
+produces — and one is active.
+
+That is also the answer to the question this README left open. **Nothing is
+lost.** The journal and the activities belong to the athlete and *point at*
+sessions; deleting a plan takes its sessions and detaches what referenced them,
+without erasing a line of what the athlete actually did. `check:db` proves it,
+inside a transaction it rolls back.
+
+### The photo, the weight and the resting heart rate
+
+Three tables rather than one, because they are three different facts: the file
+received (`msc_photo`), what a model believed it read in it (`msc_extraction`),
+and the measurement of record (`msc_mesure`).
+
+What a model reads off a blurry scale does not become the athlete's weight
+before they have seen it: `msc_mesure.etat` is `propose` until they confirm. A
+failed extraction is **rejected, not deleted** — what the model gets wrong is
+worth keeping.
+
+### Competitions belong to the athlete, not to the plan
+
+A competition is a race, run or to be run. An *objectif* is what a plan aims at
+on it; a *résultat* is what it gave. That separation is what makes the evolution
+charts possible: results outlive the plans that aimed at them, so a three-year
+progression curve crosses four plans without noticing.
+
+### The Strava tokens are sealed
+
+AES-256-GCM, in `server/bd.mjs`, with a key that is not in the database. While
+they lived in a 0600 file, protecting them was a matter of Unix permissions; a
+database is backed up, replicated, restored onto a laptop and read by more
+people than a file — a token in the clear inside one is a token that ends up in
+a dump.
+
+### What `check:db` asserts
+
+Thirty assertions, in two halves. The round trip: the 243 sessions, the four
+block `part` values at the thousandth, the eight zone offsets with their signs,
+the accents and the Polish. Then the block-B reference recomputed **in SQL** from
+what the database holds — if MySQL and the workbook ever disagree, that is where
+it shows, because `check:engine` reads the TypeScript and would not see it.
+
+The other half is every guard rail with the write it must refuse: a target
+slower than the current reference, a plan that ends before it starts, a 900 kg
+weight, an RPE of 12, the same session done twice, an adaptation that doubles the
+next session, an analysis of a session with no session, and the same offline
+mutation replayed twice — the one that stops a queue from recording the same RPE
+twice after a reconnection.
+
+It found a real defect on its first run: deleting a plan failed, because sessions
+held their block and the block FK had no cascade.
+
+### What is not built yet
+
+The database exists, holds the workbook, and is asserted. Four things sit on top
+of it and do not exist:
+
+1. **The API and the repositories** — `src/data/db.ts` still reads the
+   TypeScript arrays. The seam was built for exactly this swap, and it is one
+   file.
+2. **The photo pipeline** — upload, storage under `MSC_PHOTOS_DIR`, the vision
+   call, the confirmation step.
+3. **The offline cache and the sync queue** — `maj_le` and `msc_mutation` are in
+   the schema for it; the service worker and the outbox are not written.
+4. **The back office** — encoding competitions and results, and the evolution
+   charts that read them.
+
 ## Reference data
 
 `reference/Plan30semainessemi10kmhyroxnatation.xlsx` is the source of truth and
@@ -467,10 +569,14 @@ Strava puts the seeded activities back.
 
 **The plan itself.** The generated plan is previewed on the Créer screen but not
 persisted, and the recalculation proposes adjustments without applying them —
-the rest of the app still reads the imported workbook plan. Wiring either one
-through to `msc_session` is the same open question, and it is a decision rather
-than a task: what happens to the journal and the analyses attached to the plan
-being replaced.
+the rest of the app still reads the imported workbook plan.
+
+That was the same open question in both cases — what happens to the journal
+attached to the plan being replaced — and the schema now answers it: nothing is
+lost, because a plan is an entity and the journal points at sessions rather than
+belonging to them. What remains is the wiring, and the app reading MySQL rather
+than the TypeScript arrays; see « The database » above for what is and is not
+built.
 
 The methodology call has been written against the documented API surface but not
 executed end to end here — this environment has no Anthropic credential, so the
