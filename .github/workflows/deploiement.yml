@@ -64,6 +64,25 @@ jobs:
             echo "Attendu : la sortie de « ssh-keyscan -H <hôte> 2>/dev/null »,"
             echo "une clé par ligne, chacune commençant par |1| ou par l'hôte."
             echo "Reçu : $(wc -l < ~/.ssh/known_hosts) ligne(s)."
+            # Dire COMBIEN de lignes n'a pas suffi à deux reprises. Le premier
+            # champ de la première ligne suffit à nommer ce qui a été collé, et
+            # il ne divulgue rien : ce sont tous des mots publics.
+            case "$(head -1 ~/.ssh/known_hosts | cut -d' ' -f1)" in
+              '#'*)      echo "→ on dirait une ligne de commentaire de ssh-keyscan."
+                         echo "  Elles sortent sur stderr : ajoute 2>/dev/null." ;;
+              '|1|'*)    echo "→ on dirait une entrée hachée, mais tronquée."
+                         echo "  Une ligne fait ~150 caractères et ne doit pas être coupée." ;;
+              ssh-*|ecdsa-*|sk-*)
+                         echo "→ on dirait une clé SANS le nom d'hôte devant."
+                         echo "  Un fichier .pub n'est pas un known_hosts : celui de la clé"
+                         echo "  de déploiement va dans authorized_keys, sur le serveur." ;;
+              '-----BEGIN'*)
+                         echo "→ c'est un bloc de clé PRIVÉE. Elle n'a rien à faire ici :"
+                         echo "  elle va dans DEPLOY_SSH_KEY, et nulle part ailleurs." ;;
+              [0-9]*)    echo "→ on dirait une liste d'empreintes (ssh-keygen -l)."
+                         echo "  Il faut la sortie brute du scan, pas ses empreintes." ;;
+              *)         echo "→ premier mot inattendu ; ce n'est pas une sortie de scan." ;;
+            esac
             exit 1
           fi
 
