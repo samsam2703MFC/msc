@@ -261,7 +261,52 @@ try {
 
   console.log('\n=== ce qui n’existe pas ===');
   const rien = await c.appel('/api/nimporte-quoi');
-  check('une route inconnue répond 404', rien.statut === 404);
+  check('une route d’API inconnue répond 404 en JSON', rien.statut === 404 && Boolean(rien.corps.erreur));
+
+  console.log('\n=== la posture de production ===');
+
+  /* La porte de service du développement doit être condamnée en production, et
+     le cookie de session doit porter Secure. Les deux se vérifient en lançant
+     un second serveur, parce que ce sont des propriétés du démarrage. */
+  const prod = spawn(process.execPath, ['server/index.mjs'], {
+    env: { ...process.env, PORT: String(PORT + 1), NODE_ENV: 'production', MSC_ATHLETE_ID: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  try {
+    const baseProd = `http://127.0.0.1:${PORT + 1}`;
+    for (let i = 0; i < 100; i += 1) {
+      try { if ((await fetch(`${baseProd}/api/sante`)).ok) break; } catch { /* pas encore */ }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const bypass = await fetch(`${baseProd}/api/db/instantane`);
+    check('MSC_ATHLETE_ID est refusé en production', bypass.status === 500,
+      String(bypass.status));
+
+    const cx = await fetch(`${baseProd}/api/connexion`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: EMAIL, mot_de_passe: MOT_DE_PASSE }),
+    });
+    const pose = cx.headers.get('set-cookie') ?? '';
+    check('le cookie de session est Secure en production', /Secure/.test(pose), pose.slice(-40));
+    check('et HttpOnly, et SameSite', /HttpOnly/.test(pose) && /SameSite=Lax/.test(pose));
+
+    /* La PWA construite est servie par le même processus : même origine, donc
+       pas de CORS et un service worker qui contrôle vraiment la page. */
+    const page = await fetch(`${baseProd}/`);
+    check('la PWA est servie à la racine',
+      page.ok && (page.headers.get('content-type') ?? '').includes('text/html'),
+      String(page.status));
+    check('index.html n’est pas mis en cache',
+      (page.headers.get('cache-control') ?? '').includes('no-cache'),
+      page.headers.get('cache-control') ?? '');
+
+    const evasion = await fetch(`${baseProd}/../../../../etc/passwd`);
+    const corpsEvasion = await evasion.text();
+    check('une traversée de répertoire ne sort pas de dist',
+      !corpsEvasion.includes('root:'), corpsEvasion.slice(0, 24));
+  } finally {
+    prod.kill('SIGTERM');
+  }
 } finally {
   serveur.kill('SIGTERM');
   await bd().execute('DELETE FROM msc_journal WHERE date = ?', ['2026-10-20']);

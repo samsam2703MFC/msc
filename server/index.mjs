@@ -20,7 +20,10 @@
    traverse `athleteDe`, qui lit le cookie et vérifie msc_acces — jamais le
    paramètre d'URL, qui n'est qu'une demande. */
 
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { AuthError, athleteDe, athletesVisibles, connecter, cookieSession, identifier, ouvrirSession }
   from './auth.mjs';
 import { BdError, scellementPret } from './bd.mjs';
@@ -30,6 +33,74 @@ import { analyserSeance, recalculerPlan, repondre } from './coach.mjs';
 import * as strava from './strava.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
+
+/* En production, ce serveur sert aussi la PWA. C'est un processus au lieu de
+   deux, et surtout c'est la même origine : plus de CORS, un cookie de session
+   qui voyage normalement, et le service worker qui contrôle vraiment la page.
+   En développement, Vite sert l'app et cette partie dort. */
+const DIST = resolve(process.env.MSC_DIST ?? 'dist');
+
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+/* Vite hache le nom des fichiers qu'il construit : ceux-là ne changent jamais
+   sous un nom donné et peuvent être gardés un an. index.html et le service
+   worker, eux, sont les deux fichiers dont dépend la mise à jour de tout le
+   reste — les mettre en cache, c'est livrer une version que le navigateur
+   refusera de remplacer. */
+function cache(chemin) {
+  if (/\/(index\.html|sw\.js|registerSW\.js|manifest\.webmanifest)$/.test(chemin)) {
+    return 'no-cache';
+  }
+  return /\/assets\//.test(chemin) ? 'public, max-age=31536000, immutable' : 'public, max-age=3600';
+}
+
+async function servirFichier(res, chemin, code = 200) {
+  const infos = await stat(chemin);
+  if (!infos.isFile()) throw new Error('pas un fichier');
+  res.writeHead(code, {
+    'content-type': TYPES[extname(chemin)] ?? 'application/octet-stream',
+    'content-length': infos.size,
+    'cache-control': cache(chemin.split(sep).join('/')),
+  });
+  createReadStream(chemin).pipe(res);
+}
+
+/** La PWA construite, si elle est là. Rend false quand la requête n'est pas
+    pour elle, pour que le routeur continue son chemin. */
+async function servirPWA(req, res, url) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+
+  /* `normalize` d'abord, puis vérification que le résultat est bien sous DIST :
+     une requête « /../../etc/passwd » ne doit pas sortir du dossier. */
+  const demande = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
+  const chemin = resolve(join(DIST, demande));
+  if (chemin !== DIST && !chemin.startsWith(DIST + sep)) return false;
+
+  try {
+    await servirFichier(res, chemin);
+    return true;
+  } catch {
+    /* Une route de l'application, pas un fichier : la PWA est une page unique,
+       elle route elle-même. */
+    try {
+      await servirFichier(res, join(DIST, 'index.html'));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
 
 function json(res, code, body) {
   const payload = JSON.stringify(body);
@@ -358,6 +429,10 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return res.writeHead(204).end();
 
   try {
+    if (!url.pathname.startsWith('/api/')) {
+      if (await servirPWA(req, res, url)) return undefined;
+      return json(res, 404, { erreur: 'route inconnue' });
+    }
     return await router(req, res, url);
   } catch (e) {
     /* Le message peut porter le détail de la requête : il va aux logs, et la
@@ -390,6 +465,10 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`plan server → http://localhost:${PORT}`);
+  stat(join(DIST, 'index.html')).then(
+    () => console.log(`PWA servie depuis ${DIST}`),
+    () => console.log(`pas de build dans ${DIST} — l'API seule (npm run build pour en produire un)`),
+  );
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('⚠  ANTHROPIC_API_KEY non défini : les routes du coach renverront 401.');
   }
