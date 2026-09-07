@@ -128,13 +128,22 @@ lisibles, pour un serveur qu'on ne veut pas nommer dans le dépôt.
 # une clé qui ne sert qu'à ça, sans phrase de passe (un runner ne la tape pas)
 ssh-keygen -t ed25519 -f ~/.ssh/msc_deploy -C "deploiement msc" -N ""
 
-# la moitié publique va sur le serveur, la privée dans le secret GitHub
+# la moitié publique va sur le serveur
 ssh-copy-id -i ~/.ssh/msc_deploy.pub msc@<domaine>
-cat ~/.ssh/msc_deploy          # → secret DEPLOY_SSH_KEY
 
-# l'empreinte du serveur, pour que le runner la vérifie au lieu de l'ignorer
-ssh-keyscan -H <domaine>       # → secret DEPLOY_KNOWN_HOSTS
+# la privée dans le secret GitHub — SUR UNE LIGNE, en base64
+base64 -w0 ~/.ssh/msc_deploy   # → secret DEPLOY_SSH_KEY
 ```
+
+**Colle-la en base64.** Une clé PEM fait une douzaine de lignes qui commencent
+par des tirets, et c'est exactement ce qu'une sélection à la souris ou un champ
+de formulaire ampute : le déploiement répond alors « error in libcrypto » puis
+« Permission denied », deux messages qui ne disent pas que le problème est un
+collage. Le base64 n'a ni tiret, ni saut de ligne, ni barre verticale — rien à
+perdre. Le workflow le décode, et accepte aussi la forme PEM quand elle arrive
+intacte.
+
+Les clés d'hôte, elles, sont déjà dans `deploy/known_hosts` : rien à coller.
 
 La clé de déploiement n'a pas besoin d'être `root` et ne doit pas l'être : le
 seul droit privilégié qu'elle a est de redémarrer un service, par la ligne de

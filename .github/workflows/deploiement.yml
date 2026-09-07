@@ -86,6 +86,17 @@ jobs:
             fi
           fi
 
+          # 3 · une ligne de base64. C'est la forme qui ne se casse pas : ni
+          #     tiret, ni barre verticale, ni saut de ligne — rien qu'une
+          #     sélection à la souris ou un champ de formulaire puisse manger.
+          #        base64 -w0 ~/.ssh/msc_deploy
+          if ! valide && tr -d '\n' < ~/.ssh/id_deploy.recu | grep -qE '^[A-Za-z0-9+/=]+$'; then
+            if tr -d '\n' < ~/.ssh/id_deploy.recu | base64 -d > ~/.ssh/id_deploy 2>/dev/null; then
+              chmod 600 ~/.ssh/id_deploy
+              valide && echo "::warning::clé décodée depuis du base64."
+            fi
+          fi
+
           if ! valide; then
             cp ~/.ssh/id_deploy.recu ~/.ssh/id_deploy
             chmod 600 ~/.ssh/id_deploy
@@ -100,7 +111,10 @@ jobs:
                 echo "→ l'enveloppe est là. Ce sont donc les sauts de ligne du"
                 echo "  corps qui manquent, ou la clé est chiffrée par une"
                 echo "  phrase de passe — un runner ne peut pas la taper." ;;
-              *) echo "→ ni une clé publique ni une enveloppe reconnaissable." ;;
+              *) echo "→ ni une clé publique, ni une enveloppe, ni du base64."
+                 echo "  Le plus sûr : sur le serveur, « base64 -w0 ~/.ssh/msc_deploy »"
+                 echo "  et colle cette unique ligne — elle ne contient rien qu'un"
+                 echo "  collage puisse abîmer." ;;
             esac
             exit 1
           fi
