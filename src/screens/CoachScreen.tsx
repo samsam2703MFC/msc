@@ -5,7 +5,7 @@
 import { useState } from 'react';
 
 import * as db from '../data/db';
-import { ecartDeSemaine } from '../data/analyse';
+import { ecartDeSemaine, libelleAjustement } from '../data/analyse';
 import type { TourDeChat } from '../data/analyse';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
@@ -247,7 +247,11 @@ export function CoachScreen({ app }: { app: App }) {
 
       {/* adjustments, accepted one at a time */}
       {adjustments.map((a) => {
-        const on = !!app.applied[a.id];
+        const libelle = libelleAjustement(a, lang);
+        /* Un ajustement qui nomme une séance absente du plan ne s'affiche pas :
+           une carte manquante vaut mieux qu'une carte fausse. */
+        if (!libelle) return null;
+        const on = a.applique;
         const type = db.type(a.type);
         return (
           <Card
@@ -268,16 +272,16 @@ export function CoachScreen({ app }: { app: App }) {
               style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}
             >
               <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, lineHeight: 1.35 }}>
-                {a.quoi[lang]}
+                {libelle.quoi}
               </div>
-              <div style={{ fontSize: 11, color: C.inkQuiet }}>{a.quand[lang]}</div>
+              <div style={{ fontSize: 11, color: C.inkQuiet }}>{libelle.quand}</div>
             </div>
             <button
               type="button"
               className="msc-hover-bright"
               aria-pressed={on}
               aria-label={on ? ui.applyOn : ui.applyOff}
-              onClick={() => app.toggleAdjustment(a.id)}
+              onClick={() => void app.accepter('msc_ajustement', a.id, !on)}
               style={{
                 width: 38,
                 height: 38,

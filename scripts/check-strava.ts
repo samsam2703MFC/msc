@@ -9,13 +9,31 @@
 import { apparier, blocsDeQualite, seancesDeQualite } from '../src/data/strava';
 import {
   appliquerAdaptation,
-  appliquerAjustement,
+  libelleAjustement,
   ecartDeSemaine,
   prochaineSeance,
   statsDeSeance,
 } from '../src/data/analyse';
 import { allure, allureSecondes, formatAllure } from '../src/data/engine';
-import { msc_journal } from '../src/data/tables';
+import {
+  msc_activity, msc_adaptation, msc_ajustement, msc_analyse, msc_daily, msc_ecart,
+  msc_excuse, msc_journal, msc_metric, msc_source, msc_statut, msc_type, msc_ui,
+} from '../src/data/tables';
+import {
+  msc_athlete, msc_bloc, msc_objectif, msc_regle, msc_rpe, msc_zone,
+} from '../src/data/reference';
+import { msc_week } from '../src/data/plan.generated';
+import { charger } from '../src/data/vives';
+
+/* Les tables sont vides tant que rien ne les charge : dans l'application c'est
+   l'instantané du serveur qui le fait, ici c'est le classeur. Sans ça le moteur
+   n'a ni athlète ni bloc, et il le dit bruyamment — ce qui est le but. */
+charger({
+  msc_athlete, msc_bloc, msc_zone, msc_objectif, msc_regle, msc_rpe,
+  msc_session: PLAN, msc_week, msc_type, msc_statut, msc_excuse, msc_source,
+  msc_metric, msc_activity, msc_journal, msc_daily,
+  msc_analyse, msc_adaptation, msc_ajustement, msc_ecart, msc_ui,
+});
 import type { ActiviteDetaillee, ActiviteStrava } from '../src/data/strava';
 import { msc_session as PLAN } from '../src/data/plan.generated';
 
@@ -267,41 +285,36 @@ check('les jours de repos ne comptent pas comme sautés',
   pleine.du.seances === PLAN.filter((s) => s.semaine === 7 && s.discipline !== 'Repos').length,
   `${pleine.du.seances}`);
 
-console.log('\n=== le garde-fou des ajustements hebdo ===');
+console.log('\n=== le libellé d’un ajustement ===');
 
 const longue = PLAN.find((s) => s.semaine === 7 && s.type === 'longue')
   ?? PLAN.find((s) => s.semaine === 7 && s.discipline === 'Course à pied')!;
 const seanceNage = PLAN.find((s) => s.semaine === 7 && s.natation_m)!;
 
-const propose = (p: Partial<Parameters<typeof appliquerAjustement>[0]>) =>
-  appliquerAjustement(
-    { session_id: null, semaine: null, part: null, texte: null, type: null, ...p },
-    7200, 9500,
-  );
+const rendu = (p: Partial<Parameters<typeof libelleAjustement>[0]>) =>
+  libelleAjustement({ id: 1, analyse_id: 1, type: 'ef', applique: false, ...p }, 'fr');
 
-const reduite = propose({ session_id: longue.id, part: 0.8 });
+const reduite = rendu({ session_id: longue.id, part: 0.8 });
 check('une séance en minutes s’écrit en heures et minutes',
-  reduite?.quoi.fr.includes('→') === true && !reduite?.quoi.fr.includes('/km'), reduite?.quoi.fr);
-check('l’ajustement porte le type et la semaine de sa séance',
-  reduite?.type === longue.type && reduite?.semaine === longue.semaine);
+  reduite?.quoi.includes('→') === true && !reduite?.quoi.includes('/km'), reduite?.quoi);
+check('et le quand nomme le jour et la semaine',
+  reduite?.quand.includes(`S${longue.semaine}`) === true, reduite?.quand);
 
-const nagee = propose({ session_id: seanceNage.id, part: 1.2 });
-check('une nage s’écrit en mètres',
-  nagee?.quoi.fr.endsWith(' m') === true, nagee?.quoi.fr);
+const nagee = rendu({ session_id: seanceNage.id, part: 1.2 });
+check('une nage s’écrit en mètres', nagee?.quoi.endsWith(' m') === true, nagee?.quoi);
 check('une nage augmentée l’est vraiment',
-  nagee?.quoi.fr.includes(String(Math.round(seanceNage.natation_m! * 1.2)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')) === true,
-  nagee?.quoi.fr);
+  nagee?.quoi.includes(
+    String(Math.round(seanceNage.natation_m! * 1.2)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '),
+  ) === true, nagee?.quoi);
 
 check('une fraction délirante est bornée',
-  propose({ session_id: longue.id, part: 9 })?.quoi.fr ===
-    propose({ session_id: longue.id, part: 1.25 })?.quoi.fr);
-check('une séance inconnue est ignorée', propose({ session_id: 999_999, part: 0.8 }) === undefined);
-check('un ajustement sans rien est ignoré', propose({}) === undefined);
-
-check('un ajustement de semaine passe avec un type connu',
-  propose({ semaine: 9, texte: 'Test de 30 min décalé', type: 'test' })?.quand.fr === 'Semaine 9');
-check('un ajustement de semaine au type inventé est ignoré',
-  propose({ semaine: 9, texte: 'quelque chose', type: 'zumba' }) === undefined);
+  rendu({ session_id: longue.id, part: 9 })?.quoi === rendu({ session_id: longue.id, part: 1.25 })?.quoi);
+check('une séance inconnue ne rend rien', rendu({ session_id: 999_999, part: 0.8 }) === undefined);
+check('un ajustement sans rien ne rend rien', rendu({}) === undefined);
+check('un ajustement de semaine porte sa phrase',
+  rendu({ semaine: 9, texte: { fr: 'Test décalé', pl: 'x' } })?.quand === 'Semaine 9');
+check('un ajustement de semaine sans phrase ne rend rien',
+  rendu({ semaine: 9 }) === undefined);
 
 console.log(`\n${PLAN.length} séances au plan`);
 console.log(fails === 0 ? '\nOK' : `\n${fails} ÉCHECS`);

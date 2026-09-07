@@ -108,16 +108,16 @@ export const msc_daily: MscDaily[] = [
 ];
 
 export const msc_metric: MscMetric[] = [
-  { code: 'acwr', icon: 'scale', valeur: '1,18', couleur: '#038870', seuil: 1.5, serie: [0.82, 0.9, 0.95, 1.02, 1.1, 1.05, 1.18],
+  { code: 'acwr', icon: 'scale', couleur: '#038870', seuil: 1.5,
     nom: { fr: 'Charge aiguë / chronique', pl: 'Obciążenie ostre / chroniczne' },
     formule: { fr: 'charge 7 j ÷ moyenne 28 j · seuil 1,5', pl: '7 dni ÷ średnia 28 dni · próg 1,5' } },
-  { code: 'fc_repos', icon: 'heart-pulse', valeur: '54 bpm', couleur: '#038870', serie: [57, 56, 56, 55, 55, 54, 54],
+  { code: 'fc_repos', icon: 'heart-pulse', couleur: '#038870',
     nom: { fr: 'FC au repos', pl: 'Tętno spoczynkowe' },
     formule: { fr: 'moyenne glissante 7 jours', pl: 'średnia krocząca 7 dni' } },
-  { code: 'derive', icon: 'trending-down', valeur: '6,4 %', couleur: '#BA7517', seuil: 8, serie: [14, 11, 9.5, 8.2, 7.1, 6.4],
+  { code: 'derive', icon: 'trending-down', couleur: '#BA7517', seuil: 8,
     nom: { fr: 'Dérive cardiaque', pl: 'Dryf tętna' },
     formule: { fr: 'sorties longues · seuil 8 %', pl: 'długie wybiegania · próg 8 %' } },
-  { code: 'allure_fc', icon: 'trending-up', valeur: '−6 s/km', couleur: '#038870', serie: [0.4, 0.55, 0.62, 0.7, 0.78, 0.88, 1],
+  { code: 'allure_fc', icon: 'trending-up', couleur: '#038870',
     nom: { fr: 'Allure à FC constante', pl: 'Tempo przy stałym tętnie' },
     formule: { fr: 'la vraie progression, sur les EF', pl: 'prawdziwy postęp, na wytrzymałości' } },
 ];
@@ -128,8 +128,8 @@ export const msc_analyse: MscAnalyse[] = [
   { id: 9001, date: '2026-10-14', type: 'seance', session_id: 1052, modele: 'haiku-4-5', cout_eur: 0.008,
     verdict: { fr: 'Parti 5 s/km trop vite : le 4ᵉ bloc lâche de 7 s/km. Le travail au seuil a eu lieu.', pl: 'Start o 5 s/km za szybko: czwarty blok traci 7 s/km. Praca progowa się odbyła.' },
     stats: [
-      { valeur: '+7 s/km', icon: 'trending-down', couleur: '#BA7517', label: { fr: 'dérive B1 → B4', pl: 'spadek B1 → B4' } },
-      { valeur: '5:07/km', icon: 'gauge', couleur: '#0A1C33', label: { fr: 'moyenne · cible 5:12', pl: 'średnia · cel 5:12' } },
+      { valeur: '+12 s/km', icon: 'trending-down', couleur: '#BA7517', label: { fr: 'dérive B1 → B5', pl: 'spadek B1 → B5' } },
+      { valeur: '4:56/km', icon: 'gauge', couleur: '#0A1C33', label: { fr: 'blocs · cible 4:55', pl: 'bloki · cel 4:55' } },
       { valeur: '8', icon: 'activity', couleur: '#BA7517', label: { fr: 'RPE · cible 7', pl: 'RPE · cel 7' } },
     ] },
   { id: 9002, date: '2026-10-18', type: 'hebdo', semaine: 7, modele: 'sonnet-5', cout_eur: 0.07,
@@ -141,30 +141,35 @@ export const msc_analyse: MscAnalyse[] = [
 ];
 
 /* Adaptation issue de l'analyse de séance : proposition, jamais écriture directe. */
+/* Une zone et une part de la durée prévue, pas « 45 min · 6:20/km » : le moteur
+   rend la ligne, donc elle glisse quand la référence de l'athlète glisse.
+   0,776 × 58 min = 45 min, en zone Récup du bloc B = 6:20/km. */
 export const msc_adaptation: MscAdaptation[] = [
-  { id: 7001, analyse_id: 9001, session_id: 1055, type: 'recup', session_avant: { fr: 'Footing de récupération · 58 min', pl: 'Trucht regeneracyjny · 58 min' },
-    session_apres: '45 min · 6:20/km',
+  { id: 7001, analyse_id: 9001, session_id: 1055, zone: 'recup', part_duree: 0.776, applique: false,
     pourquoi: { fr: 'Le seuil a coûté plus que prévu. On protège la sortie longue de samedi.', pl: 'Próg kosztował więcej niż zakładano. Chronimy sobotni długi bieg.' } },
 ];
 
+/* Même principe : une part de la quantité de la séance — sa durée, ou ses
+   mètres pour une nage — et le libellé se rend. L'ajustement de semaine, lui,
+   n'a pas de quantité : il porte sa phrase. */
 export const msc_ajustement: MscAjustement[] = [
-  { id: 7101, analyse_id: 9002, session_id: 1056, type: 'longue', quand: { fr: 'Samedi · S7', pl: 'Sobota · T7' }, quoi: { fr: 'Sortie longue 1h37 → 1h20', pl: 'Długi bieg 1h37 → 1h20' } },
-  { id: 7102, analyse_id: 9002, session_id: 1054, type: 'nage', quand: { fr: 'Vendredi · S7', pl: 'Piątek · T7' }, quoi: { fr: 'Nage 2 000 → 2 600 m', pl: 'Pływanie 2 000 → 2 600 m' } },
-  { id: 7103, analyse_id: 9002, semaine: 10, type: 'test', quand: { fr: 'Semaine 10', pl: 'Tydzień 10' }, quoi: { fr: 'Test de 30 min décalé d’une semaine', pl: 'Test 30 min przesunięty o tydzień' } },
+  { id: 7101, analyse_id: 9002, session_id: 1056, type: 'longue', part: 0.82, applique: false },
+  { id: 7102, analyse_id: 9002, session_id: 1054, type: 'nage', part: 1.08, applique: false },
+  { id: 7103, analyse_id: 9002, semaine: 10, type: 'test', applique: false,
+    texte: { fr: 'Test de 30 min décalé d’une semaine', pl: 'Test 30 min przesunięty o tydzień' } },
 ];
 
+/* Les trois chiffres de l'écart — le retard, les séances sautées, la
+   réalisation — ne sont pas ici : ils sont arithmétiques et `ecartDeSemaine`
+   les recalcule à l'affichage. Ce qui se garde est la lecture qu'en fait
+   Claude, et les portées du réétalonnage. */
 export const msc_ecart: MscEcart[] = [
-  { semaine: 7, retard: '−3h20', sautees: 2, realisation: '82 %',
+  { semaine: 7,
     texte: { fr: 'Deux séances sautées, 3h20 de retard. Le coach réétalonne au lieu de faire rattraper.', pl: 'Dwa opuszczone treningi, 3h20 zaległości. Trener przelicza, zamiast kazać nadrabiać.' },
-    stats: [
-      { valeur: '−3h20', icon: 'clock', label: { fr: 'volume en retard', pl: 'zaległej objętości' } },
-      { valeur: '2', icon: 'calendar-x', label: { fr: 'séances sautées', pl: 'opuszczone treningi' } },
-      { valeur: '82 %', icon: 'percent', label: { fr: 'réalisation', pl: 'realizacja' } },
-    ],
     recalcul: [
-      { portee: 'S7–S8', texte: { fr: 'Volume ramené à 7h, nage avant la force.', pl: 'Objętość do 7h, pływanie przed siłą.' } },
-      { portee: 'S9', texte: { fr: 'Test de 30 min déplacé en semaine 6.', pl: 'Test 30 min przeniesiony na tydzień 6.' } },
-      { portee: 'S10–S23', texte: { fr: 'Progression lissée à +6 % / semaine. Semi du 22/11 conservé.', pl: 'Progresja wygładzona do +6 % / tydzień. Półmaraton 22/11 zachowany.' } },
+      { portee: 'S7–S8', texte: { fr: 'Volume allégé, nage avant la force.', pl: 'Objętość zmniejszona, pływanie przed siłą.' } },
+      { portee: 'S9', texte: { fr: 'Test de 30 min avancé.', pl: 'Test 30 min przesunięty wcześniej.' } },
+      { portee: 'S10–S23', texte: { fr: 'Progression lissée. Semi du 22/11 conservé.', pl: 'Progresja wygładzona. Półmaraton 22/11 zachowany.' } },
     ] },
 ];
 

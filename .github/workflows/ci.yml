@@ -78,3 +78,11 @@ jobs:
         run: |
           npm run build
           npm run check:api
+
+      # Le seul contrôle qui exerce le client. Les autres diraient que le moteur
+      # calcule juste et que l'API répond ; aucun ne dirait que l'écran de
+      # connexion s'affiche et que le plan arrive derrière.
+      - name: le navigateur
+        run: |
+          npx playwright install --with-deps chromium
+          npm run check:app

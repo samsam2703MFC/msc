@@ -435,6 +435,49 @@ export async function ecrireMesure(athleteId, { date, poids_kg, fc_repos, source
   return { date };
 }
 
+/**
+ * Les activités que le navigateur a appariées.
+ *
+ * L'appariement a besoin du plan, donc il se fait dans le navigateur ; ce qui
+ * en sort atterrit ici. Un remplacement plutôt qu'une fusion : la synchro
+ * renvoie l'état complet de la fenêtre demandée, et une activité qui a disparu
+ * de Strava — supprimée par l'athlète — doit disparaître d'ici aussi.
+ *
+ * Ce qui n'est pas touché : les activités saisies à la main, qui n'ont pas
+ * d'identifiant Strava et que Strava ne peut donc pas confirmer.
+ */
+export async function ecrireActivites(athleteId, activites, cnx) {
+  const q = cnx ?? (await import('./bd.mjs')).bd();
+  await q.execute(
+    'DELETE FROM msc_activity WHERE athlete_id = ? AND id_strava IS NOT NULL', [athleteId],
+  );
+  let ecrites = 0;
+  for (const a of activites ?? []) {
+    if (!a?.id_strava) continue;
+    const [r] = await q.execute(
+      `INSERT INTO msc_activity (athlete_id, id_strava, session_id, date, sport, duree_min,
+         allure_s_km, fc_moy, statut)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [athleteId, a.id_strava, a.session_id ?? null, a.date, a.sport, a.duree_min,
+       a.allure_moy ? secondesDAllure(a.allure_moy) : null, a.fc_moy ?? null, a.statut ?? 'fait'],
+    );
+    for (const [ordre, allure] of (a.splits_blocs ?? []).entries()) {
+      await q.execute(
+        'INSERT INTO msc_activity_bloc (activity_id, ordre, allure_s_km) VALUES (?, ?, ?)',
+        [r.insertId, ordre, allure],
+      );
+    }
+    ecrites += 1;
+  }
+  return { ecrites };
+}
+
+/** « 4:56/km » → 296. L'inverse de `formatAllure`. */
+function secondesDAllure(allure) {
+  const [min, sec] = String(allure).split('/')[0].split(':').map(Number);
+  return min * 60 + (sec || 0);
+}
+
 /** Accepter ou retirer une proposition du coach. */
 export async function appliquer(athleteId, table, id, applique) {
   if (table !== 'msc_adaptation' && table !== 'msc_ajustement') {

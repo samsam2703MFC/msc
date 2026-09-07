@@ -1,162 +1,25 @@
-/* The MSC database seam.
+/* La couture de la base MSC.
 
-   Screens never import ./tables, ./plan.generated or ./reference directly —
-   they go through this module, so swapping the seed data for a real backend is
-   a change in one file.
+   Les écrans passent tous par ici — `select`, `one`, `mustOne`, `type`, `ui`,
+   plus le moteur — et n'importent jamais une table directement. C'est ce qui a
+   rendu le passage du tableau en mémoire au serveur possible en un seul
+   fichier : les tables vivent maintenant dans `./vives`, remplies par
+   `charger()` avec l'instantané que le serveur rend, et rien d'autre n'a bougé.
 
-   Three sources sit behind it:
-     ./plan.generated  the 243 sessions and 30 weekly totals, imported from the
-                       reference workbook
-     ./reference       the athlete, the blocks, the pace zones, the objectives
-                       and the adjustment rules — the mechanic's inputs
-     ./tables          the reference vocabulary, plus seeded examples of what
-                       the Anthropic API writes back */
+   Avant le chargement, les tables sont vides et `db.athlete` crie plutôt que de
+   rendre zéro. Aucun écran ne doit s'afficher avant `charger()` : `App.tsx`
+   tient cette garde. */
 
-import { msc_session, msc_week } from './plan.generated';
-import {
-  msc_athlete,
-  msc_bloc,
-  msc_objectif,
-  msc_regle,
-  msc_rpe,
-  msc_zone,
-} from './reference';
-import {
-  msc_activity,
-  msc_adaptation,
-  msc_ajustement,
-  msc_analyse,
-  msc_daily,
-  msc_ecart,
-  msc_excuse,
-  msc_journal,
-  msc_metric,
-  msc_source,
-  msc_statut,
-  msc_type,
-  msc_ui,
-} from './tables';
-import type {
-  Lang,
-  MscActivity,
-  MscAdaptation,
-  MscAjustement,
-  MscAnalyse,
-  MscEcart,
-  MscType,
-  MscUiStrings,
-  TypeCode,
-} from './types';
+import { tables, ui as uiVivant } from './vives';
+import type { Lang, MscType, MscUiStrings, TypeCode } from './types';
 
 export * from './engine';
+/* `chargee`, pas `charge` : le moteur exporte déjà `charge(durée, RPE)`,
+   la charge de Foster, et deux noms identiques en masqueraient un. */
+export { charger, vider, chargee, athleteId, droit } from './vives';
+export type { Instantane } from './vives';
 
-/* The one table a live integration writes into. Every other table here is read
-   from end to end — seeded, imported or computed — but activities are what the
-   athlete actually did, and Strava replaces them wholesale on every sync. So
-   the accessors close over a mutable array rather than the imported seed, and
-   `setActivites` is the seam the sync writes through.
-
-   Unlinking puts the seeded example back, because a prototype with no Strava
-   account should still have something to show. */
-const activites: MscActivity[] = [...msc_activity];
-
-/** Replaces the activity table with what Strava returned. */
-export function setActivites(rows: MscActivity[]): void {
-  activites.splice(0, activites.length, ...rows);
-}
-
-/** Back to the seeded example — what unlinking Strava leaves behind. */
-export function reinitialiserActivites(): void {
-  activites.splice(0, activites.length, ...msc_activity);
-}
-
-/* The coach's output lands here the same way. The seeded rows are the worked
-   example from the workbook; a real analysis replaces the one for its own
-   session and leaves the rest alone. */
-const analyses: MscAnalyse[] = [...msc_analyse];
-const adaptations: MscAdaptation[] = [...msc_adaptation];
-const ajustements: MscAjustement[] = [...msc_ajustement];
-const ecarts: MscEcart[] = [...msc_ecart];
-
-/**
- * Writes back what Claude made of a session, or of a week.
- *
- * An analysis replaces the one it supersedes — same session, or same week —
- * and takes its proposals with it. An orphaned adjustment would keep showing
- * under a verdict that no longer exists.
- */
-export function setAnalyse(
-  analyse: MscAnalyse,
-  propositions: { adaptation?: MscAdaptation; ajustements?: MscAjustement[] } = {},
-): void {
-  const meme = (r: MscAnalyse) =>
-    r.type === analyse.type &&
-    (analyse.type === 'seance'
-      ? r.session_id === analyse.session_id
-      : r.semaine === analyse.semaine);
-
-  for (let i = analyses.length - 1; i >= 0; i -= 1) {
-    if (!meme(analyses[i])) continue;
-    const id = analyses[i].id;
-    for (let j = adaptations.length - 1; j >= 0; j -= 1) {
-      if (adaptations[j].analyse_id === id) adaptations.splice(j, 1);
-    }
-    for (let j = ajustements.length - 1; j >= 0; j -= 1) {
-      if (ajustements[j].analyse_id === id) ajustements.splice(j, 1);
-    }
-    analyses.splice(i, 1);
-  }
-
-  analyses.push(analyse);
-  if (propositions.adaptation) adaptations.push(propositions.adaptation);
-  if (propositions.ajustements) ajustements.push(...propositions.ajustements);
-}
-
-/** The week's gap, recomputed. One row per week, replaced in place. */
-export function setEcart(ecart: MscEcart): void {
-  const i = ecarts.findIndex((e) => e.semaine === ecart.semaine);
-  if (i >= 0) ecarts.splice(i, 1, ecart);
-  else ecarts.push(ecart);
-}
-
-/** The next analysis id — above the seeds, and above anything already written. */
-export function prochainAnalyseId(): number {
-  return analyses.reduce((max, a) => Math.max(max, a.id), 9000) + 1;
-}
-
-/** The next adaptation id — the proposals have their own numbering. */
-export function prochainAdaptationId(): number {
-  return adaptations.reduce((max, a) => Math.max(max, a.id), 7000) + 1;
-}
-
-/** Likewise for the weekly adjustments. */
-export function prochainAjustementId(): number {
-  return ajustements.reduce((max, a) => Math.max(max, a.id), 7100) + 1;
-}
-
-/* Key order is the order the tables are listed in the settings sheet. */
-const arrayTables = {
-  msc_athlete,
-  msc_objectif,
-  msc_bloc,
-  msc_zone,
-  msc_type,
-  msc_session,
-  msc_week,
-  msc_regle,
-  msc_rpe,
-  msc_activity: activites,
-  msc_journal,
-  msc_daily,
-  msc_metric,
-  msc_analyse: analyses,
-  msc_adaptation: adaptations,
-  msc_ajustement: ajustements,
-  msc_ecart: ecarts,
-  msc_excuse,
-  msc_statut,
-  msc_source,
-};
+const arrayTables = tables;
 
 export type TableName = keyof typeof arrayTables;
 export type Row<K extends TableName> = (typeof arrayTables)[K][number];
@@ -190,11 +53,13 @@ export function mustOne<K extends TableName>(
 }
 
 export function type(code: TypeCode): MscType {
-  const row = msc_type.find((r) => r.code === code);
+  const row = tables.msc_type.find((r) => r.code === code);
   if (!row) throw new Error(`msc_type: unknown code "${code}"`);
   return row;
 }
 
 export function ui(lang: Lang): MscUiStrings {
-  return msc_ui[lang];
+  const chaines = uiVivant[lang];
+  if (!chaines) throw new Error(`msc_ui: la langue « ${lang} » n'est pas chargée`);
+  return chaines;
 }

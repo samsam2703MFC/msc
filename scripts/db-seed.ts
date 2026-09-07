@@ -303,33 +303,23 @@ async function coach(cnx: Cnx, athleteId: number, planId: number) {
     ids.set(a.id, r.insertId);
   }
 
-  /* L'adaptation portait « 45 min · 6:20/km » en toutes lettres. Ce que la base
-     garde est ce que le modèle a choisi — une zone et une part — et le moteur
-     réécrit la ligne. Changer la référence de l'athlète doit la faire glisser
-     comme il fait glisser le reste du plan. */
+  /* La graine porte maintenant ce que la base garde : une zone et une part.
+     Plus rien à convertir — le rendu se fait dans le navigateur, avec le
+     moteur, donc « 45 min · 6:20/km » n'existe qu'à l'écran. */
   for (const ad of msc_adaptation) {
-    const [session] = (await cnx.query(
-      'SELECT duree_min FROM msc_session WHERE id = ?', [ad.session_id],
-    )) as any;
-    const minutes = Number(ad.session_apres.match(/(\d+)\s*min/)?.[1] ?? session[0]?.duree_min ?? 0);
-    const part = session[0]?.duree_min ? minutes / session[0].duree_min : 1;
-    const [zone] = (await cnx.query(
-      'SELECT zone_code FROM msc_session_zone WHERE session_id = ? ORDER BY ordre DESC LIMIT 1',
-      [ad.session_id],
-    )) as any;
     await cnx.query(
       `INSERT INTO msc_adaptation (analyse_id, session_id, zone_code, part_duree, pourquoi_fr, pourquoi_pl)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [ids.get(ad.analyse_id), ad.session_id, zone[0]?.zone_code ?? null,
-       Math.min(1, Math.max(0.5, part)), ...L(ad.pourquoi)],
+      [ids.get(ad.analyse_id), ad.session_id, ad.zone ?? null, ad.part_duree, ...L(ad.pourquoi)],
     );
   }
 
   for (const aj of msc_ajustement) {
     await cnx.query(
-      `INSERT INTO msc_ajustement (analyse_id, session_id, semaine, type_code, texte_fr, texte_pl)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [ids.get(aj.analyse_id), aj.session_id ?? null, aj.semaine ?? null, aj.type, ...L(aj.quoi)],
+      `INSERT INTO msc_ajustement (analyse_id, session_id, semaine, type_code, part, texte_fr, texte_pl)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [ids.get(aj.analyse_id), aj.session_id ?? null, aj.semaine ?? null, aj.type,
+       aj.part ?? null, ...L(aj.texte)],
     );
   }
 

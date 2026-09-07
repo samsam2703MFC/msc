@@ -5,6 +5,7 @@
    block's 10 km reference plus the zone's offset. */
 
 import * as db from '../data/db';
+import { appliquerAdaptation } from '../data/analyse';
 import type { Lang, MscPlanSession } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
@@ -163,6 +164,7 @@ export function TodayScreen({ app }: { app: App }) {
           rows={2}
           value={app.note}
           onChange={(e) => app.setNote(e.target.value)}
+          onBlur={() => void app.enregistrerJournal()}
           style={{
             width: '100%',
             resize: 'none',
@@ -280,6 +282,9 @@ function Analyse({
 }) {
   const activity = db.one('msc_activity', (a) => a.session_id === analyse.session_id);
   const splits = activity?.splits_blocs ?? [];
+  const visee = adaptation
+    ? db.one('msc_session', (s) => s.id === adaptation.session_id)
+    : undefined;
   /* Bars are read against the target pace, so the drift is the story. */
   const base = cible ?? Math.min(...splits);
   const top = Math.max(...splits, base + 1);
@@ -312,7 +317,9 @@ function Analyse({
 
       <div style={{ fontSize: 14, lineHeight: 1.5, color: C.inkBody }}>{analyse.verdict[lang]}</div>
 
-      {adaptation && (
+      {/* La proposition est une zone et une part ; les minutes et l'allure se
+          calculent ici, avec le moteur, donc elles suivent la référence. */}
+      {adaptation && visee && (
         <div
           style={{
             borderRadius: 12,
@@ -330,21 +337,21 @@ function Analyse({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Mono size={11} color={C.inkQuiet} style={{ textDecoration: 'line-through' }}>
-              {adaptation.session_avant[lang]}
+              {`${visee.titre_court[lang]} · ${visee.duree_min} min`}
             </Mono>
             <Icon name="arrow-right" size={14} color={C.accentDeep} />
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <TypeChip
-              label={db.type(adaptation.type).label[lang]}
-              icon={db.type(adaptation.type).icon}
-              color={db.type(adaptation.type).color}
-              onClick={() => app.openType(adaptation.type)}
+              label={db.type(visee.type).label[lang]}
+              icon={db.type(visee.type).icon}
+              color={db.type(visee.type).color}
+              onClick={() => app.openType(visee.type)}
               compact
             />
             <Mono size={13} color={C.ink}>
-              {adaptation.session_apres}
+              {appliquerAdaptation(adaptation, visee).session_apres}
             </Mono>
           </div>
 
@@ -352,11 +359,15 @@ function Analyse({
             {adaptation.pourquoi[lang]}
           </div>
 
+          {/* L'acceptation part au serveur : c'est une décision de l'athlète,
+              elle doit survivre au rechargement de la page. */}
           <AccentButton
-            label={app.nextApplied ? ui.applyOn : ui.applyOff}
-            icon={app.nextApplied ? 'check' : 'wand-sparkles'}
-            active={app.nextApplied}
-            onClick={app.toggleNextApplied}
+            label={adaptation.applique ? ui.applyOn : ui.applyOff}
+            icon={adaptation.applique ? 'check' : 'wand-sparkles'}
+            active={adaptation.applique}
+            onClick={() =>
+              void app.accepter('msc_adaptation', adaptation.id, !adaptation.applique)
+            }
             full={false}
             size="sm"
           />

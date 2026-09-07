@@ -93,6 +93,7 @@ export interface MscJournal {
   rpe_ressenti: number;
   sommeil: number;
   douleurs: string[];
+  note?: string;
 }
 
 export interface MscDaily {
@@ -100,15 +101,18 @@ export interface MscDaily {
   fc_repos: number;
 }
 
+/** La définition d'une métrique. `valeur` et `serie` se calculent depuis les
+    activités et les mesures : elles manquent tant qu'il n'y a pas de quoi les
+    calculer, et l'écran le dit plutôt que de peindre un chiffre inventé. */
 export interface MscMetric {
   code: string;
   icon: IconName;
-  valeur: string;
   couleur: Hex;
-  serie: number[];
   nom: Localized;
   formule: Localized;
   seuil?: number;
+  valeur?: string;
+  serie?: number[];
 }
 
 export interface MscWeekTotal {
@@ -152,25 +156,36 @@ export interface MscAnalyse {
   blocs?: MscAnalyseBloc[];
 }
 
-/** Comes out of a session analysis: a proposal, never a direct write. */
+/** Comes out of a session analysis: a proposal, never a direct write.
+
+    Ce que la base garde est ce que le modèle a choisi — une zone et une part de
+    la durée prévue — et non « 44 min · 6:20/km ». Le moteur rend la ligne, donc
+    réécrire la référence 10 km de l'athlète fait glisser la proposition comme
+    elle fait glisser le plan. `appliquerAdaptation` s'en charge. */
 export interface MscAdaptation {
   id: number;
   analyse_id: number;
+  /** La séance visée : celle qui suit. */
   session_id: number;
-  type: TypeCode;
-  session_avant: Localized;
-  session_apres: string;
+  zone?: ZoneCode;
+  part_duree: number;
   pourquoi: Localized;
+  applique: boolean;
 }
 
+/** Un ajustement du réétalonnage hebdomadaire, accepté un par un. Soit une
+    séance et une part de sa quantité — sa durée, ou ses mètres pour une nage —
+    soit une semaine et ce qui s'y déplace. Le libellé est rendu par
+    `libelleAjustement`, pour la même raison que l'adaptation. */
 export interface MscAjustement {
   id: number;
   analyse_id: number;
   type: TypeCode;
-  quand: Localized;
-  quoi: Localized;
   session_id?: number;
   semaine?: number;
+  part?: number;
+  texte?: Localized;
+  applique: boolean;
 }
 
 export interface MscEcartStat {
@@ -184,13 +199,12 @@ export interface MscEcartRecalcul {
   texte: Localized;
 }
 
+/** Ce que Claude dit de l'écart d'une semaine. Les trois chiffres — le retard,
+    les séances sautées, la réalisation — n'y sont pas : ils sont arithmétiques
+    et `ecartDeSemaine` les recalcule à chaque affichage. */
 export interface MscEcart {
   semaine: number;
-  retard: string;
-  sautees: number;
-  realisation: string;
   texte: Localized;
-  stats: MscEcartStat[];
   recalcul: MscEcartRecalcul[];
 }
 
@@ -243,6 +257,37 @@ export interface MscExcuse {
   label: Localized;
   reponse: Localized;
   remplacement: Localized;
+}
+
+/** Ce qu'une course a donné. L'allure n'est pas stockée : temps ÷ distance, et
+    la distance est sur la compétition. */
+export interface MscResultat {
+  temps_s: number;
+  allure_s_km: number;
+  classement?: number;
+  classement_categorie?: number;
+  categorie?: string;
+  partants?: number;
+  fc_moy?: number;
+  abandon: boolean;
+  note?: string;
+}
+
+/** Une course, courue ou à courir. Elle appartient à l'athlète et pas au plan :
+    c'est ce qui laisse les résultats survivre aux plans qui les visaient, et
+    une courbe de progression traverser plusieurs plans sans s'en apercevoir. */
+export interface MscCompetition {
+  id: number;
+  date: string;
+  nom: string;
+  lieu?: string;
+  pays?: string;
+  discipline: string;
+  distance_km: number;
+  denivele_m?: number;
+  officielle: boolean;
+  note?: string;
+  resultat?: MscResultat;
 }
 
 export type ScreenKey = 'today' | 'week' | 'form' | 'coach' | 'admin';

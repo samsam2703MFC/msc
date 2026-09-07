@@ -13,6 +13,7 @@
     "check:strava": "npx esbuild scripts/check-strava.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-strava.mjs --log-level=error && node node_modules/.tmp/check-strava.mjs",
     "check:db": "npx esbuild scripts/check-db.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-db.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/check-db.mjs",
     "check:api": "npx esbuild scripts/check-api.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-api.mjs --log-level=error --external:mysql2 --external:@anthropic-ai/sdk && node --env-file-if-exists=.env node_modules/.tmp/check-api.mjs",
+    "check:app": "node --env-file-if-exists=.env scripts/check-app.mjs",
     "server": "node --env-file-if-exists=.env server/index.mjs",
     "strava:webhook": "node --env-file-if-exists=.env scripts/strava-webhook.mjs",
     "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
@@ -32,6 +33,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "playwright-core": "^1.63.0",
     "typescript": "^5.9.0",
     "vite": "^7.1.0",
     "vite-plugin-pwa": "^1.0.0"

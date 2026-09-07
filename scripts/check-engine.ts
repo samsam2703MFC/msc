@@ -1,5 +1,13 @@
 /* Verifies the engine against the workbook's "Allures" table, cell for cell. */
 import { grilleAllures, format10k, reference, charge, evaluer } from '../src/data/engine';
+import { msc_athlete, msc_bloc, msc_regle, msc_zone } from '../src/data/reference';
+import { charger } from '../src/data/vives';
+
+/* Les tables sont vides tant que rien ne les charge : dans l'application c'est
+   l'instantané du serveur, ici c'est le classeur. Le moteur ne va pas chercher
+   ses données tout seul, et c'est ce qui a rendu le passage à MySQL possible
+   sans toucher à ce fichier — hormis ces trois lignes. */
+charger({ msc_athlete, msc_bloc, msc_zone, msc_regle });
 
 const ATTENDU: Record<string, string[]> = {
   // Récup, EF, End. active, Marathon, Semi, Seuil, 10 km, VMA

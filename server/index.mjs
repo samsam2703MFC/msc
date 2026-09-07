@@ -9,6 +9,7 @@
      /api/connexion, /api/moi     qui parle, et de quel athlète
      /api/db/instantane           toute la base d'un athlète, en une fois
      /api/journal, /api/mesure    ce que l'application écrit
+     /api/activites               les activités appariées par le navigateur
      /api/competitions            le back office
      /api/analyse, /api/recalcul  ce que Claude fait d'une séance, d'une semaine
      /api/coach                   les barres de chat
@@ -316,6 +317,13 @@ async function router(req, res, url) {
     const corps = await lireCorps(req, 16_000);
     return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'mesure', (cnx) =>
       depots.ecrireMesure(athlete_id, corps, cnx)));
+  }
+
+  if (chemin === '/api/activites' && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const corps = await lireCorps(req, 2_000_000);
+    return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'activites', (cnx) =>
+      depots.ecrireActivites(athlete_id, corps.activites, cnx)));
   }
 
   if (chemin === '/api/proposition' && req.method === 'POST') {

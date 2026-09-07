@@ -25,6 +25,7 @@ npm run check:plan     # the generator against its own rules
 npm run check:strava   # the session ↔ activity matcher against the real plan
 npm run check:db       # the round trip through MySQL, and its guard rails
 npm run check:api      # the API over HTTP, cookie and access control included
+npm run check:app      # the app itself, in a real browser
 
 npm run db:migrate     # create the database and apply db/schema.sql
 npm run db:seed        # load the workbook into it
@@ -45,7 +46,7 @@ the installed PWA looks like an app rather than a picture of one.
 db/           the MySQL schema — 37 tables, and its own README
 server/       the plan server: the secrets, Strava, the coach, the database
 src/
-  data/       the MSC database seam — accessors, the engine, the generator
+  data/       the seam — the live tables, the accessors, the engine, the API client
   design/     design-system tokens + the global stylesheet
   state/      the app's state machine
   components/ the frame, the sheets, and the shapes every screen repeats
@@ -588,14 +589,7 @@ There is no token file any more.
 
 ### What is not built yet
 
-1. **The app still reads the TypeScript arrays.** `src/data/db.ts` has not been
-   pointed at `/api/db/instantane`, and there is no login screen — so the API is
-   complete and unused. That is the next step, and the seam was built for it.
-2. **The photo pipeline** — upload, storage, the vision call, the confirmation.
-3. **The offline cache and the sync queue** — `maj_le` and `msc_mutation` are
-   there for it; the service worker and the outbox are not written.
-4. **The back office screens** — the API has the competitions and the results;
-   nothing renders them.
+The app is on it — see « The app on the API » below.
 
 ## Putting it online
 
@@ -621,6 +615,67 @@ work.
 development back door and puts `Secure` on the session cookie. `check:api`
 starts a second server in production mode and asserts both, along with the
 cache headers and that a directory traversal cannot escape `dist/`.
+
+## The app on the API
+
+The screens are unchanged. That is the whole point of the seam: they still call
+`db.select('msc_session')` synchronously, and what moved is where those rows
+come from.
+
+`src/data/vives.ts` holds the tables. They start **empty** and `charger()` fills
+them from `/api/db/instantane`. The workbook no longer ships in the bundle —
+`plan.generated.ts` and `reference.ts` are read by the seed script and the
+checks, and nothing else imports them. The bundle went from 425 KB to 292 KB,
+and more usefully the app can no longer display one athlete's plan while
+believing it is showing yours.
+
+Reading `db.athlete` before the load throws, deliberately, through a proxy that
+says so. The alternative — a placeholder of zeroes — would render a 6:00/km
+session as `0:00/km` and nothing would protest. `App.tsx` holds the gate:
+nothing renders until `amorce === 'pret'`.
+
+### Everything that writes ends in a reload
+
+The server is the truth, so a write is followed by re-reading it rather than by
+a parallel write into memory. Two copies always diverge. That covers the
+journal, the accepted proposals, the coach's output — which the server now
+persists — and the Strava sync: matching still happens in the browser because
+that is where the plan is, and what comes out is posted and read back.
+
+### The login screen
+
+There is no sign-up and there will not be one. MySmartCoach is an athlete's plan
+and their coach's back office, not a service you join — accounts are made with
+`npm run compte` on the server. The screen only opens the door for someone who
+already has the key.
+
+### `check:app` drives a real browser
+
+The other checks prove the engine computes correctly, the database keeps what it
+is given, and the API answers. None of them would say the login screen appears
+and the plan arrives behind it. This one does, and it found two real defects
+while being written:
+
+- The form unmounted during a login attempt, because `seConnecter` switched the
+  boot state to "loading". A wrong password cleared both fields, so the address
+  had to be retyped every time.
+- `/api/strava/etat` was called before login, on the login screen, where it can
+  only 401 — leaving a "Non connecté" error to surface in the settings sheet
+  afterwards.
+
+It also asserts the negative space: that the plan is not visible before login,
+and that logging out empties the tables rather than just the screen — one
+athlete's data must not stay readable by the next person to log in on the same
+device.
+
+### What is not built yet
+
+1. **The photo pipeline** — upload, storage, the vision call, the confirmation.
+2. **The offline cache and the sync queue** — `maj_le` and `msc_mutation` are in
+   the schema for it, and every write already carries a `mutation_id` the server
+   deduplicates on. The service worker and the outbox are not written.
+3. **The back office screens** — the API has competitions and results; nothing
+   renders them, and the evolution charts do not exist.
 
 ## Reference data
 
@@ -660,8 +715,8 @@ settings sheet carries a date control so you can walk the thirty weeks.
 Nothing on the four screens runs on a timer any more. The prototype had three,
 and all three are gone:
 
-- **Analyser avec Claude** and **Recalculer le plan** call the coach and write
-  real rows through `db.setAnalyse` — see « The coach » above.
+- **Analyser avec Claude** and **Recalculer le plan** call the coach; the server
+  persists what comes back and the app re-reads it — see « The coach » above.
 - The two chat bars each keep their own thread and reach `/api/coach`.
 - **Take my data** is the real OAuth link — see « Linking Strava » above. Its
   card has six states now instead of a boolean, because a boolean could only
@@ -672,24 +727,22 @@ Three things are still seed data, for three different reasons.
 **`msc_daily`** — resting heart rate, which two adjustment rules watch — because
 Strava does not carry it. That one needs the wearable, not the platform.
 
-**The example `msc_analyse` / `msc_adaptation` / `msc_ajustement` rows**, because
-an app with no Strava account and no API key should still have something to
-show. They are anchored on session 1052 — the plan's first quality session,
-semaine 7, "CAP · Seuil — 5 × 3'" — and their figures follow the worked example
-in the workbook's "Suivi & ajustement" sheet. A real analysis replaces the one
-for its own session or its own week, and takes its proposals with it; unlinking
-Strava puts the seeded activities back.
+**The example `msc_analyse` / `msc_adaptation` / `msc_ajustement` rows**, loaded
+by `db:seed`, because a fresh database with no Strava account and no API key
+should still have something to show. They are anchored on session 1052 — the plan's first quality
+session, semaine 7, "CAP · Seuil — 5 × 3'" — and their figures follow the worked
+example in the workbook's "Suivi & ajustement" sheet. A real analysis replaces
+the one for its own session or its own week, and takes its proposals with it.
 
 **The plan itself.** The generated plan is previewed on the Créer screen but not
-persisted, and the recalculation proposes adjustments without applying them —
-the rest of the app still reads the imported workbook plan.
+persisted, and the recalculation proposes adjustments without applying them.
 
 That was the same open question in both cases — what happens to the journal
-attached to the plan being replaced — and the schema now answers it: nothing is
+attached to the plan being replaced — and the schema answers it: nothing is
 lost, because a plan is an entity and the journal points at sessions rather than
-belonging to them. What remains is the wiring, and the app reading MySQL rather
-than the TypeScript arrays; see « The database » above for what is and is not
-built.
+belonging to them. What remains is the wiring: a generated plan needs an
+endpoint that writes it, and an accepted adjustment needs to move a session
+rather than only be marked accepted.
 
 The methodology call has been written against the documented API surface but not
 executed end to end here — this environment has no Anthropic credential, so the

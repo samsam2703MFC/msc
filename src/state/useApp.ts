@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as db from '../data/db';
 import * as strava from '../data/strava';
 import * as coach from '../data/analyse';
+import * as api from '../data/api';
 import type { Lang, ScreenKey, TypeCode } from '../data/types';
 
 const LANG_KEY = 'msc.lang';
@@ -51,13 +52,23 @@ function lendemain(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+export type Amorce = 'chargement' | 'connexion' | 'pret' | 'erreur';
+
 export function useApp() {
   const [screen, setScreen] = useState<ScreenKey>('today');
 
+  /* L'amorçage. Aucun écran ne s'affiche avant « pret » : les tables sont vides
+     jusqu'à ce que l'instantané arrive, et `db.athlete` crie plutôt que de
+     rendre zéro — c'est voulu, une allure de 0:00 affichée sans protester
+     serait pire qu'un écran de chargement. */
+  const [amorce, setAmorce] = useState<Amorce>('chargement');
+  const [identite, setIdentite] = useState<api.Identite | null>(null);
+  const [amorceErreur, setAmorceErreur] = useState<string | null>(null);
+
   /* Where the plan is. Defaults to the real date, clamped into the plan's
      span; the settings sheet lets you move it to walk the thirty weeks. */
-  const [date, setDate] = useState(() => db.positionDuPlan(db.aujourdhuiISO()).date);
-  const semaine = useMemo(() => db.positionDuPlan(date).semaine, [date]);
+  const [date, setDate] = useState('');
+  const semaine = useMemo(() => (db.chargee ? db.positionDuPlan(date).semaine : 0), [date]);
 
   const [lang, setLangState] = useState<Lang>(storedLang);
 
@@ -87,6 +98,11 @@ export function useApp() {
 
   /* Nothing async may touch state after the hook is gone. */
   const monte = useRef(true);
+
+  /* L'amorçage Strava n'a lieu qu'une fois par session ouverte, et la
+     déconnexion le réarme. Déclaré ici parce que les deux moitiés du fichier
+     s'en servent. */
+  const stravaAmorce = useRef(false);
 
   /* One analysis at a time — a second press while the first is in flight would
      spend a second call to overwrite the first. */
@@ -156,6 +172,86 @@ export function useApp() {
     };
   }, []);
 
+  /* Recharger la base. C'est le geste central du basculement : le serveur est
+     la vérité, et tout ce qui écrit se termine par un rechargement plutôt que
+     par une écriture parallèle en mémoire. Deux copies divergent toujours. */
+  const recharger = useCallback(async (athleteId?: number | null) => {
+    const instantane = await api.instantane(athleteId);
+    db.charger(instantane);
+    setDate((actuelle) => {
+      const position = db.positionDuPlan(actuelle || db.aujourdhuiISO());
+      return position.date;
+    });
+    setVersion((v) => v + 1);
+    return instantane;
+  }, []);
+
+  const ouvrir = useCallback(
+    async (qui: api.Identite) => {
+      setIdentite(qui);
+      await recharger(qui.athletes[0]?.id ?? null);
+      setAmorce('pret');
+    },
+    [recharger],
+  );
+
+  /* Au démarrage : qui es-tu, puis ta base. Un 401 n'est pas une erreur, c'est
+     l'écran de connexion. */
+  useEffect(() => {
+    void (async () => {
+      try {
+        await ouvrir(await api.moi());
+      } catch (e) {
+        if (!monte.current) return;
+        if (e instanceof api.ApiError && e.nonConnecte) setAmorce('connexion');
+        else {
+          setAmorceErreur(message(e));
+          setAmorce('erreur');
+        }
+      }
+    })();
+    /* Une fois, au montage. */
+  }, [ouvrir]);
+
+  const seConnecter = useCallback(
+    async (email: string, motDePasse: string) => {
+      setAmorceErreur(null);
+      /* L'amorce reste sur « connexion » pendant la tentative : basculer sur
+         « chargement » démonterait le formulaire, et un mot de passe raté
+         rendrait les deux champs vides — il faudrait retaper l'adresse à chaque
+         essai. Le formulaire a son propre indicateur pour ça. */
+      try {
+        await ouvrir(await api.connexion(email, motDePasse));
+      } catch (e) {
+        if (!monte.current) return;
+        setAmorceErreur(message(e));
+        throw e;
+      }
+    },
+    [ouvrir],
+  );
+
+  const seDeconnecter = useCallback(async () => {
+    try {
+      await api.deconnexion();
+    } catch {
+      /* Le cookie est de toute façon oublié côté client juste après. */
+    }
+    /* Vider les tables, et pas seulement l'écran : les données d'un athlète ne
+       doivent pas rester lisibles par le suivant qui se connecte ici. */
+    db.vider();
+    stravaAmorce.current = false;
+    brutes.current = [];
+    details.current.clear();
+    vu.current = null;
+    setIdentite(null);
+    setStravaEtat(null);
+    setStravaErreur(null);
+    setChats({});
+    setVersion((v) => v + 1);
+    setAmorce('connexion');
+  }, []);
+
   const rafraichirEtat = useCallback(async () => {
     try {
       const e = await strava.etat();
@@ -167,15 +263,17 @@ export function useApp() {
     }
   }, []);
 
-  /* Pure: re-derives the activity table from what we already hold. */
-  const appliquer = useCallback(() => {
+  /* L'appariement a besoin du plan, donc il se fait ici ; ce qui en sort part
+     au serveur, qui le range. Puis on relit : le serveur est la vérité, même
+     quand c'est nous qui venons de la lui donner. */
+  const appliquer = useCallback(async () => {
     const sessions = db.select('msc_session');
     const resultat = strava.apparier(brutes.current, sessions, details.current);
-    db.setActivites(resultat.activites);
-    setOrphelines(resultat.orphelines);
-    setVersion((v) => v + 1);
+    await api.ecrireActivites(resultat.activites);
+    await recharger(db.athleteId);
+    if (monte.current) setOrphelines(resultat.orphelines);
     return resultat;
-  }, []);
+  }, [recharger]);
 
   /* Laps for the quality runs of one week — the only place splits are read. */
   const completerDetails = useCallback(
@@ -200,7 +298,7 @@ export function useApp() {
              failed sync. Leave it out and carry on. */
         }
       }
-      if (monte.current) appliquer();
+      if (monte.current) await appliquer();
     },
     [appliquer],
   );
@@ -220,7 +318,7 @@ export function useApp() {
       );
       if (!monte.current) return;
       brutes.current = activites;
-      appliquer();
+      await appliquer();
       await rafraichirEtat();
       await completerDetails(db.positionDuPlan(date).semaine);
     } catch (e) {
@@ -230,9 +328,17 @@ export function useApp() {
     }
   }, [appliquer, completerDetails, date, rafraichirEtat]);
 
-  /* On load: what does the server know? If the athlete is already linked from
-     a previous run, their activities are there before they ask. */
+  /* Une fois la base ouverte : que sait le serveur de Strava ? Si l'athlète est
+     déjà lié d'une session précédente, ses activités sont là avant qu'il ne
+     demande.
+
+     Après l'amorçage, pas avant : /api/strava/etat est une route authentifiée,
+     et l'appeler depuis l'écran de connexion ne fait que produire un 401 et
+     poser une erreur « Non connecté » qui s'afficherait ensuite dans les
+     paramètres. */
   useEffect(() => {
+    if (amorce !== 'pret' || stravaAmorce.current) return;
+    stravaAmorce.current = true;
     void (async () => {
       const e = await rafraichirEtat();
       if (e?.lie) {
@@ -240,10 +346,10 @@ export function useApp() {
         await synchroniser();
       }
     })();
-    /* Deliberately once, at mount: `synchroniser` closes over the plan date,
-       and walking the thirty weeks must not re-fetch the whole span each time.
-       Later syncs are the webhook's, or the athlete's. */
-  }, []);
+    /* Une seule fois : `synchroniser` capture la date du plan, et parcourir les
+       trente semaines ne doit pas retélécharger toute la période à chaque pas.
+       Les synchros suivantes sont celles du webhook, ou celles de l'athlète. */
+  }, [amorce]);
 
   /* Walking to another week wants that week's laps, and nothing else. */
   useEffect(() => {
@@ -261,8 +367,7 @@ export function useApp() {
         if (!e.lie) {
           /* The athlete revoked us from Strava's side; the webhook told the
              server, and the server has already dropped the token. */
-          db.reinitialiserActivites();
-          setVersion((v) => v + 1);
+          await recharger(db.athleteId);
           return;
         }
         if (e.dernier_evenement && e.dernier_evenement !== vu.current) {
@@ -327,11 +432,42 @@ export function useApp() {
     brutes.current = [];
     details.current.clear();
     vu.current = null;
-    db.reinitialiserActivites();
     setOrphelines([]);
-    setVersion((v) => v + 1);
+    await recharger(db.athleteId);
     await rafraichirEtat();
-  }, [rafraichirEtat]);
+  }, [rafraichirEtat, recharger]);
+
+  /* Le RPE et la note. Écrits quand l'athlète quitte le champ, et de nouveau
+     juste avant une analyse — c'est le moment où ils comptent, puisque c'est ce
+     que le coach lit. */
+  const enregistrerJournal = useCallback(async () => {
+    if (!db.chargee || db.droit !== 'ecriture') return;
+    const session = db.sessionDuJour(date);
+    try {
+      await api.ecrireJournal({
+        date,
+        session_id: session?.id ?? null,
+        rpe,
+        note: note.trim() || undefined,
+      });
+    } catch (e) {
+      if (monte.current) setAnaErreur(message(e));
+    }
+  }, [date, note, rpe]);
+
+  /* Accepter une proposition du coach. L'état optimiste garde le bouton vif ;
+     le rechargement dit le vrai. */
+  const accepter = useCallback(
+    async (table: 'msc_adaptation' | 'msc_ajustement', id: number, applique: boolean) => {
+      try {
+        await api.proposition(table, id, applique);
+        await recharger(db.athleteId);
+      } catch (e) {
+        if (monte.current) setAnaErreur(message(e));
+      }
+    },
+    [recharger],
+  );
 
   /* ------------------------------------------------------------ le reste */
 
@@ -364,16 +500,19 @@ export function useApp() {
           note: note.trim() || undefined,
         };
         const suivante = coach.prochaineSeance(session);
+        await enregistrerJournal();
 
-        const reponse = await coach.demanderAnalyse(session, {
+        await coach.demanderAnalyse(session, {
           activite,
           journal,
           suivante,
           lang,
         });
         if (!monte.current) return;
-        coach.enregistrerAnalyse(reponse, session, { activite, journal, suivante });
-        setVersion((v) => v + 1);
+        /* Le serveur a rangé l'analyse et sa proposition ; on relit plutôt que
+           d'écrire une seconde copie en mémoire. */
+        await recharger(db.athleteId);
+        if (!monte.current) return;
         setAna('done');
       } catch (e) {
         if (monte.current) {
@@ -384,7 +523,7 @@ export function useApp() {
         anaRef.current = false;
       }
     })();
-  }, [date, lang, note, rpe]);
+  }, [date, enregistrerJournal, lang, note, rpe]);
 
   /* Recalculating the weeks that follow; a second press folds the result away.
 
@@ -404,10 +543,10 @@ export function useApp() {
     void (async () => {
       try {
         const calcule = coach.ecartDeSemaine(semaine, date);
-        const reponse = await coach.demanderRecalcul(semaine, calcule, lang);
+        await coach.demanderRecalcul(semaine, calcule, lang);
         if (!monte.current) return;
-        coach.enregistrerRecalcul(reponse, semaine, calcule, lang);
-        setVersion((v) => v + 1);
+        await recharger(db.athleteId);
+        if (!monte.current) return;
         setRecalc('done');
       } catch (e) {
         if (monte.current) {
@@ -432,6 +571,14 @@ export function useApp() {
   const allerA = useCallback((iso: string) => setDate(db.positionDuPlan(iso).date), []);
 
   return {
+    /* l'amorçage */
+    amorce,
+    amorceErreur,
+    identite,
+    seConnecter,
+    seDeconnecter,
+    recharger,
+
     screen,
     setScreen,
     date,
@@ -478,6 +625,8 @@ export function useApp() {
     toggleExcuseApplied: useCallback(() => setExcuseApplied((v) => !v), []),
     applied,
     toggleAdjustment,
+    enregistrerJournal,
+    accepter,
 
     settingsOpen,
     openSettings: useCallback(() => setSettingsOpen(true), []),

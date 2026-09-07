@@ -213,6 +213,63 @@ export function SettingsSheet({ app }: { app: App }) {
         </div>
       </div>
 
+      {/* Qui est connecté, et de quoi partir. Déconnecter vide les tables du
+          navigateur, pas seulement l'écran : les données d'un athlète ne
+          doivent pas rester lisibles par le suivant qui se connecte ici. */}
+      <div
+        style={{
+          borderRadius: 12,
+          border: `1px solid ${C.border}`,
+          padding: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 9,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `1px solid ${C.border}`,
+            color: C.inkSecondary,
+            flexShrink: 0,
+          }}
+        >
+          <Icon name="user" size={18} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>
+            {app.identite?.compte.nom ?? '—'}
+          </div>
+          <div style={{ fontSize: 11, color: C.inkSecondary }}>
+            {app.identite?.compte.email ?? ''}
+            {db.droit === 'lecture' ? ` · ${lang === 'fr' ? 'lecture seule' : 'tylko odczyt'}` : ''}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => void app.seDeconnecter()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            borderRadius: R.full,
+            border: `1px solid ${C.border}`,
+            background: C.surface,
+            color: C.inkSecondary,
+            fontSize: 11,
+          }}
+        >
+          <Icon name="log-out" size={14} />
+          {lang === 'fr' ? 'Déconnexion' : 'Wyloguj'}
+        </button>
+      </div>
+
       <SheetCloseButton label={ui.modalClose} onClick={app.closeSettings} />
     </Sheet>
   );

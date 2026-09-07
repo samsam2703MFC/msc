@@ -11,6 +11,7 @@ import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TypeSheet } from './components/TypeSheet';
 import { AdminScreen } from './screens/AdminScreen';
+import { ChargementScreen, ConnexionScreen, PanneScreen } from './screens/ConnexionScreen';
 import { CoachScreen } from './screens/CoachScreen';
 import { FormScreen } from './screens/FormScreen';
 import { TodayScreen } from './screens/TodayScreen';
@@ -224,6 +225,35 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
   );
 }
 
+/* Aucun écran ne s'affiche avant que l'instantané soit chargé.
+   Ce n'est pas de la courtoisie : les tables sont vides jusque-là, et
+   `db.athlete` lève plutôt que de rendre zéro — une allure de 0:00 affichée
+   sans que rien ne proteste serait pire qu'un écran d'attente. */
+function Contenu({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolean }) {
+  switch (app.amorce) {
+    case 'pret':
+      return <Phone app={app} framed={framed} />;
+    case 'connexion':
+      return (
+        <ConnexionScreen
+          lang={app.lang}
+          erreur={app.amorceErreur}
+          onConnexion={app.seConnecter}
+        />
+      );
+    case 'erreur':
+      return (
+        <PanneScreen
+          lang={app.lang}
+          erreur={app.amorceErreur}
+          onReessayer={() => window.location.reload()}
+        />
+      );
+    default:
+      return <ChargementScreen lang={app.lang} />;
+  }
+}
+
 export function App() {
   const app = useApp();
   const framed = useFramed();
@@ -231,7 +261,7 @@ export function App() {
   if (!framed) {
     return (
       <IOSDevice standalone>
-        <Phone app={app} framed={false} />
+        <Contenu app={app} framed={false} />
       </IOSDevice>
     );
   }
@@ -258,7 +288,7 @@ export function App() {
             fontWeight: 600,
           }}
         >
-          Prototype · PWA · base MSC
+          PWA · API · base MSC
         </div>
         <div
           style={{
@@ -272,8 +302,8 @@ export function App() {
           MySmartCoach
         </div>
         <div style={{ fontSize: 14, color: C.inkSecondary, lineHeight: 1.5 }}>
-          Tous les écrans lisent les tables msc_. « Take my data » et la langue sont dans les
-          paramètres.
+          Tous les écrans lisent les tables msc_, servies par l'API. « Take my data », la
+          langue et la déconnexion sont dans les paramètres.
         </div>
         <div
           style={{
@@ -287,7 +317,7 @@ export function App() {
       </div>
 
       <IOSDevice>
-        <Phone app={app} framed />
+        <Contenu app={app} framed />
       </IOSDevice>
     </div>
   );

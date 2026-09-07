@@ -18,15 +18,12 @@
 import * as db from './db';
 import type {
   MscActivity,
-  MscAdaptation,
-  MscAnalyse,
   MscAnalyseStat,
   MscAjustement,
   MscEcartStat,
   MscJournal,
   MscPlanSession,
   Lang,
-  TypeCode,
   ZoneCode,
 } from './types';
 
@@ -224,7 +221,7 @@ const PART_MAX = 1;
  * choose among the ones the engine is willing to compute.
  */
 export function appliquerAdaptation(
-  adaptation: AnalyseAdaptation,
+  adaptation: { zone?: string; part_duree: number },
   suivante: MscPlanSession,
 ): { session_apres: string; zone?: ZoneCode; duree_min: number } {
   const part = Number.isFinite(adaptation.part_duree)
@@ -239,7 +236,7 @@ export function appliquerAdaptation(
   const planifiee = zonePrincipale(suivante);
   if (!planifiee) return { session_apres: `${duree_min} min`, duree_min };
 
-  const propose = adaptation.zone;
+  const propose = adaptation.zone ?? '';
   const connue = estZone(propose) ? propose : planifiee;
   const zone = ZONES.indexOf(connue) > ZONES.indexOf(planifiee) ? planifiee : connue;
 
@@ -299,63 +296,6 @@ function briefDeSeance(session: MscPlanSession, lang: Lang = 'fr') {
     titre: session.titre[lang],
     detail: session.detail[lang],
   };
-}
-
-/**
- * Turns Claude's reading into the two rows the Aujourd'hui screen renders.
- *
- * The stats are recomputed here rather than taken from the response — they were
- * only ever sent to Claude so it could cite them, and the screen must show what
- * the engine says, not what came back over the wire.
- *
- * Both language keys carry the same text: the call was made in one language,
- * and inventing the other by machine would be worse than repeating it. Ask
- * again with the switch flipped and the answer comes back in the other one.
- */
-export function enregistrerAnalyse(
-  reponse: AnalyseClaude,
-  session: MscPlanSession,
-  options: {
-    activite?: MscActivity;
-    journal?: MscJournal;
-    suivante?: MscPlanSession;
-  } = {},
-): void {
-  const id = db.prochainAnalyseId();
-  const deux = (v: string) => ({ fr: v, pl: v });
-
-  const analyse: MscAnalyse = {
-    id,
-    date: session.date,
-    type: 'seance',
-    session_id: session.id,
-    modele: reponse.modele,
-    cout_eur: reponse.cout_eur,
-    verdict: deux(reponse.verdict),
-    stats: statsDeSeance(session, options.activite, options.journal),
-    blocs: reponse.observations.map((o) => ({
-      icon: o.ton === 'bon' ? 'circle-check' : 'triangle-alert',
-      couleur: o.ton === 'bon' ? BON : ATTENTION,
-      items: { fr: o.lignes, pl: o.lignes },
-    })),
-  };
-
-  let adaptation: MscAdaptation | undefined;
-  if (reponse.adaptation && options.suivante) {
-    const suivante = options.suivante;
-    const { session_apres } = appliquerAdaptation(reponse.adaptation, suivante);
-    adaptation = {
-      id: db.prochainAdaptationId(),
-      analyse_id: id,
-      session_id: suivante.id,
-      type: suivante.type,
-      session_avant: deux(`${suivante.titre_court.fr} · ${suivante.duree_min} min`),
-      session_apres,
-      pourquoi: deux(reponse.adaptation.pourquoi),
-    };
-  }
-
-  db.setAnalyse(analyse, { adaptation });
 }
 
 export function demanderAnalyse(
@@ -525,117 +465,47 @@ export interface RecalculClaude {
 }
 
 /**
- * Renders one proposed adjustment into the card the Coach screen shows.
+ * Le libellé d'un ajustement, rendu au moment de l'afficher.
  *
- * The guard rail again, and the figures are the app's. Claude names a session
- * and a fraction; the "1h37 → 1h20" is computed from the session's own planned
- * quantity — its duration, or its metres where the plan writes the session in
- * metres, because that is the number that session is about.
+ * La base garde une séance et une part de sa quantité ; « Sortie longue
+ * 1h37 → 1h20 » se recompose ici. Un ajustement de semaine n'a pas de
+ * quantité : il porte sa phrase, et c'est elle qui s'affiche.
  *
- * Returns undefined rather than guessing: a proposal naming a session that is
- * not in the plan, or a session type the app does not know, is dropped. A
- * dropped adjustment is a card that does not appear; a guessed one is a card
- * the athlete might act on.
+ * Rend undefined quand l'ajustement nomme une séance absente du plan — une
+ * carte qui n'apparaît pas plutôt qu'une carte fausse.
  */
-export function appliquerAjustement(
-  propose: AjustementPropose,
-  id: number,
-  analyse_id: number,
+export function libelleAjustement(
+  a: MscAjustement,
   lang: Lang = 'fr',
-): MscAjustement | undefined {
-  const deux = (v: string) => ({ fr: v, pl: v });
-
-  /* Week-scoped: a move or a reordering, with no quantity of its own. */
-  if (propose.session_id === null || propose.session_id === undefined) {
-    const semaine = propose.semaine;
-    const texte = propose.texte?.trim();
-    if (!semaine || !texte || !propose.type || !estType(propose.type)) return undefined;
-    return {
-      id,
-      analyse_id,
-      semaine,
-      type: propose.type,
-      quand: { fr: `Semaine ${semaine}`, pl: `Tydzień ${semaine}` },
-      quoi: deux(texte),
-    };
+): { quoi: string; quand: string } | undefined {
+  if (a.session_id === undefined) {
+    const texte = a.texte?.[lang];
+    if (!a.semaine || !texte) return undefined;
+    return { quoi: texte, quand: lang === 'fr' ? `Semaine ${a.semaine}` : `Tydzień ${a.semaine}` };
   }
 
-  const session = db.one('msc_session', (s) => s.id === propose.session_id);
+  const session = db.one('msc_session', (s) => s.id === a.session_id);
   if (!session) return undefined;
 
-  const part = Number.isFinite(propose.part)
-    ? Math.min(PART_SEMAINE_MAX, Math.max(PART_SEMAINE_MIN, propose.part as number))
+  const part = Number.isFinite(a.part)
+    ? Math.min(PART_SEMAINE_MAX, Math.max(PART_SEMAINE_MIN, a.part as number))
     : 1;
 
-  /* A swim is written in metres and a run in minutes; the adjustment speaks
-     whichever language its session does. */
+  /* Une nage est écrite en mètres et une course en minutes : chacune parle du
+     nombre dont elle est faite. */
   const quoi = session.natation_m
     ? `${session.titre_court[lang]} ${milliers(session.natation_m)} → ${milliers(session.natation_m * part)} m`
     : `${session.titre_court[lang]} ${hm(session.duree_min)} → ${hm(session.duree_min * part)}`;
 
   return {
-    id,
-    analyse_id,
-    session_id: session.id,
-    semaine: session.semaine,
-    type: session.type,
-    quand: {
-      fr: `${session.jour_long} · S${session.semaine}`,
-      pl: `${session.jour[('pl')]} · T${session.semaine}`,
-    },
-    quoi: deux(quoi),
+    quoi,
+    quand: lang === 'fr'
+      ? `${session.jour_long} · S${session.semaine}`
+      : `${session.jour[lang]} · T${session.semaine}`,
   };
 }
 
-function estType(code: string): code is TypeCode {
-  return db.select('msc_type').some((t) => t.code === code);
-}
-
 /* --------------------------------------------------------------- les appels */
-
-/** Writes the recalculation back: the gap, the weekly verdict, the proposals. */
-export function enregistrerRecalcul(
-  reponse: RecalculClaude,
-  semaine: number,
-  calcule: EcartCalcule,
-  lang: Lang = 'fr',
-): void {
-  const id = db.prochainAnalyseId();
-  const deux = (v: string) => ({ fr: v, pl: v });
-
-  db.setEcart({
-    semaine,
-    retard: calcule.stats[0].valeur,
-    sautees: calcule.sautees,
-    realisation: calcule.stats[2].valeur,
-    texte: deux(reponse.ecart),
-    stats: calcule.stats,
-    recalcul: reponse.recalcul.map((r) => ({ portee: r.portee, texte: deux(r.texte) })),
-  });
-
-  let prochain = db.prochainAjustementId();
-  const ajustements = reponse.ajustements
-    .map((a) => appliquerAjustement(a, prochain++, id, lang))
-    .filter((a): a is MscAjustement => a !== undefined);
-
-  db.setAnalyse(
-    {
-      id,
-      date: db.sessionsDeSemaine(semaine).slice(-1)[0]?.date ?? calcule.semaine.toString(),
-      type: 'hebdo',
-      semaine,
-      modele: reponse.modele,
-      cout_eur: reponse.cout_eur,
-      verdict: deux(reponse.verdict),
-      blocs: reponse.observations.map((o) => ({
-        icon: o.ton === 'bon' ? 'circle-check' : 'triangle-alert',
-        couleur: o.ton === 'bon' ? BON : ATTENTION,
-        items: { fr: o.lignes, pl: o.lignes },
-      })),
-    },
-    { ajustements },
-  );
-}
 
 export function demanderRecalcul(
   semaine: number,

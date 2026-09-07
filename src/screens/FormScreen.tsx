@@ -26,13 +26,27 @@ export function FormScreen({ lang }: { lang: 'fr' | 'pl' }) {
               <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{m.nom[lang]}</div>
             </div>
             <div
-              style={{ fontFamily: F.mono, fontSize: 19, color: m.couleur, flexShrink: 0 }}
+              style={{
+                fontFamily: F.mono,
+                fontSize: 19,
+                color: m.valeur ? m.couleur : C.inkQuiet,
+                flexShrink: 0,
+              }}
             >
-              {m.valeur}
+              {m.valeur ?? '—'}
             </div>
           </div>
 
-          <BarChart height={38} gap={4} data={bars(m.serie, m.seuil, C.warning)} />
+          {/* Une métrique se calcule depuis les activités et les mesures. Tant
+              qu'il n'y en a pas assez, elle n'a ni valeur ni série — et le dire
+              vaut mieux que peindre une barre sur rien. */}
+          {m.serie?.length ? (
+            <BarChart height={38} gap={4} data={bars(m.serie, m.seuil, C.warning)} />
+          ) : (
+            <div style={{ fontSize: 11, color: C.inkQuiet, fontStyle: 'italic' }}>
+              {lang === 'fr' ? 'Pas encore assez de données' : 'Za mało danych'}
+            </div>
+          )}
 
           <div style={{ fontSize: 11, color: C.inkQuiet }}>{m.formule[lang]}</div>
         </Card>
