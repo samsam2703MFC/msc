@@ -13,7 +13,6 @@ import * as strava from '../data/strava';
 import * as coach from '../data/analyse';
 import type { Lang, ScreenKey, TypeCode } from '../data/types';
 
-const RECALC_MS = 1500;
 const LANG_KEY = 'msc.lang';
 
 /* While the athlete is on Strava's consent screen. Their window is on Strava's
@@ -92,9 +91,8 @@ export function useApp() {
   /* One analysis at a time — a second press while the first is in flight would
      spend a second call to overwrite the first. */
   const anaRef = useRef(false);
-  const recalcTimer = useRef<number | undefined>(undefined);
-
-  useEffect(() => () => window.clearTimeout(recalcTimer.current), []);
+  const [recalcErreur, setRecalcErreur] = useState<string | null>(null);
+  const recalcRef = useRef(false);
 
   /* The chat bars. Two of them — the Coach screen's and the one on each session
      sheet — so the threads are keyed and each keeps its own history. */
@@ -388,16 +386,39 @@ export function useApp() {
     })();
   }, [date, lang, note, rpe]);
 
-  /* Recalculating the remaining 27 weeks; a second press folds the result away. */
+  /* Recalculating the weeks that follow; a second press folds the result away.
+
+     The gap itself is arithmetic and is recomputed on every render — what this
+     call buys is the reading of it: what the recalibration changes, over which
+     stretch of the plan, and which sessions move. */
   const runRecalc = useCallback(() => {
-    setRecalc((current) => {
-      if (current === 'running') return current;
-      if (current === 'done') return 'idle';
-      window.clearTimeout(recalcTimer.current);
-      recalcTimer.current = window.setTimeout(() => setRecalc('done'), RECALC_MS);
-      return 'running';
-    });
-  }, []);
+    if (recalcRef.current) return;
+    if (recalc === 'done') {
+      setRecalc('idle');
+      return;
+    }
+    recalcRef.current = true;
+    setRecalc('running');
+    setRecalcErreur(null);
+
+    void (async () => {
+      try {
+        const calcule = coach.ecartDeSemaine(semaine, date);
+        const reponse = await coach.demanderRecalcul(semaine, calcule, lang);
+        if (!monte.current) return;
+        coach.enregistrerRecalcul(reponse, semaine, calcule, lang);
+        setVersion((v) => v + 1);
+        setRecalc('done');
+      } catch (e) {
+        if (monte.current) {
+          setRecalcErreur(message(e));
+          setRecalc('idle');
+        }
+      } finally {
+        recalcRef.current = false;
+      }
+    })();
+  }, [date, lang, recalc, semaine]);
 
   const pickExcuse = useCallback((code: string) => {
     setExcuse((current) => (current === code ? null : code));
@@ -449,6 +470,7 @@ export function useApp() {
     toggleNextApplied: useCallback(() => setNextApplied((v) => !v), []),
 
     recalc,
+    recalcErreur,
     runRecalc,
     excuse,
     pickExcuse,

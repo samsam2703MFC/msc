@@ -263,6 +263,7 @@ export interface MscUiStrings {
   applyOff: string;
   legendLabel: string;
   gapLabel: string;
+  gapNone: string;
   recalcIdle: string;
   recalcRunning: string;
   recalcDoneBtn: string;

@@ -40,7 +40,9 @@ import type {
   Lang,
   MscActivity,
   MscAdaptation,
+  MscAjustement,
   MscAnalyse,
+  MscEcart,
   MscType,
   MscUiStrings,
   TypeCode,
@@ -73,26 +75,48 @@ export function reinitialiserActivites(): void {
    session and leaves the rest alone. */
 const analyses: MscAnalyse[] = [...msc_analyse];
 const adaptations: MscAdaptation[] = [...msc_adaptation];
+const ajustements: MscAjustement[] = [...msc_ajustement];
+const ecarts: MscEcart[] = [...msc_ecart];
 
-/** Writes back what Claude made of a session. */
-export function setAnalyse(analyse: MscAnalyse, adaptation?: MscAdaptation): void {
-  const memeSeance = (r: { session_id?: number; type?: string }) =>
-    r.type === 'seance' && r.session_id === analyse.session_id;
+/**
+ * Writes back what Claude made of a session, or of a week.
+ *
+ * An analysis replaces the one it supersedes — same session, or same week —
+ * and takes its proposals with it. An orphaned adjustment would keep showing
+ * under a verdict that no longer exists.
+ */
+export function setAnalyse(
+  analyse: MscAnalyse,
+  propositions: { adaptation?: MscAdaptation; ajustements?: MscAjustement[] } = {},
+): void {
+  const meme = (r: MscAnalyse) =>
+    r.type === analyse.type &&
+    (analyse.type === 'seance'
+      ? r.session_id === analyse.session_id
+      : r.semaine === analyse.semaine);
 
   for (let i = analyses.length - 1; i >= 0; i -= 1) {
-    if (memeSeance(analyses[i])) {
-      /* Its adaptation goes with it — an orphaned proposal would keep showing
-         under a verdict that no longer exists. */
-      const id = analyses[i].id;
-      for (let j = adaptations.length - 1; j >= 0; j -= 1) {
-        if (adaptations[j].analyse_id === id) adaptations.splice(j, 1);
-      }
-      analyses.splice(i, 1);
+    if (!meme(analyses[i])) continue;
+    const id = analyses[i].id;
+    for (let j = adaptations.length - 1; j >= 0; j -= 1) {
+      if (adaptations[j].analyse_id === id) adaptations.splice(j, 1);
     }
+    for (let j = ajustements.length - 1; j >= 0; j -= 1) {
+      if (ajustements[j].analyse_id === id) ajustements.splice(j, 1);
+    }
+    analyses.splice(i, 1);
   }
 
   analyses.push(analyse);
-  if (adaptation) adaptations.push(adaptation);
+  if (propositions.adaptation) adaptations.push(propositions.adaptation);
+  if (propositions.ajustements) ajustements.push(...propositions.ajustements);
+}
+
+/** The week's gap, recomputed. One row per week, replaced in place. */
+export function setEcart(ecart: MscEcart): void {
+  const i = ecarts.findIndex((e) => e.semaine === ecart.semaine);
+  if (i >= 0) ecarts.splice(i, 1, ecart);
+  else ecarts.push(ecart);
 }
 
 /** The next analysis id — above the seeds, and above anything already written. */
@@ -103,6 +127,11 @@ export function prochainAnalyseId(): number {
 /** The next adaptation id — the proposals have their own numbering. */
 export function prochainAdaptationId(): number {
   return adaptations.reduce((max, a) => Math.max(max, a.id), 7000) + 1;
+}
+
+/** Likewise for the weekly adjustments. */
+export function prochainAjustementId(): number {
+  return ajustements.reduce((max, a) => Math.max(max, a.id), 7100) + 1;
 }
 
 /* Key order is the order the tables are listed in the settings sheet. */
@@ -122,8 +151,8 @@ const arrayTables = {
   msc_metric,
   msc_analyse: analyses,
   msc_adaptation: adaptations,
-  msc_ajustement,
-  msc_ecart,
+  msc_ajustement: ajustements,
+  msc_ecart: ecarts,
   msc_excuse,
   msc_statut,
   msc_source,

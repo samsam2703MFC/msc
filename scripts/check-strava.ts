@@ -7,7 +7,13 @@
    athlete never did. So it runs against the real plan, not a fixture. */
 
 import { apparier, blocsDeQualite, seancesDeQualite } from '../src/data/strava';
-import { appliquerAdaptation, prochaineSeance, statsDeSeance } from '../src/data/analyse';
+import {
+  appliquerAdaptation,
+  appliquerAjustement,
+  ecartDeSemaine,
+  prochaineSeance,
+  statsDeSeance,
+} from '../src/data/analyse';
 import { allure, allureSecondes, formatAllure } from '../src/data/engine';
 import { msc_journal } from '../src/data/tables';
 import type { ActiviteDetaillee, ActiviteStrava } from '../src/data/strava';
@@ -224,6 +230,78 @@ check('une fraction dérisoire est ramenée à la moitié',
   applique(zonePrevue, 0.05).duree_min === Math.round(suivanteCourse.duree_min * 0.5));
 check('une fraction absente ne casse rien',
   applique(zonePrevue, Number.NaN).duree_min === suivanteCourse.duree_min);
+
+/* The weekly half. The gap is arithmetic and only counts what has come due —
+   walking to a week that has not happened yet must not report it as skipped. */
+console.log('\n=== l’écart de la semaine ===');
+
+/* The seeded activities are sessions 1050 (mardi, nage) and 1052 (mercredi,
+   seuil), both in semaine 7. */
+const auMardi = ecartDeSemaine(7, MARDI);
+const duMardi = PLAN.filter((s) => s.semaine === 7 && s.discipline !== 'Repos' && s.date <= MARDI);
+
+check('seules les séances échues comptent',
+  auMardi.du.seances === duMardi.length, `${auMardi.du.seances} / ${duMardi.length}`);
+check('la nage du mardi est faite, le vélo non',
+  auMardi.fait.seances === 1 && auMardi.sautees === auMardi.du.seances - 1,
+  `faites ${auMardi.fait.seances} · sautées ${auMardi.sautees}`);
+check('le retard est le volume dû moins le volume fait',
+  auMardi.retard_min === auMardi.du.minutes - auMardi.fait.minutes,
+  `${auMardi.retard_min} min`);
+check('la réalisation est un pourcentage de volume',
+  auMardi.realisation_pct === Math.round((auMardi.fait.minutes / auMardi.du.minutes) * 100),
+  `${auMardi.realisation_pct} %`);
+check('le retard s’affiche en heures et minutes',
+  /^−\d+h\d\d$|^−\d+ min$/.test(auMardi.stats[0].valeur), auMardi.stats[0].valeur);
+
+/* A week the athlete has not reached yet owes nothing. */
+const aVenir = ecartDeSemaine(8, '2026-10-01');
+check('une semaine à venir n’a rien sauté',
+  aVenir.sautees === 0 && aVenir.du.seances === 0 && aVenir.realisation_pct === 100,
+  `${aVenir.sautees} sautées · ${aVenir.realisation_pct} %`);
+
+/* Rest days are not sessions and cannot be missed. */
+const finDeSemaine = PLAN.filter((s) => s.semaine === 7).slice(-1)[0].date;
+const pleine = ecartDeSemaine(7, finDeSemaine);
+check('les jours de repos ne comptent pas comme sautés',
+  pleine.du.seances === PLAN.filter((s) => s.semaine === 7 && s.discipline !== 'Repos').length,
+  `${pleine.du.seances}`);
+
+console.log('\n=== le garde-fou des ajustements hebdo ===');
+
+const longue = PLAN.find((s) => s.semaine === 7 && s.type === 'longue')
+  ?? PLAN.find((s) => s.semaine === 7 && s.discipline === 'Course à pied')!;
+const seanceNage = PLAN.find((s) => s.semaine === 7 && s.natation_m)!;
+
+const propose = (p: Partial<Parameters<typeof appliquerAjustement>[0]>) =>
+  appliquerAjustement(
+    { session_id: null, semaine: null, part: null, texte: null, type: null, ...p },
+    7200, 9500,
+  );
+
+const reduite = propose({ session_id: longue.id, part: 0.8 });
+check('une séance en minutes s’écrit en heures et minutes',
+  reduite?.quoi.fr.includes('→') === true && !reduite?.quoi.fr.includes('/km'), reduite?.quoi.fr);
+check('l’ajustement porte le type et la semaine de sa séance',
+  reduite?.type === longue.type && reduite?.semaine === longue.semaine);
+
+const nagee = propose({ session_id: seanceNage.id, part: 1.2 });
+check('une nage s’écrit en mètres',
+  nagee?.quoi.fr.endsWith(' m') === true, nagee?.quoi.fr);
+check('une nage augmentée l’est vraiment',
+  nagee?.quoi.fr.includes(String(Math.round(seanceNage.natation_m! * 1.2)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')) === true,
+  nagee?.quoi.fr);
+
+check('une fraction délirante est bornée',
+  propose({ session_id: longue.id, part: 9 })?.quoi.fr ===
+    propose({ session_id: longue.id, part: 1.25 })?.quoi.fr);
+check('une séance inconnue est ignorée', propose({ session_id: 999_999, part: 0.8 }) === undefined);
+check('un ajustement sans rien est ignoré', propose({}) === undefined);
+
+check('un ajustement de semaine passe avec un type connu',
+  propose({ semaine: 9, texte: 'Test de 30 min décalé', type: 'test' })?.quand.fr === 'Semaine 9');
+check('un ajustement de semaine au type inventé est ignoré',
+  propose({ semaine: 9, texte: 'quelque chose', type: 'zumba' }) === undefined);
 
 console.log(`\n${PLAN.length} séances au plan`);
 console.log(fails === 0 ? '\nOK' : `\n${fails} ÉCHECS`);

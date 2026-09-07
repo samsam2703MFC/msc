@@ -278,9 +278,10 @@ that says what it *meant*: `server/coach.mjs`, behind two routes.
 ```
 /api/analyse   « Analyser avec Claude » on the Aujourd'hui screen
 /api/coach     the two chat bars — the Coach screen's, and one per session
+/api/recalcul  « Recalculer le plan » — the week rather than the session
 ```
 
-**Strava's MCP server is attached to both calls.** That is the piece the app
+**Strava's MCP server is attached to all three calls.** That is the piece the app
 could not do for itself: the sync keeps aggregates — duration, average pace,
 heart rate, the work blocks — because that is all `msc_activity` needs and all
 the pace engine computes against. A coach reading a session back wants more
@@ -340,6 +341,62 @@ Between those, a model cannot put a number on this screen. It can only choose
 among the ones the engine is willing to compute — and `check:strava` asserts
 each rule, including the ones that fire when Claude answers badly.
 
+### The week — « Recalculer le plan »
+
+`/api/recalcul` is the same shape one scope up, and the split falls in the same
+place.
+
+**The gap is arithmetic**, so it is computed — `ecartDeSemaine` in
+`src/data/analyse.ts`, on every render, for every week: planned minutes against
+done minutes, counting only the sessions that have already come due. That last
+clause matters because the settings sheet walks the thirty weeks, and a week
+still in the future would otherwise report every session as skipped and 0 %
+realised — a gap the athlete has not had the chance to open yet. Rest days are
+not sessions and cannot be missed.
+
+That is also a change from the prototype: the gap card used to be a seeded row
+that existed for semaine 7 alone, which meant the button existed there alone.
+Now the card is computed everywhere, turns from warning to plain when the week
+was held, and the recalculation can be asked for on any week.
+
+**What to do about the gap is Claude's**, with two of the plan's own rules
+written into the prompt rather than left to the model:
+
+- a missed session is **never** made up for — the plan recalibrates, it does not
+  ask the athlete to catch up;
+- when something must be sacrificed, the order is the bike, then the second
+  Hyrox, then the swim. The quality session and the long run are protected.
+
+A model left to itself proposes catch-up sessions, because that is what the
+internet is full of. The workbook says otherwise, and the workbook is the plan.
+
+The adjustments come back structured, and `appliquerAjustement` renders them:
+
+- a `session_id` may only name a session from the week that was sent, and one
+  that is not in the plan is **dropped, not guessed** — a dropped adjustment is
+  a card that does not appear, a guessed one is a card the athlete might act on;
+- the fraction is clamped to [0,5 · 1,25]. A weekly rebalance may lengthen a
+  session as well as shorten one — a swim picking up what a missed run gave
+  back — but it may not double it;
+- a swim is written in metres and a run in minutes, because that is the number
+  each session is about, so `Volume — séries longues 3 000 → 3 600 m` and
+  `Sortie longue 1h37 → 1h18` are both the engine's arithmetic on the session's
+  own planned quantity;
+- a week-scoped note carries a session type for its chip, and an invented type
+  drops the whole adjustment.
+
+The prose parts — the reading of the gap, the recalibration entries, the weekly
+observations — carry **no figure at all**. The prototype's seeded text said
+« Volume ramené à 7h » ; this says what changes and over which stretch, and the
+number lives on the adjustment card next to it, where it is computed. One place
+per figure.
+
+**The plan itself is not rewritten.** The adjustments are proposals the athlete
+accepts one at a time, which is what the Coach screen always did with them.
+Persisting a recalculated plan back into `msc_session` is the open item below,
+and it needs a decision about the journal and the analyses attached to what
+would be replaced.
+
 ### Why OAuth *and* MCP
 
 They are not the same job, and the split falls where the model belongs.
@@ -374,7 +431,8 @@ The four races are in `msc_objectif`: semi 22/11/2026 (1h45–1h52), 10 km
 | still to come from a wearable | `msc_daily` (resting HR; Strava does not carry it) |
 | computed by the engine | paces, per-session and per-week load, week totals, session status |
 | computed on the backend | `msc_metric` |
-| returned by the Anthropic API | `msc_analyse` + `msc_adaptation` for a session, for real; `msc_ajustement` still seeded |
+| computed by the engine, shown as the gap | `msc_ecart` stats — planned against done, per week |
+| returned by the Anthropic API | `msc_analyse`, `msc_adaptation`, `msc_ajustement`, and the prose of `msc_ecart` |
 | imported from the workbook | `msc_session`, `msc_week` |
 | set once, per athlete | `msc_athlete`, `msc_bloc`, `msc_zone`, `msc_objectif`, `msc_regle` |
 | by hand, each day | `msc_journal` (RPE + note, on the Aujourd'hui screen) |
@@ -382,56 +440,57 @@ The four races are in `msc_objectif`: semi 22/11/2026 (1h45–1h52), 10 km
 The app resolves "today" from the real date, clamped into the plan's span. The
 settings sheet carries a date control so you can walk the thirty weeks.
 
-## What is simulated
+## What is real, and what is still seeded
 
-The design is a clickable prototype, and one thing in it still stands in for an
-integration that does not exist yet:
+Nothing on the four screens runs on a timer any more. The prototype had three,
+and all three are gone:
 
-- **Recalculer le plan** resolves on a timer and reads its result out of
-  `msc_ecart`. It is the weekly half of the coach — the same shape as
-  `/api/analyse`, over a week instead of a session — and it is the next thing
-  to wire.
+- **Analyser avec Claude** and **Recalculer le plan** call the coach and write
+  real rows through `db.setAnalyse` — see « The coach » above.
+- The two chat bars each keep their own thread and reach `/api/coach`.
+- **Take my data** is the real OAuth link — see « Linking Strava » above. Its
+  card has six states now instead of a boolean, because a boolean could only
+  say "connected" and mean nothing by it.
 
-**Analyser avec Claude** and the two chat bars are no longer among them — see
-« The coach » above. The analysis writes a real `msc_analyse` row through
-`db.setAnalyse`, and each chat bar keeps its own thread.
+Three things are still seed data, for three different reasons.
 
-**Take my data** is no longer one of them either — see « Linking Strava » above. The
-card has six states now instead of a boolean, because a boolean could only say
-"connected" and mean nothing by it. Unlinking puts the seeded example activities
-back, so the prototype still has something to show without a Strava account.
+**`msc_daily`** — resting heart rate, which two adjustment rules watch — because
+Strava does not carry it. That one needs the wearable, not the platform.
 
-`msc_daily` — resting heart rate, which two adjustment rules watch — stays
-seeded: Strava does not carry it. It needs the wearable, not the platform.
+**The example `msc_analyse` / `msc_adaptation` / `msc_ajustement` rows**, because
+an app with no Strava account and no API key should still have something to
+show. They are anchored on session 1052 — the plan's first quality session,
+semaine 7, "CAP · Seuil — 5 × 3'" — and their figures follow the worked example
+in the workbook's "Suivi & ajustement" sheet. A real analysis replaces the one
+for its own session or its own week, and takes its proposals with it; unlinking
+Strava puts the seeded activities back.
 
-The seeded `msc_analyse` / `msc_adaptation` / `msc_ajustement` rows are an
-example of what the API writes back. They are anchored on session 1052 — the
-plan's first quality session, semaine 7, "CAP · Seuil — 5 × 3'" — and their
-figures follow the worked example in the workbook's "Suivi & ajustement" sheet.
-
-Still open: the generated plan is previewed on the Créer screen but not yet
-persisted — the rest of the app still reads the imported workbook plan. Wiring
-"generate" through to `msc_session` is the next step, and it needs a decision
-about what happens to the journal and analyses attached to the plan being
-replaced.
+**The plan itself.** The generated plan is previewed on the Créer screen but not
+persisted, and the recalculation proposes adjustments without applying them —
+the rest of the app still reads the imported workbook plan. Wiring either one
+through to `msc_session` is the same open question, and it is a decision rather
+than a task: what happens to the journal and the analyses attached to the plan
+being replaced.
 
 The methodology call has been written against the documented API surface but not
 executed end to end here — this environment has no Anthropic credential, so the
-401 path is tested and the success path is not. The two coach routes are in
+401 path is tested and the success path is not. The three coach routes are in
 exactly the same position, with one more unknown on top: whether Strava's MCP
 server accepts the token, which is why they fall back rather than assume.
 
 The same caveat applies to Strava, and to the same extent. There is no Strava
 application behind this checkout, so what has actually been exercised is every
-route the server exposes (health, state, the authorisation URL, the webhook
-handshake with a good and a bad verify token, an event POST, and the 409 / 501 /
-400 paths) and the matcher, against the real plan, in `check:strava`. What has
-not is the round-trip through Strava's own consent screen and the shape of a
-live activity payload.
+route the server exposes — health, state, the authorisation URL, the webhook
+handshake with a good and a bad verify token, an event POST, a forged
+revocation naming another athlete, and the 400 / 401 / 409 / 501 paths on all
+three coach routes — plus the 49 assertions in `check:strava`, which hold the
+matcher, every computed figure and every branch of both guard rails against the
+real plan. What has not is the round-trip through Strava's own consent screen,
+the shape of a live activity payload, and any call that reaches Claude.
 
 ## Deviations from the prototype
 
-Five places where the prototype's behaviour was an artefact of the design medium
+Six places where the prototype's behaviour was an artefact of the design medium
 rather than the intent:
 
 1. **Sheets no longer close on any click.** In the prototype a click anywhere in
@@ -449,6 +508,11 @@ rather than the intent:
    `msc_activity` on a webhook, with no model in the loop, needs its own OAuth;
    Claude reading a session back wants Strava's MCP server. Both are wired, and
    « Why OAuth *and* MCP » above says which does what.
+6. **The gap card exists on every week.** It was a seeded row for semaine 7, so
+   « Recalculer le plan » could only be pressed there. The gap is arithmetic —
+   planned against done, for the sessions that have come due — so it is computed
+   for whichever week is on screen, and reads « Semaine tenue » rather than
+   « Écart détecté » when there is nothing to recalibrate.
 
 The prototype's `msc_zone` also had the block-A threshold pace at 5:12, which is
 in fact the 10 km reference pace; the workbook puts the threshold at 5:22. The

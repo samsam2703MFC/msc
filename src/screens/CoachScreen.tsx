@@ -5,6 +5,7 @@
 import { useState } from 'react';
 
 import * as db from '../data/db';
+import { ecartDeSemaine } from '../data/analyse';
 import type { TourDeChat } from '../data/analyse';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
@@ -25,7 +26,14 @@ export function CoachScreen({ app }: { app: App }) {
   const ui = db.ui(lang);
 
   const weekly = db.one('msc_analyse', (r) => r.type === 'hebdo' && r.semaine === app.semaine);
+
+  /* The gap is arithmetic: planned against done, for the sessions that have
+     come due. It is recomputed on every render and exists for every week — so
+     the recalculation can be asked for anywhere, not only where a row happens
+     to have been seeded. What is stored is Claude's reading of it. */
+  const calcule = ecartDeSemaine(app.semaine, app.date);
   const ecart = db.one('msc_ecart', (r) => r.semaine === app.semaine);
+  const enRetard = calcule.retard_min > 0 || calcule.sautees > 0;
   const excuses = db.select('msc_excuse');
   const picked = app.excuse ? db.mustOne('msc_excuse', (r) => r.code === app.excuse) : null;
   const adjustments = weekly ? db.select('msc_ajustement', (r) => r.analyse_id === weekly.id) : [];
@@ -128,39 +136,67 @@ export function CoachScreen({ app }: { app: App }) {
       <ReglesCard app={app} declenchees={codesDeclenches} />
 
       {/* the gap — recalculated, never made up for */}
-      {ecart && <div
+      <div
         style={{
           borderRadius: R.card,
-          background: C.warningBg,
-          border: `1px solid ${C.warning}`,
+          background: enRetard ? C.warningBg : C.surface,
+          border: `1px solid ${enRetard ? C.warning : C.border}`,
           padding: 18,
           display: 'flex',
           flexDirection: 'column',
           gap: 12,
         }}
       >
-        <SectionLabel icon="triangle-alert" color={C.warning}>
-          {ui.gapLabel}
+        <SectionLabel
+          icon={enRetard ? 'triangle-alert' : 'circle-check'}
+          color={enRetard ? C.warning : C.accentDeep}
+        >
+          {enRetard ? ui.gapLabel : ui.gapNone}
         </SectionLabel>
-        <div style={{ fontSize: 14, lineHeight: 1.5, color: C.inkBody }}>{ecart.texte[lang]}</div>
+
+        {/* Claude's reading of the gap — only once it has been asked for. */}
+        {ecart && (
+          <div style={{ fontSize: 14, lineHeight: 1.5, color: C.inkBody }}>{ecart.texte[lang]}</div>
+        )}
+
         <Grid cols={3} gap={10}>
-          {ecart.stats.map((s) => (
+          {calcule.stats.map((s) => (
             <StatCell
               key={s.label[lang]}
               icon={s.icon}
               value={s.valeur}
               label={s.label[lang]}
-              color={C.warning}
+              color={enRetard ? C.warning : C.inkSecondary}
             />
           ))}
         </Grid>
+
         <AccentButton
           label={recRunning ? ui.recalcRunning : recDone ? ui.recalcDoneBtn : ui.recalcIdle}
           icon={recRunning ? 'loader' : recDone ? 'check' : 'refresh-cw'}
           active={recRunning || recDone}
           onClick={app.runRecalc}
         />
-      </div>}
+
+        {app.recalcErreur && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              padding: '8px 10px',
+              borderRadius: R.md,
+              background: C.warningBg,
+              color: C.warning,
+              fontSize: 11,
+              lineHeight: 1.4,
+            }}
+          >
+            <Icon name="triangle-alert" size={14} />
+            <span>{app.recalcErreur}</span>
+          </div>
+        )}
+      </div>
 
       {recDone && ecart && (
         <Card featured padding="16px 18px" gap={10}>

@@ -284,3 +284,145 @@ plutôt que de supposer.`,
     usage: reponse.usage,
   };
 }
+
+/* ======================================================================
+   La semaine — « Recalculer le plan »
+
+   Same shape as the session analysis, one scope up, and with one doctrine of
+   the plan's own written into the prompt: a missed session is never made up
+   for. The plan recalibrates; it does not ask the athlete to catch up. That is
+   the workbook's rule, not a preference, and a model left to itself proposes
+   catch-up sessions because that is what the internet is full of. */
+
+const AjustementPropose = z.object({
+  session_id: z
+    .number()
+    .nullable()
+    .describe(
+      "L'id d'une séance de la liste fournie. null pour un ajustement à l'échelle d'une semaine.",
+    ),
+  semaine: z
+    .number()
+    .nullable()
+    .describe("Le numéro de semaine, pour un ajustement de semaine. null sinon."),
+  part: z
+    .number()
+    .nullable()
+    .describe(
+      "La quantité de la séance — sa durée, ou ses mètres si c'est une nage — en fraction de ce qui était prévu. 1 = inchangée, 0,8 = réduite d'un cinquième, 1,2 = augmentée d'un cinquième. Entre 0,5 et 1,25. null pour un ajustement de semaine.",
+    ),
+  texte: z
+    .string()
+    .nullable()
+    .describe(
+      "Pour un ajustement de semaine seulement : ce qui change, en une ligne, sans aucun chiffre de volume, d'allure ou de durée.",
+    ),
+  type: z
+    .string()
+    .nullable()
+    .describe(
+      'Pour un ajustement de semaine seulement : le code de type concerné — ef, recup, endactive, seuil, allure10, vma, longue, montagne, force, compromis, nage, velo, test, repos, course.',
+    ),
+});
+
+const Recalcul = z.object({
+  ecart: z
+    .string()
+    .describe(
+      "Ce que la semaine a laissé filer, en une ou deux phrases. Tu cites les chiffres fournis et tu n'en produis aucun autre.",
+    ),
+  recalcul: z
+    .array(
+      z.object({
+        portee: z.string().describe('La portée, courte : « S8 », « S9–S12 ».'),
+        texte: z
+          .string()
+          .describe(
+            "Ce qui change sur cette portée, en une ligne. Aucun chiffre de volume, d'allure ou de durée : tu dis quoi et pourquoi, le moteur dit combien.",
+          ),
+      }),
+    )
+    .describe('Deux à quatre portées, de la plus proche à la plus lointaine.'),
+  verdict: z.string().describe('Le verdict de la semaine, une à deux phrases.'),
+  observations: z.array(Observation).describe('Un bloc « bon », un bloc « attention ». Au plus deux.'),
+  ajustements: z
+    .array(AjustementPropose)
+    .describe("Deux à quatre ajustements concrets. Chacun nomme une séance de la liste, ou une semaine."),
+  strava_lu: z.array(z.string()).describe("Ce que tu es allé chercher dans Strava. Vide si tu n'y es pas allé."),
+});
+
+const DOCTRINE = `Deux règles du plan que tu ne discutes pas :
+- Une séance sautée n'est JAMAIS rattrapée. Le plan se réétalonne ; il ne fait pas
+  rattraper. Ne propose jamais de séance de rattrapage.
+- Quand il faut sacrifier, l'ordre est : le vélo d'abord, puis le second Hyrox,
+  puis la nage. La séance de qualité et la sortie longue se protègent.`;
+
+function contexteSemaine({ athlete, semaine, bloc, ecart, seances, suite, regles }) {
+  const lignes = [
+    `Athlète : ${athlete.nom}. Référence 10 km actuelle ${athlete.ref_actuelle} → cible ${athlete.ref_cible}.`,
+    `Semaine ${semaine}, bloc ${bloc}.`,
+    '',
+    'L’écart, déjà calculé — cite-le tel quel :',
+    `  volume en retard ${ecart.retard} · ${ecart.sautees} séance(s) sautée(s) · réalisation ${ecart.realisation}`,
+    `  (${ecart.fait_min} min faites sur ${ecart.du_min} min dues)`,
+    '',
+    'Les séances de la semaine. Un ajustement ne peut nommer qu’un de ces id :',
+  ];
+  for (const s of seances ?? []) {
+    lignes.push(
+      `  ${s.id}  ${s.jour} ${s.date} · ${s.titre} · ${s.discipline} · ${s.type} · ${s.duree_min} min${s.natation_m ? ` · ${s.natation_m} m` : ''} · ${s.faite ? 'FAITE' : 'non faite'}`,
+    );
+  }
+
+  if (suite?.length) {
+    lignes.push('', 'Les semaines qui suivent, si un déplacement doit atterrir quelque part :');
+    for (const w of suite) lignes.push(`  S${w.semaine} · ${w.phase} · bloc ${w.bloc} · ${w.heures} h`);
+  }
+
+  if (regles?.length) {
+    lignes.push('', 'Les règles d’ajustement du plan, telles qu’elles sont écrites :');
+    for (const r of regles) lignes.push(`  ${r}`);
+  }
+
+  return lignes.join('\n');
+}
+
+export async function recalculerPlan(corps) {
+  const client = new Anthropic();
+  const langue = corps.langue === 'pl' ? 'pl' : 'fr';
+
+  const { reponse, strava } = await avecRepli(
+    client,
+    {
+      model: MODEL,
+      max_tokens: 12000,
+      system: `${systeme(langue)}\n\n${DOCTRINE}`,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'high', format: zodOutputFormat(Recalcul) },
+      messages: [
+        {
+          role: 'user',
+          content: `${contexteSemaine(corps)}
+
+Réétalonne. Si tu as accès à Strava, regarde ce que l'athlète a réellement fait
+cette semaine et les précédentes — la tendance compte plus que la semaine seule.
+
+Puis donne : ce que la semaine a laissé filer, ce que le réétalonnage change et
+sur quelles portées, le verdict de la semaine, et les ajustements concrets.
+Chaque ajustement nomme une séance de la liste par son id et une fraction de sa
+quantité, ou une semaine et ce qui s'y déplace.`,
+        },
+      ],
+    },
+    corps.jeton_strava,
+  );
+
+  if (!reponse.parsed_output) throw new Error("Le réétalonnage n'a pas pu être structuré.");
+  return {
+    ...reponse.parsed_output,
+    strava,
+    modele: MODEL,
+    cout_eur: cout(reponse.usage),
+    usage: reponse.usage,
+  };
+}
