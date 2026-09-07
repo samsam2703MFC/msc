@@ -4,7 +4,7 @@
 import * as db from '../data/db';
 import type { Lang } from '../data/types';
 import { C } from '../design/theme';
-import { ChatBar } from '../screens/CoachScreen';
+import { ChatBar, Conversation } from '../screens/CoachScreen';
 import { Icon } from './Icon';
 import { GainPill, SheetHeading } from './SheetHeading';
 import { Card, Grid, IconLine, Mono } from './primitives';
@@ -30,6 +30,16 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
   const session = db.mustOne('msc_session', (r) => r.id === sessionId);
   const type = db.type(session.type);
   const chat = CHAT[lang];
+
+  /* One thread per session, and the session itself is what the coach is asked
+     about — so the brief goes with every question rather than being restated. */
+  const cle = `session:${session.id}`;
+  const contexte = [
+    `Séance : ${session.titre[lang]}`,
+    `${session.jour_long} ${session.date} · semaine ${session.semaine} · bloc ${session.bloc} · ${session.discipline}`,
+    `${session.duree_min} min · RPE cible ${session.rpe_cible} · charge ${session.charge}`,
+    session.detail[lang],
+  ].join('\n');
 
   /* Paces are derived for the session's block, not stored on the session. */
   const paces = session.zones.map((code) => ({
@@ -104,7 +114,17 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
         </Mono>
       </Card>
 
-      <ChatBar placeholder={chat.placeholder} />
+      <Conversation
+        tours={app.chats[cle] ?? []}
+        busy={app.chatEnCours === cle}
+        erreur={app.chatErreur}
+        thinking={ui.chatThinking}
+      />
+      <ChatBar
+        placeholder={chat.placeholder}
+        busy={app.chatEnCours !== null}
+        onSend={(q) => void app.demanderCoach(cle, q, contexte)}
+      />
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {chat.prompts.map((q) => (
@@ -112,6 +132,8 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
             key={q}
             type="button"
             className="msc-hover-accent"
+            onClick={() => void app.demanderCoach(cle, q, contexte)}
+            disabled={app.chatEnCours !== null}
             style={{
               padding: '6px 10px',
               borderRadius: 999,

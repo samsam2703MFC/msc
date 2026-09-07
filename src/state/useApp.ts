@@ -10,9 +10,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as db from '../data/db';
 import * as strava from '../data/strava';
+import * as coach from '../data/analyse';
 import type { Lang, ScreenKey, TypeCode } from '../data/types';
 
-const ANALYSE_MS = 1400;
 const RECALC_MS = 1500;
 const LANG_KEY = 'msc.lang';
 
@@ -80,15 +80,50 @@ export function useApp() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [typeCode, setTypeCode] = useState<TypeCode | null>(null);
 
-  const anaTimer = useRef<number | undefined>(undefined);
+  const [anaErreur, setAnaErreur] = useState<string | null>(null);
+
+  /* Both halves below write into the database behind the accessors, which React
+     has no way to notice. Bumping this is what tells it something changed. */
+  const [version, setVersion] = useState(0);
+
+  /* Nothing async may touch state after the hook is gone. */
+  const monte = useRef(true);
+
+  /* One analysis at a time — a second press while the first is in flight would
+     spend a second call to overwrite the first. */
+  const anaRef = useRef(false);
   const recalcTimer = useRef<number | undefined>(undefined);
 
-  useEffect(
-    () => () => {
-      window.clearTimeout(anaTimer.current);
-      window.clearTimeout(recalcTimer.current);
+  useEffect(() => () => window.clearTimeout(recalcTimer.current), []);
+
+  /* The chat bars. Two of them — the Coach screen's and the one on each session
+     sheet — so the threads are keyed and each keeps its own history. */
+  const [chats, setChats] = useState<Record<string, coach.TourDeChat[]>>({});
+  const [chatEnCours, setChatEnCours] = useState<string | null>(null);
+  const [chatErreur, setChatErreur] = useState<string | null>(null);
+
+  const demanderCoach = useCallback(
+    async (cle: string, question: string, contexte?: string) => {
+      const q = question.trim();
+      if (!q || chatEnCours) return;
+      const historique = chats[cle] ?? [];
+      setChatErreur(null);
+      setChats((prev) => ({ ...prev, [cle]: [...(prev[cle] ?? []), { role: 'user', texte: q }] }));
+      setChatEnCours(cle);
+      try {
+        const r = await coach.demanderCoach(q, { contexte, historique, lang });
+        if (!monte.current) return;
+        setChats((prev) => ({
+          ...prev,
+          [cle]: [...(prev[cle] ?? []), { role: 'assistant', texte: r.texte }],
+        }));
+      } catch (e) {
+        if (monte.current) setChatErreur(message(e));
+      } finally {
+        if (monte.current) setChatEnCours(null);
+      }
     },
-    [],
+    [chatEnCours, chats, lang],
   );
 
   const setLang = useCallback((next: Lang) => {
@@ -107,9 +142,6 @@ export function useApp() {
   const [stravaErreur, setStravaErreur] = useState<string | null>(null);
   const [orphelines, setOrphelines] = useState<strava.ActiviteStrava[]>([]);
 
-  /* `db.setActivites` mutates the table behind the accessors, which React has
-     no way to notice. This is what tells it something changed. */
-  const [version, setVersion] = useState(0);
 
   /* The last bulk fetch, and the laps we have already paid a request for.
      Both are caches, so re-matching after the week changes costs nothing. */
@@ -117,7 +149,6 @@ export function useApp() {
   const details = useRef(new Map<number, strava.ActiviteDetaillee>());
   const liaison = useRef<number | undefined>(undefined);
   const vu = useRef<string | null>(null);
-  const monte = useRef(true);
 
   useEffect(() => {
     monte.current = true;
@@ -306,15 +337,56 @@ export function useApp() {
 
   /* ------------------------------------------------------------ le reste */
 
-  /* Claude reads the session back and answers; re-running replays it. */
+  /* Claude reads the session back and answers.
+
+     What it is given is what the app already knows — the session, its computed
+     zones, the synced activity, the journal — plus, through Strava's MCP
+     server, the ability to go and look at what the sync did not keep. What
+     comes back is prose and a zone; every figure on the panel is still the
+     engine's. */
   const runAnalyse = useCallback(() => {
-    setAna((current) => {
-      if (current === 'running') return current;
-      window.clearTimeout(anaTimer.current);
-      anaTimer.current = window.setTimeout(() => setAna('done'), ANALYSE_MS);
-      return 'running';
-    });
-  }, []);
+    if (anaRef.current) return;
+    anaRef.current = true;
+    setAna('running');
+    setAnaErreur(null);
+
+    void (async () => {
+      try {
+        const session = db.sessionDuJour(date);
+        if (!session) throw new Error('Aucune séance ce jour-là.');
+
+        const activite = db.one('msc_activity', (a) => a.session_id === session.id);
+        const seed = db.one('msc_journal', (j) => j.session_id === session.id);
+        const journal = {
+          date: session.date,
+          session_id: session.id,
+          rpe_ressenti: rpe,
+          sommeil: seed?.sommeil ?? 0,
+          douleurs: seed?.douleurs ?? [],
+          note: note.trim() || undefined,
+        };
+        const suivante = coach.prochaineSeance(session);
+
+        const reponse = await coach.demanderAnalyse(session, {
+          activite,
+          journal,
+          suivante,
+          lang,
+        });
+        if (!monte.current) return;
+        coach.enregistrerAnalyse(reponse, session, { activite, journal, suivante });
+        setVersion((v) => v + 1);
+        setAna('done');
+      } catch (e) {
+        if (monte.current) {
+          setAnaErreur(message(e));
+          setAna('idle');
+        }
+      } finally {
+        anaRef.current = false;
+      }
+    })();
+  }, [date, lang, note, rpe]);
 
   /* Recalculating the remaining 27 weeks; a second press folds the result away. */
   const runRecalc = useCallback(() => {
@@ -366,7 +438,13 @@ export function useApp() {
     note,
     setNote,
     ana,
+    anaErreur,
     runAnalyse,
+
+    chats,
+    chatEnCours,
+    chatErreur,
+    demanderCoach,
     nextApplied,
     toggleNextApplied: useCallback(() => setNextApplied((v) => !v), []),
 

@@ -2,7 +2,10 @@
    sideways), then the gap the plan has drifted into, then the weekly verdict
    and the adjustments to accept one by one. */
 
+import { useState } from 'react';
+
 import * as db from '../data/db';
+import type { TourDeChat } from '../data/analyse';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import {
@@ -258,7 +261,23 @@ export function CoachScreen({ app }: { app: App }) {
         );
       })}
 
-      <ChatBar placeholder={ui.askPlaceholder} />
+      <Conversation
+        tours={app.chats.coach ?? []}
+        busy={app.chatEnCours === 'coach'}
+        erreur={app.chatErreur}
+        thinking={ui.chatThinking}
+      />
+      <ChatBar
+        placeholder={ui.askPlaceholder}
+        busy={app.chatEnCours !== null}
+        onSend={(q) =>
+          void app.demanderCoach(
+            'coach',
+            q,
+            `L'athlète regarde la semaine ${app.semaine} (bloc ${db.blocDeSemaine(app.semaine).code}), au ${app.date}.`,
+          )
+        }
+      />
     </div>
   );
 }
@@ -321,19 +340,42 @@ function ReglesCard({ app, declenchees }: { app: App; declenchees: ReadonlySet<s
   );
 }
 
-/** The coach's free-text line. Wired to a send handler when the API lands. */
-export function ChatBar({ placeholder }: { placeholder: string }) {
+/** The coach's free-text line. */
+export function ChatBar({
+  placeholder,
+  onSend,
+  busy,
+}: {
+  placeholder: string;
+  onSend: (question: string) => void;
+  busy?: boolean;
+}) {
+  const [value, setValue] = useState('');
+  const pret = value.trim() !== '' && !busy;
+
+  const envoyer = () => {
+    if (!pret) return;
+    onSend(value.trim());
+    setValue('');
+  };
+
   return (
     <div style={{ display: 'flex', gap: 8 }}>
       <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') envoyer();
+        }}
         placeholder={placeholder}
         aria-label={placeholder}
+        disabled={busy}
         style={{
           flex: 1,
           minWidth: 0,
           borderRadius: R.md,
           border: `1px solid ${C.border}`,
-          background: C.surface,
+          background: busy ? C.surfaceAlt : C.surface,
           color: C.ink,
           padding: 12,
           fontFamily: F.body,
@@ -343,19 +385,95 @@ export function ChatBar({ placeholder }: { placeholder: string }) {
       <button
         type="button"
         className="msc-hover-emerald"
+        onClick={envoyer}
+        disabled={!pret}
         aria-label={placeholder}
         style={{
           width: 46,
           borderRadius: R.md,
-          background: C.accent,
-          color: C.accentInk,
+          background: pret ? C.accent : C.surfaceAlt,
+          color: pret ? C.accentInk : C.inkQuiet,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name="send" size={18} />
+        <Icon name={busy ? 'loader' : 'send'} size={18} />
       </button>
+    </div>
+  );
+}
+
+/** The thread above a chat bar. Nothing at all until something has been said. */
+export function Conversation({
+  tours,
+  busy,
+  erreur,
+  thinking,
+}: {
+  tours: TourDeChat[];
+  busy?: boolean;
+  erreur?: string | null;
+  thinking: string;
+}) {
+  if (tours.length === 0 && !busy && !erreur) return null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {tours.map((t, i) => (
+        <div
+          key={`${i}-${t.role}`}
+          style={{
+            alignSelf: t.role === 'user' ? 'flex-end' : 'flex-start',
+            maxWidth: '88%',
+            borderRadius: 12,
+            padding: '9px 12px',
+            fontSize: 13,
+            lineHeight: 1.45,
+            background: t.role === 'user' ? C.accentSoft : C.surface,
+            border: `1px solid ${t.role === 'user' ? C.accent : C.border}`,
+            color: t.role === 'user' ? C.ink : C.inkBody,
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {t.texte}
+        </div>
+      ))}
+
+      {busy && (
+        <div
+          style={{
+            alignSelf: 'flex-start',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 12,
+            color: C.inkQuiet,
+          }}
+        >
+          <Icon name="loader" size={14} />
+          {thinking}
+        </div>
+      )}
+
+      {erreur && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            padding: '8px 10px',
+            borderRadius: R.md,
+            background: C.warningBg,
+            color: C.warning,
+            fontSize: 11,
+            lineHeight: 1.4,
+          }}
+        >
+          <Icon name="triangle-alert" size={14} />
+          <span>{erreur}</span>
+        </div>
+      )}
     </div>
   );
 }

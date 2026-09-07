@@ -195,6 +195,27 @@ export function TodayScreen({ app }: { app: App }) {
           onClick={app.runAnalyse}
         />
 
+        {/* A call that failed says so. The panel below is the previous
+            analysis, if there was one — it is not this one. */}
+        {app.anaErreur && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              padding: '8px 10px',
+              borderRadius: 10,
+              background: C.warningBg,
+              color: C.warning,
+              fontSize: 11,
+              lineHeight: 1.4,
+            }}
+          >
+            <Icon name="triangle-alert" size={14} />
+            <span>{app.anaErreur}</span>
+          </div>
+        )}
+
         {anaDone && analyse && (
           <Analyse
             lang={lang}

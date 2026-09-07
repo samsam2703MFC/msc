@@ -268,6 +268,8 @@ export interface MscUiStrings {
   recalcDoneBtn: string;
   verdictLabel: string;
   askPlaceholder: string;
+  chatThinking: string;
+  chatEmpty: string;
   excuseLabel: string;
   excuseAnswer: string;
   excuseNew: string;

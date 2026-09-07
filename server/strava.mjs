@@ -219,6 +219,20 @@ async function jeton() {
   return data.access_token;
 }
 
+/** A valid access token, or null when nobody is linked.
+
+    The coach service needs it to hand to Strava's MCP server; nothing else
+    outside this module may see it, and it never reaches an HTTP response. */
+export async function jetonCourant() {
+  if (!(await lire())) return null;
+  try {
+    return await jeton();
+  } catch (e) {
+    console.warn('[strava] jeton indisponible :', e?.message ?? e);
+    return null;
+  }
+}
+
 /** Revokes the token at Strava, then forgets it here. */
 export async function delier() {
   const etat = await lire();

@@ -36,7 +36,15 @@ import {
   msc_type,
   msc_ui,
 } from './tables';
-import type { Lang, MscActivity, MscType, MscUiStrings, TypeCode } from './types';
+import type {
+  Lang,
+  MscActivity,
+  MscAdaptation,
+  MscAnalyse,
+  MscType,
+  MscUiStrings,
+  TypeCode,
+} from './types';
 
 export * from './engine';
 
@@ -60,6 +68,43 @@ export function reinitialiserActivites(): void {
   activites.splice(0, activites.length, ...msc_activity);
 }
 
+/* The coach's output lands here the same way. The seeded rows are the worked
+   example from the workbook; a real analysis replaces the one for its own
+   session and leaves the rest alone. */
+const analyses: MscAnalyse[] = [...msc_analyse];
+const adaptations: MscAdaptation[] = [...msc_adaptation];
+
+/** Writes back what Claude made of a session. */
+export function setAnalyse(analyse: MscAnalyse, adaptation?: MscAdaptation): void {
+  const memeSeance = (r: { session_id?: number; type?: string }) =>
+    r.type === 'seance' && r.session_id === analyse.session_id;
+
+  for (let i = analyses.length - 1; i >= 0; i -= 1) {
+    if (memeSeance(analyses[i])) {
+      /* Its adaptation goes with it — an orphaned proposal would keep showing
+         under a verdict that no longer exists. */
+      const id = analyses[i].id;
+      for (let j = adaptations.length - 1; j >= 0; j -= 1) {
+        if (adaptations[j].analyse_id === id) adaptations.splice(j, 1);
+      }
+      analyses.splice(i, 1);
+    }
+  }
+
+  analyses.push(analyse);
+  if (adaptation) adaptations.push(adaptation);
+}
+
+/** The next analysis id — above the seeds, and above anything already written. */
+export function prochainAnalyseId(): number {
+  return analyses.reduce((max, a) => Math.max(max, a.id), 9000) + 1;
+}
+
+/** The next adaptation id — the proposals have their own numbering. */
+export function prochainAdaptationId(): number {
+  return adaptations.reduce((max, a) => Math.max(max, a.id), 7000) + 1;
+}
+
 /* Key order is the order the tables are listed in the settings sheet. */
 const arrayTables = {
   msc_athlete,
@@ -75,8 +120,8 @@ const arrayTables = {
   msc_journal,
   msc_daily,
   msc_metric,
-  msc_analyse,
-  msc_adaptation,
+  msc_analyse: analyses,
+  msc_adaptation: adaptations,
   msc_ajustement,
   msc_ecart,
   msc_excuse,

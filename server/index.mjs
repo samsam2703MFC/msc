@@ -7,10 +7,17 @@
 
    Two halves, and they do not know about each other:
      /api/methode      asks Claude for the training methodology
-     /api/strava/*     the OAuth round-trip, the activities, the webhook */
+     /api/analyse      what Claude makes of a session that has happened
+     /api/coach        the chat bars
+     /api/strava/*     the OAuth round-trip, the activities, the webhook
+
+   The two coach routes attach Strava's MCP server to their Claude call, using
+   the token the OAuth half already holds — so the model can read past what the
+   sync kept. */
 
 import { createServer } from 'node:http';
 import { construireMethode } from './methode.mjs';
+import { analyserSeance, repondre } from './coach.mjs';
 import * as strava from './strava.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -195,6 +202,24 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname.startsWith('/api/strava')) {
       return await routerStrava(req, res, url);
+    }
+
+    /* The coach. Both routes hand Claude the Strava token so it can read past
+       the aggregates the app synced — and the token is fetched here, never
+       taken from the request: a browser that could name its own credential
+       would be a browser that could borrow someone else's. */
+    if (req.method === 'POST' && url.pathname === '/api/analyse') {
+      const { jeton_strava: _ignore, ...corps } = await lireCorps(req);
+      for (const champ of ['athlete', 'session']) {
+        if (!corps[champ]) return json(res, 400, { erreur: `champ manquant : ${champ}` });
+      }
+      return json(res, 200, await analyserSeance({ ...corps, jeton_strava: await strava.jetonCourant() }));
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/coach') {
+      const { jeton_strava: _ignore, ...corps } = await lireCorps(req);
+      if (!corps.question) return json(res, 400, { erreur: 'champ manquant : question' });
+      return json(res, 200, await repondre({ ...corps, jeton_strava: await strava.jetonCourant() }));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/methode') {

@@ -270,6 +270,86 @@ Strava answers every request with what is left of the quota, and the server
 reads it: it stops before a 429 rather than after one, and the numbers are on
 `/api/strava/etat`.
 
+## The coach
+
+The generator writes the plan and the sync says what was done. This is the part
+that says what it *meant*: `server/coach.mjs`, behind two routes.
+
+```
+/api/analyse   « Analyser avec Claude » on the Aujourd'hui screen
+/api/coach     the two chat bars — the Coach screen's, and one per session
+```
+
+**Strava's MCP server is attached to both calls.** That is the piece the app
+could not do for itself: the sync keeps aggregates — duration, average pace,
+heart rate, the work blocks — because that is all `msc_activity` needs and all
+the pace engine computes against. A coach reading a session back wants more
+than that, and `mcp.strava.com` is where more lives. So the call carries what
+the app already knows, and Claude can go further when it needs to.
+
+```js
+mcp_servers: [{ type: 'url', url: MCP_STRAVA, name: 'strava',
+                authorization_token: <le jeton de l'athlète> }],
+tools: [{ type: 'mcp_toolset', mcp_server_name: 'strava',
+          default_config: { enabled: false },      // allowlist
+          configs: { list_activities: …, get_activity_performance: …,
+                     get_activity_streams: … } }],
+```
+
+The allowlist is three tools out of eight. Claude has no business reading the
+athlete's clubs or their gear to say how Wednesday's threshold went, and a list
+of what is allowed ages better than a list of what is not.
+
+The token is the one the OAuth half already holds, fetched by the route — never
+taken from the request body, which the server strips. A browser that could name
+its own credential would be a browser that could borrow someone else's.
+
+Whether Strava's MCP server accepts that token is not knowable from here: it
+may run its own authorisation server, in which case a Strava API token is not
+its currency. So the call is made twice at most — once with the server
+attached, once without — and the answer is poorer without the streams, not
+absent. Everything the app synced is in the prompt either way.
+
+### Claude still does not produce a figure
+
+The same line that runs through the methodology service runs through here, one
+level down. Every number on the analysis panel is computed by
+`src/data/analyse.ts` from `msc_activity`, `msc_journal` and the engine:
+
+| Figure | How |
+|---|---|
+| dérive B1 → Bn | last work block minus the first, from the laps |
+| allure | the mean of the work blocks against the block's zone — an interval session is judged on its intervals, not on an average that includes the warm-up |
+| RPE | what the athlete logged, against the plan's target |
+| charge | Foster's session-RPE, against what the week budgeted |
+
+Claude is handed those and cites them. What it writes is the verdict, what went
+well, what to watch — and an adjustment expressed as **a zone and a fraction of
+the planned duration**, never as minutes and a pace.
+
+`appliquerAdaptation` turns that back into a line, and it is the guard rail:
+
+- a zone the engine does not know falls back to the session's own;
+- so does a zone *faster* than planned — an adjustment after a hard session
+  protects, it does not sharpen, and deciding when to go hard is the plan's job;
+- the fraction is clamped to [0,5 · 1] — never longer than planned;
+- a session the plan writes no zone on (Hyrox, a swim, a ride) gets a duration
+  and no pace at all, for the same reason a swim carries no pace anywhere else.
+
+Between those, a model cannot put a number on this screen. It can only choose
+among the ones the engine is willing to compute — and `check:strava` asserts
+each rule, including the ones that fire when Claude answers badly.
+
+### Why OAuth *and* MCP
+
+They are not the same job, and the split falls where the model belongs.
+
+|  | the sync | the coach |
+|---|---|---|
+| what | fills `msc_activity` | reads a session back |
+| how | Strava's REST API, `server/strava.mjs` | Strava's MCP server, via the Messages API |
+| why not the other one | MCP is request-scoped — Claude connects during a call, so nothing pushes, and the webhook would disappear. And a model transcribing numbers the pace engine then computes against is a non-deterministic step in a path `check:engine` asserts to the second. | The REST aggregates are what one sync happened to keep. The coach wants the shape of the effort inside the session and the weeks before it. |
+
 ## Reference data
 
 `reference/Plan30semainessemi10kmhyroxnatation.xlsx` is the source of truth and
@@ -294,7 +374,7 @@ The four races are in `msc_objectif`: semi 22/11/2026 (1h45–1h52), 10 km
 | still to come from a wearable | `msc_daily` (resting HR; Strava does not carry it) |
 | computed by the engine | paces, per-session and per-week load, week totals, session status |
 | computed on the backend | `msc_metric` |
-| returned by the Anthropic API | `msc_analyse`, `msc_adaptation`, `msc_ajustement` |
+| returned by the Anthropic API | `msc_analyse` + `msc_adaptation` for a session, for real; `msc_ajustement` still seeded |
 | imported from the workbook | `msc_session`, `msc_week` |
 | set once, per athlete | `msc_athlete`, `msc_bloc`, `msc_zone`, `msc_objectif`, `msc_regle` |
 | by hand, each day | `msc_journal` (RPE + note, on the Aujourd'hui screen) |
@@ -304,17 +384,19 @@ settings sheet carries a date control so you can walk the thirty weeks.
 
 ## What is simulated
 
-The design is a clickable prototype, and two things in it still stand in for
-integrations that do not exist yet. They behave exactly as designed — the
-buttons work, the states change — but nothing leaves the device:
+The design is a clickable prototype, and one thing in it still stands in for an
+integration that does not exist yet:
 
-- **Analyser avec Claude** and **Recalculer le plan** resolve on a timer and
-  read their results out of `msc_analyse` / `msc_ecart`. The Anthropic API call
-  goes where those timers are, in `src/state/useApp.ts`.
-- The two chat bars (Coach, and the one on each session) render but have no send
-  handler yet.
+- **Recalculer le plan** resolves on a timer and reads its result out of
+  `msc_ecart`. It is the weekly half of the coach — the same shape as
+  `/api/analyse`, over a week instead of a session — and it is the next thing
+  to wire.
 
-**Take my data** is no longer one of them — see « Linking Strava » above. The
+**Analyser avec Claude** and the two chat bars are no longer among them — see
+« The coach » above. The analysis writes a real `msc_analyse` row through
+`db.setAnalyse`, and each chat bar keeps its own thread.
+
+**Take my data** is no longer one of them either — see « Linking Strava » above. The
 card has six states now instead of a boolean, because a boolean could only say
 "connected" and mean nothing by it. Unlinking puts the seeded example activities
 back, so the prototype still has something to show without a Strava account.
@@ -335,7 +417,9 @@ replaced.
 
 The methodology call has been written against the documented API surface but not
 executed end to end here — this environment has no Anthropic credential, so the
-401 path is tested and the success path is not.
+401 path is tested and the success path is not. The two coach routes are in
+exactly the same position, with one more unknown on top: whether Strava's MCP
+server accepts the token, which is why they fall back rather than assume.
 
 The same caveat applies to Strava, and to the same extent. There is no Strava
 application behind this checkout, so what has actually been exercised is every
@@ -360,10 +444,11 @@ rather than the intent:
    and focus rings, rather than divs with click handlers.
 4. **`circle-help` is aliased to `circle-question-mark`** — Lucide renamed the
    glyph after the design was made. Same icon.
-5. **The Strava source is OAuth, not an MCP connector.** The prototype labelled
-   the channel `MCP`, which is how *Claude* would reach Strava. The app reaching
-   Strava on its own screens, with no model in the loop, is a different problem
-   and takes its own authorisation.
+5. **The Strava source is OAuth, and the coach is MCP.** The prototype labelled
+   the single channel `MCP`. It turned out to be two jobs: the app filling
+   `msc_activity` on a webhook, with no model in the loop, needs its own OAuth;
+   Claude reading a session back wants Strava's MCP server. Both are wired, and
+   « Why OAuth *and* MCP » above says which does what.
 
 The prototype's `msc_zone` also had the block-A threshold pace at 5:12, which is
 in fact the 10 km reference pace; the workbook puts the threshold at 5:22. The
