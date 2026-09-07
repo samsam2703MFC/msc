@@ -599,6 +599,18 @@ There is no token file any more.
 
 ## Putting it online
 
+**The repository holds the access.** `.github/workflows/deploiement.yml` builds
+on the runner, ships to the server over SSH, migrates, flips a symlink and
+restarts — with the credentials in the repository's secrets, where nobody has
+to read them for it to work. `deploy/README.md` says which secrets, and how to
+make the key.
+
+`.github/workflows/ci.yml` runs all five checks on every push, two of them
+against a real **MySQL 8** service container. That matters more than it looks:
+the schema was written for MySQL 8 but validated on MariaDB 10.11, for want of
+anything better where it was written. CI is the first place it meets the engine
+it targets.
+
 `deploy/README.md` is the runbook. The short version: one Node process serves
 the built PWA **and** the API from the same origin — no CORS, a session cookie
 that travels normally, and a service worker that actually controls the page.

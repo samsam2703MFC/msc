@@ -1,7 +1,11 @@
 # Mettre MySmartCoach en ligne
 
-Ce carnet se déroule **depuis ta machine**, avec tes clés. Rien ici ne demande de
-coller un identifiant dans une conversation.
+**C'est le dépôt qui a l'accès, pas moi.** Les identifiants du serveur vivent
+dans les secrets GitHub, `.github/workflows/deploiement.yml` s'en sert, et ils
+ne passent ni par le code, ni par une conversation, ni par ta presse-papier.
+
+La préparation du serveur (§ *Le serveur, une fois*) se fait à la main, une
+seule fois. Tout le reste part ensuite d'un bouton dans l'onglet Actions.
 
 ## Ce qu'on déploie
 
@@ -39,34 +43,83 @@ complet est `.env.example` ; voici ce qui change en production.
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-## L'ordre
+## Le serveur, une fois
 
 ```sh
-# 1 · la base, une seule fois
-mysql -u root -p -e "CREATE DATABASE msc CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+# 1 · un utilisateur qui n'est pas root, et l'arborescence
+sudo adduser --system --group --home /srv/msc msc
+sudo -u msc mkdir -p /srv/msc/{releases,var}
+
+# 2 · la base, et un utilisateur MySQL qui n'a de droits que sur elle
+sudo mysql -e "CREATE DATABASE msc CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
   CREATE USER 'msc'@'localhost' IDENTIFIED BY '<un mot de passe long>';
   GRANT ALL PRIVILEGES ON msc.* TO 'msc'@'localhost'; FLUSH PRIVILEGES;"
 
-# 2 · le code, les dépendances, le build
-git clone <le dépôt> /srv/msc && cd /srv/msc
-npm ci
-npm run build
+# 3 · les secrets, hors des versions
+sudo -u msc install -m 600 /dev/null /srv/msc/.env
+sudo -u msc editor /srv/msc/.env        # voir « Les variables » ci-dessus
 
-# 3 · le schéma, puis le classeur
-npm run db:migrate
-npm run db:seed
-
-# 4 · un mot de passe pour le compte que le seed a créé
-npm run compte -- lister
-npm run compte -- motdepasse sam@mysmartcoach.local
-
-# 5 · démarrer
-NODE_ENV=production npm run server
+# 4 · le service (l'unité est plus bas), et le droit de le redémarrer
+sudo systemctl enable msc
+echo 'msc ALL=(root) NOPASSWD: /bin/systemctl restart msc' \
+  | sudo tee /etc/sudoers.d/msc-restart
 ```
 
-Le seed crée un compte **sans mot de passe utilisable** — c'est délibéré, un
-mot de passe par défaut est un mot de passe public. `compte -- lister` le
-signale par `⚠ sans mot de passe`.
+Le déploiement peut partir dès ici : il crée la version, migre, bascule et
+redémarre. Restent deux gestes qui ne se font qu'une fois, sur la base neuve :
+
+```sh
+cd /srv/msc/current
+npm run db:seed                      # le classeur — JAMAIS sur une base vivante
+npm run compte -- motdepasse sam@mysmartcoach.local
+```
+
+`db:seed` vide les tables du plan avant de les remplir. Sur une base qui sert,
+c'est le plan de l'athlète et les analyses qui y sont attachées qui
+disparaissent — c'est pourquoi le script de déploiement ne l'appelle jamais.
+
+Le seed crée un compte **sans mot de passe utilisable** : un mot de passe par
+défaut est un mot de passe public. `compte -- lister` le signale par
+`⚠ sans mot de passe`.
+
+## Ce que le dépôt doit savoir
+
+`Settings → Secrets and variables → Actions`. Les deux colonnes ne servent pas
+à la même chose : ce qui est dans *Variables* est lisible par qui voit le
+dépôt, ce qui est dans *Secrets* ne se relit plus une fois posé.
+
+| Secrets | |
+|---|---|
+| `DEPLOY_SSH_KEY` | la clé privée de déploiement, en entier, `-----BEGIN` compris |
+| `DEPLOY_KNOWN_HOSTS` | la sortie de `ssh-keyscan` pour ton serveur |
+
+| Variables | |
+|---|---|
+| `DEPLOY_HOST` · `DEPLOY_USER` · `DEPLOY_PATH` | `<domaine>` · `msc` · `/srv/msc` |
+| `DEPLOY_PORT` | seulement si SSH n'est pas sur 22 |
+| `DEPLOY_URL` | `https://<domaine>` — le workflow vérifie `/api/sante` après la bascule |
+
+```sh
+# une clé qui ne sert qu'à ça, sans phrase de passe (un runner ne la tape pas)
+ssh-keygen -t ed25519 -f ~/.ssh/msc_deploy -C "deploiement msc" -N ""
+
+# la moitié publique va sur le serveur, la privée dans le secret GitHub
+ssh-copy-id -i ~/.ssh/msc_deploy.pub msc@<domaine>
+cat ~/.ssh/msc_deploy          # → secret DEPLOY_SSH_KEY
+
+# l'empreinte du serveur, pour que le runner la vérifie au lieu de l'ignorer
+ssh-keyscan -H <domaine>       # → secret DEPLOY_KNOWN_HOSTS
+```
+
+La clé de déploiement n'a pas besoin d'être `root` et ne doit pas l'être : le
+seul droit privilégié qu'elle a est de redémarrer un service, par la ligne de
+sudoers ci-dessus.
+
+Le workflow `deploiement.yml` se déclenche **à la main** (onglet Actions →
+*déploiement* → Run workflow) ou sur une poussée vers `main`. Tant que rien
+n'est poussé sur `main`, rien ne part. Un environnement GitHub nommé
+`production` est déjà référencé : y ajouter un *required reviewer* met une
+approbation manuelle devant chaque déploiement.
 
 ## Vérifier
 
@@ -92,12 +145,24 @@ vérifier que la porte de service est bien condamnée.
 
 ## Mettre à jour
 
+Le bouton *Run workflow*. Le workflow construit sur le runner, envoie dans
+`releases/<sha>`, migre, bascule le lien `current` et redémarre — dans cet
+ordre, parce qu'une migration qui échoue doit laisser l'ancienne version en
+place et en marche plutôt qu'une version neuve devant une base qu'elle ne
+comprend pas.
+
+Cinq versions sont gardées. Revenir en arrière est un lien symbolique :
+
 ```sh
-git pull && npm ci && npm run build && npm run db:migrate && <relancer le service>
+ls -1dt /srv/msc/releases/*/          # la précédente est la deuxième
+sudo -u msc ln -sfn /srv/msc/releases/<sha> /srv/msc/current
+sudo systemctl restart msc
 ```
 
 `db:migrate` est idempotent (`CREATE TABLE IF NOT EXISTS`) : il ne casse rien à
-être rejoué. Ce n'est pas encore un système de migrations versionnées — le jour
+être rejoué. Ce qu'il ne sait pas faire, c'est revenir en arrière — un retour
+de version ne défait pas une migration, et le jour où l'une d'elles détruit une
+colonne, la seule issue est une sauvegarde prise juste avant. Ce n'est pas encore un système de migrations versionnées — le jour
 où le schéma change **après** la mise en production, il faudra
 `db/migrations/NNNN-*.sql` et un journal de ce qui a été appliqué. Le dire
 plutôt que de le découvrir en perdant des données.
@@ -136,7 +201,10 @@ After=network.target mysql.service
 [Service]
 Type=simple
 User=msc
-WorkingDirectory=/srv/msc
+Group=msc
+# `current` est un lien vers la version en service ; systemd le suit au
+# démarrage, donc un retour en arrière est un lien à refaire et un redémarrage.
+WorkingDirectory=/srv/msc/current
 EnvironmentFile=/srv/msc/.env
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/node server/index.mjs

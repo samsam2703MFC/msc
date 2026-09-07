@@ -1,0 +1,80 @@
+# Les cinq contrôles, à chaque poussée.
+#
+# Deux d'entre eux — check:db et check:api — ont besoin d'un vrai MySQL, et
+# c'est le point : le schéma a été écrit pour MySQL 8 mais validé jusqu'ici sur
+# MariaDB 10.11, faute de mieux dans l'environnement où il a été écrit. Ce
+# workflow est le premier endroit où il rencontre le moteur qu'il vise.
+
+name: contrôles
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  controles:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: controle
+          MYSQL_DATABASE: msc
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pcontrole"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      MSC_DB_HOST: 127.0.0.1
+      MSC_DB_PORT: '3306'
+      MSC_DB_USER: root
+      MSC_DB_PASSWORD: controle
+      MSC_DB_NAME: msc
+      # Une clé jetable : elle ne chiffre ici que des jetons de contrôle.
+      MSC_SECRET_KEY: Y29udHJvbGUtc2V1bGVtZW50LTMyLW9jdGV0cy1pY2kh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: types
+        run: npm run typecheck
+
+      # Le moteur d'allures contre le classeur, cellule par cellule. Aucun
+      # service requis : c'est du calcul pur.
+      - name: le moteur
+        run: npm run check:engine
+
+      - name: le générateur de plan
+        run: npm run check:plan
+
+      - name: l'appariement Strava et les chiffres du coach
+        run: npm run check:strava
+
+      - name: le schéma et le classeur
+        run: |
+          npm run db:migrate
+          npm run db:seed
+          npm run check:db
+
+      - name: l'API par HTTP
+        # check:api sert la PWA construite : il lui faut un dist/.
+        run: |
+          npm run build
+          npm run check:api

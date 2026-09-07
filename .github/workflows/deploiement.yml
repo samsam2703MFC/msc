@@ -1,0 +1,111 @@
+# Construit, envoie, migre, bascule.
+#
+# Les identifiants du serveur vivent dans les secrets du dépôt, jamais dans le
+# code ni dans une conversation. Rien ici n'a besoin d'être lu par un humain
+# pour fonctionner, et personne d'autre que GitHub ne voit la clé.
+#
+# Se déclenche à la main, ou sur une poussée vers main. Tant que rien n'est
+# poussé sur main, rien ne part.
+
+name: déploiement
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploiement
+  cancel-in-progress: false
+
+jobs:
+  deployer:
+    runs-on: ubuntu-latest
+    # Un environnement GitHub permet d'exiger une approbation manuelle avant
+    # que le job ne démarre : Settings → Environments → production.
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: construire
+        run: |
+          npm ci
+          npm run build
+
+      - name: la clé
+        env:
+          CLE: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOTES: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          test -n "$CLE"   || { echo "secret DEPLOY_SSH_KEY manquant"; exit 1; }
+          test -n "$HOTES" || { echo "secret DEPLOY_KNOWN_HOSTS manquant"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$CLE" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # L'empreinte du serveur est vérifiée, elle n'est pas désactivée.
+          # StrictHostKeyChecking=no offrirait la clé de déploiement à qui
+          # sait se mettre sur le chemin du runner.
+          printf '%s\n' "$HOTES" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: envoyer
+        env:
+          HOTE: ${{ vars.DEPLOY_HOST }}
+          UTILISATEUR: ${{ vars.DEPLOY_USER }}
+          RACINE: ${{ vars.DEPLOY_PATH }}
+          PORT: ${{ vars.DEPLOY_PORT || '22' }}
+        run: |
+          test -n "$HOTE" || { echo "variable DEPLOY_HOST manquante"; exit 1; }
+          CIBLE="$RACINE/releases/${{ github.sha }}"
+          SSH="ssh -i ~/.ssh/id_deploy -p $PORT"
+          $SSH "$UTILISATEUR@$HOTE" "mkdir -p '$CIBLE' '$RACINE/var'"
+          # Ce qui part : le build, le serveur, le schéma, les scripts. Pas src/,
+          # pas les tests, pas le classeur — le serveur n'en a pas l'usage.
+          rsync -az --delete -e "$SSH" \
+            dist/ "$UTILISATEUR@$HOTE:$CIBLE/dist/"
+          rsync -az --delete -e "$SSH" \
+            server/ "$UTILISATEUR@$HOTE:$CIBLE/server/"
+          rsync -az --delete -e "$SSH" \
+            db/ "$UTILISATEUR@$HOTE:$CIBLE/db/"
+          rsync -az --delete -e "$SSH" \
+            scripts/ "$UTILISATEUR@$HOTE:$CIBLE/scripts/"
+          rsync -az -e "$SSH" \
+            package.json package-lock.json "$UTILISATEUR@$HOTE:$CIBLE/"
+          rsync -az -e "$SSH" \
+            deploy/liberer.sh "$UTILISATEUR@$HOTE:$CIBLE/"
+
+      - name: migrer et basculer
+        env:
+          HOTE: ${{ vars.DEPLOY_HOST }}
+          UTILISATEUR: ${{ vars.DEPLOY_USER }}
+          RACINE: ${{ vars.DEPLOY_PATH }}
+          PORT: ${{ vars.DEPLOY_PORT || '22' }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "$PORT" "$UTILISATEUR@$HOTE" \
+            "bash '$RACINE/releases/${{ github.sha }}/liberer.sh' '$RACINE' '${{ github.sha }}'"
+
+      - name: vérifier
+        env:
+          URL: ${{ vars.DEPLOY_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "variable DEPLOY_URL non définie — pas de vérification en ligne"
+            exit 0
+          fi
+          for i in $(seq 1 20); do
+            REPONSE=$(curl -fsS --max-time 10 "$URL/api/sante" 2>/dev/null) && break
+            sleep 3
+          done
+          test -n "${REPONSE:-}" || { echo "le serveur ne répond pas après le déploiement"; exit 1; }
+          echo "$REPONSE"
+          # `ok` seul ne dit pas que tout est configuré : les trois autres
+          # drapeaux disent ce qui manque encore.
+          echo "$REPONSE" | grep -q '"ok":true' || exit 1
+          echo "$REPONSE" | grep -q '"scellement":true' \
+            || echo "⚠ MSC_SECRET_KEY absente sur le serveur : ni sessions ni jetons Strava"
