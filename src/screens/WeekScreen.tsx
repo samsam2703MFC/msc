@@ -21,7 +21,14 @@ export function WeekScreen({ app }: { app: App }) {
   const ui = db.ui(lang);
   const fr = lang === 'fr';
 
-  const faites = new Set(db.select('msc_activity').map((a) => a.session_id));
+  /* An activity that matched no session — a ride on a rest day — is not a
+     session done, so it is not in here. */
+  const faites = new Set(
+    db
+      .select('msc_activity')
+      .map((a) => a.session_id)
+      .filter((id): id is number => id !== undefined),
+  );
   const bilan = db.bilanSemaine(app.semaine);
   const jours = db.sessionsDeSemaine(app.semaine);
   const bloc = db.blocDeSemaine(app.semaine);

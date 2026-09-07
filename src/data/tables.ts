@@ -178,11 +178,21 @@ export const msc_statut: MscStatut[] = [
 
 
 export const msc_source: MscSource[] = [
-  { code: 'strava', etat: 'off', canal: 'MCP',
+  { code: 'strava', etat: 'off', canal: 'OAuth',
+    titre_absent: { fr: 'Take my data', pl: 'Take my data' },
+    sous_absent: { fr: 'Strava non configuré sur le serveur', pl: 'Strava nieskonfigurowana na serwerze' },
     titre_off: { fr: 'Take my data', pl: 'Take my data' },
-    sous_off: { fr: 'Connecter Strava · connecteur MCP', pl: 'Połącz Strava · konektor MCP' },
+    sous_off: { fr: 'Connecter Strava · OAuth', pl: 'Połącz Strava · OAuth' },
+    titre_liaison: { fr: 'Autorisation Strava…', pl: 'Autoryzacja Strava…' },
+    sous_liaison: { fr: 'Termine la connexion dans la fenêtre Strava', pl: 'Dokończ połączenie w oknie Strava' },
     titre_on: { fr: 'Strava connecté', pl: 'Strava połączona' },
-    sous_on: { fr: 'Dernière synchro il y a 4 min · webhook actif', pl: 'Ostatnia synchronizacja 4 min temu · webhook aktywny' } },
+    sous_on: { fr: 'Dernière synchro', pl: 'Ostatnia synchronizacja' },
+    sous_synchro: { fr: 'Synchronisation…', pl: 'Synchronizacja…' },
+    jamais: { fr: 'jamais synchronisé', pl: 'nigdy nie synchronizowano' },
+    webhook_on: { fr: 'webhook actif', pl: 'webhook aktywny' },
+    webhook_off: { fr: 'synchro manuelle', pl: 'synchronizacja ręczna' },
+    orphelines: { fr: 'activités hors plan', pl: 'aktywności poza planem' },
+    delier: { fr: 'Délier', pl: 'Odłącz' } },
 ];
 
 export const msc_ui: Record<Lang, MscUiStrings> = {

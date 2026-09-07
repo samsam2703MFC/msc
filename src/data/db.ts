@@ -36,9 +36,29 @@ import {
   msc_type,
   msc_ui,
 } from './tables';
-import type { Lang, MscType, MscUiStrings, TypeCode } from './types';
+import type { Lang, MscActivity, MscType, MscUiStrings, TypeCode } from './types';
 
 export * from './engine';
+
+/* The one table a live integration writes into. Every other table here is read
+   from end to end — seeded, imported or computed — but activities are what the
+   athlete actually did, and Strava replaces them wholesale on every sync. So
+   the accessors close over a mutable array rather than the imported seed, and
+   `setActivites` is the seam the sync writes through.
+
+   Unlinking puts the seeded example back, because a prototype with no Strava
+   account should still have something to show. */
+const activites: MscActivity[] = [...msc_activity];
+
+/** Replaces the activity table with what Strava returned. */
+export function setActivites(rows: MscActivity[]): void {
+  activites.splice(0, activites.length, ...rows);
+}
+
+/** Back to the seeded example — what unlinking Strava leaves behind. */
+export function reinitialiserActivites(): void {
+  activites.splice(0, activites.length, ...msc_activity);
+}
 
 /* Key order is the order the tables are listed in the settings sheet. */
 const arrayTables = {
@@ -51,7 +71,7 @@ const arrayTables = {
   msc_week,
   msc_regle,
   msc_rpe,
-  msc_activity,
+  msc_activity: activites,
   msc_journal,
   msc_daily,
   msc_metric,

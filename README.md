@@ -22,7 +22,13 @@ npm run server     # the plan server — needs ANTHROPIC_API_KEY, see .env.examp
 
 npm run check:engine   # paces against the workbook, cell for cell
 npm run check:plan     # the generator against its own rules
+npm run check:strava   # the session ↔ activity matcher against the real plan
+
+npm run strava:webhook -- etat      # the push subscription, see « Strava »
 ```
+
+`npm run server` and `npm run strava:webhook` read `.env` if there is one, so
+copying `.env.example` is enough — no export needed.
 
 On a desktop viewport the app renders inside an iPhone frame, the way the design
 presents it. Below 720×940 the frame drops away and the app fills the screen, so
@@ -155,6 +161,115 @@ can assert it.
 > 401 with what to do about it, and the rest of the app is unaffected: the plan
 > still generates, because generating it needs nothing.
 
+## Linking Strava
+
+The plan knows what the athlete was *supposed* to do. Strava knows what they
+actually did. `server/strava.mjs` and `src/data/strava.ts` join the two.
+
+It is a direct OAuth integration rather than the MCP connector the prototype
+mentioned, for a plain reason: an MCP connector is something *Claude* uses to
+reach a service. This is the *app* needing the athlete's own activities, on its
+own screens, with no model in the loop — so it needs its own authorisation, and
+Strava's is OAuth 2.
+
+**The seam is the same one the methodology service draws.** The server does the
+half that needs a secret and a network; the app does the half that needs the
+plan:
+
+```
+server/strava.mjs     OAuth, the token and its refresh, the fetch, the webhook
+                      → returns aggregates. Knows nothing about blocks, zones,
+                        sessions or paces
+src/data/strava.ts    which session an activity was, and what that makes of it
+                      → the plan lives in the browser, so the matching does too
+```
+
+That division is why there is only ever one copy of the plan. It is also why
+the token never appears in anything the browser can read: `/api/strava/etat`
+returns the athlete's first name and when the last sync ran, and nothing else.
+
+### The three moving parts
+
+1. **The link.** The settings sheet asks the server for an authorisation URL
+   and opens it. Strava's consent screen is on Strava's origin, so the popup is
+   opaque to us — the app watches `/api/strava/etat` for the token appearing
+   instead of trying to read the window. Scope is `read,activity:read_all`:
+   private activities included, because a training log with the private
+   sessions missing is a training log with holes in it. Nothing is ever
+   written back to Strava.
+2. **The sync.** One pass over the plan's whole span — about 250 activities
+   across thirty weeks, which is three requests against a quota of a hundred.
+   A rolling window would cost more round-trips than it saves. Laps are a
+   separate request each, so they are fetched only for the quality runs of the
+   week on screen.
+3. **The webhook.** Strava pushes an event when an activity lands. It must be
+   answered in under two seconds, so the server records that something happened
+   and does nothing else; the app asks its own server once a minute — a local
+   request, costing no quota — and only then spends a Strava one. An athlete
+   revoking access from Strava's side arrives the same way, and the server
+   drops the token on the spot.
+
+   Strava does not sign its deliveries, so anyone who learns the callback URL
+   can post to it. An event that does not name the athlete whose token we hold
+   is dropped: recording it would spend their quota on a sync, and honouring
+   its revocation flag would throw away a token that is still good.
+
+### Matching an activity to a session
+
+`apparier()` is the only part of this with a right answer, and `npm run
+check:strava` holds it to the real plan:
+
+| | |
+|---|---|
+| same day, always | in the athlete's own timezone (`start_date_local`) — a 22:00 run in Paris is not tomorrow's session |
+| never across days | a Sunday long run moved to Monday is a session missed *and* a session done; the Coach screen has rules for exactly that, and guessing here would hide the gap |
+| best fit by duration | a 20-minute jog in the morning and 68 minutes of threshold in the evening: the threshold session goes to the threshold run, not to whichever came first |
+| each session once | whatever is left over is *orpheline* — shown as a count in the settings sheet, not swallowed |
+| paces only on runs | a swim carrying "4:56/km" would be a lie |
+
+The per-interval splits of a quality session are a heuristic, and named as one
+in the code: the laps of a structured session fall into two groups separated by
+a wide gap in pace, so the widest gap in the sorted lap paces is the split.
+Requiring that gap to be real (15 s/km) is what stops a steady run from
+reporting its faster half as intervals. A session run without pressing lap
+gives nothing back — which is the honest answer rather than a fabricated one.
+
+### Setting it up
+
+1. Create an application at <https://www.strava.com/settings/api>. Set its
+   Authorization Callback Domain to `localhost` for development. Since June
+   2026 the standard developer tier requires an active Strava subscription on
+   the account that owns the application.
+2. Copy `.env.example` to `.env` and fill in `STRAVA_CLIENT_ID`,
+   `STRAVA_CLIENT_SECRET` and a `STRAVA_VERIFY_TOKEN` you invent.
+3. `npm run server` alongside `npm run dev`, then **Take my data** in the
+   settings sheet.
+
+The webhook is the one part that cannot work from a laptop: Strava validates
+the callback URL synchronously, from the internet, when the subscription is
+created. So it is a deployment step rather than a startup one, and it lives in
+its own script:
+
+```sh
+npm run strava:webhook -- abonner https://exemple.tld/api/strava/webhook
+npm run strava:webhook -- etat
+npm run strava:webhook -- desabonner 123456
+```
+
+Without a subscription everything still works — the settings card says *synchro
+manuelle* instead of *webhook actif*, and syncing is a tap.
+
+> **The client secret never reaches the browser**, for the same reason the
+> Anthropic key does not. The athlete's tokens live in `.strava.json` (0600,
+> gitignored) so a server restart does not cost them another trip through the
+> consent screen. Without `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET` the
+> server answers 501 with what to do about it, and the rest of the app is
+> unaffected.
+
+Strava answers every request with what is left of the quota, and the server
+reads it: it stops before a 429 rather than after one, and the numbers are on
+`/api/strava/etat`.
+
 ## Reference data
 
 `reference/Plan30semainessemi10kmhyroxnatation.xlsx` is the source of truth and
@@ -175,7 +290,8 @@ The four races are in `msc_objectif`: semi 22/11/2026 (1h45–1h52), 10 km
 
 | Filled how | Tables |
 |---|---|
-| by the Strava webhook | `msc_activity`, `msc_daily` |
+| by Strava, for real | `msc_activity` — synced on link, on demand, and on the webhook |
+| still to come from a wearable | `msc_daily` (resting HR; Strava does not carry it) |
 | computed by the engine | paces, per-session and per-week load, week totals, session status |
 | computed on the backend | `msc_metric` |
 | returned by the Anthropic API | `msc_analyse`, `msc_adaptation`, `msc_ajustement` |
@@ -188,17 +304,23 @@ settings sheet carries a date control so you can walk the thirty weeks.
 
 ## What is simulated
 
-The design is a clickable prototype, and three things in it stand in for
+The design is a clickable prototype, and two things in it still stand in for
 integrations that do not exist yet. They behave exactly as designed — the
 buttons work, the states change — but nothing leaves the device:
 
 - **Analyser avec Claude** and **Recalculer le plan** resolve on a timer and
   read their results out of `msc_analyse` / `msc_ecart`. The Anthropic API call
   goes where those timers are, in `src/state/useApp.ts`.
-- **Take my data** toggles the Strava source between connected and not. The MCP
-  connector goes behind that toggle.
 - The two chat bars (Coach, and the one on each session) render but have no send
   handler yet.
+
+**Take my data** is no longer one of them — see « Linking Strava » above. The
+card has six states now instead of a boolean, because a boolean could only say
+"connected" and mean nothing by it. Unlinking puts the seeded example activities
+back, so the prototype still has something to show without a Strava account.
+
+`msc_daily` — resting heart rate, which two adjustment rules watch — stays
+seeded: Strava does not carry it. It needs the wearable, not the platform.
 
 The seeded `msc_analyse` / `msc_adaptation` / `msc_ajustement` rows are an
 example of what the API writes back. They are anchored on session 1052 — the
@@ -215,9 +337,17 @@ The methodology call has been written against the documented API surface but not
 executed end to end here — this environment has no Anthropic credential, so the
 401 path is tested and the success path is not.
 
+The same caveat applies to Strava, and to the same extent. There is no Strava
+application behind this checkout, so what has actually been exercised is every
+route the server exposes (health, state, the authorisation URL, the webhook
+handshake with a good and a bad verify token, an event POST, and the 409 / 501 /
+400 paths) and the matcher, against the real plan, in `check:strava`. What has
+not is the round-trip through Strava's own consent screen and the shape of a
+live activity payload.
+
 ## Deviations from the prototype
 
-Four places where the prototype's behaviour was an artefact of the design medium
+Five places where the prototype's behaviour was an artefact of the design medium
 rather than the intent:
 
 1. **Sheets no longer close on any click.** In the prototype a click anywhere in
@@ -230,6 +360,10 @@ rather than the intent:
    and focus rings, rather than divs with click handlers.
 4. **`circle-help` is aliased to `circle-question-mark`** — Lucide renamed the
    glyph after the design was made. Same icon.
+5. **The Strava source is OAuth, not an MCP connector.** The prototype labelled
+   the channel `MCP`, which is how *Claude* would reach Strava. The app reaching
+   Strava on its own screens, with no model in the loop, is a different problem
+   and takes its own authorisation.
 
 The prototype's `msc_zone` also had the block-A threshold pace at 5:12, which is
 in fact the 10 km reference pace; the workbook puts the threshold at 5:22. The

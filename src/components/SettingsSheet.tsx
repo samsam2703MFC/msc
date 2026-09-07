@@ -17,8 +17,6 @@ const LANGS: Lang[] = ['fr', 'pl'];
 export function SettingsSheet({ app }: { app: App }) {
   const lang = app.lang;
   const ui = db.ui(lang);
-  const src = db.mustOne('msc_source', (r) => r.code === 'strava');
-  const on = app.stravaOn;
 
   return (
     <Sheet onClose={app.closeSettings} zIndex={90} label={SETTINGS_TITLE[lang]}>
@@ -36,59 +34,7 @@ export function SettingsSheet({ app }: { app: App }) {
         </div>
       </div>
 
-      {/* Take my data — Strava through the MCP connector */}
-      <button
-        type="button"
-        onClick={app.toggleStrava}
-        aria-pressed={on}
-        style={{
-          borderRadius: 12,
-          background: on ? C.accentSoft : C.surface,
-          border: `1px solid ${on ? C.accent : C.border}`,
-          padding: 14,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 9,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: `1px solid ${on ? C.accent : C.border}`,
-            color: on ? C.accentDeep : C.negative,
-            flexShrink: 0,
-          }}
-        >
-          <Icon name={on ? 'link' : 'download'} size={18} />
-        </div>
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-            textAlign: 'left',
-          }}
-        >
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>
-            {(on ? src.titre_on : src.titre_off)[lang]}
-          </div>
-          <div style={{ fontSize: 11, color: C.inkSecondary }}>
-            {(on ? src.sous_on : src.sous_off)[lang]}
-          </div>
-        </div>
-        <Icon
-          name={on ? 'refresh-cw' : 'chevron-right'}
-          size={18}
-          color={on ? C.accentDeep : C.negative}
-        />
-      </button>
+      <StravaCard app={app} />
 
       {/* FR / PL */}
       <div
@@ -270,4 +216,188 @@ export function SettingsSheet({ app }: { app: App }) {
       <SheetCloseButton label={ui.modalClose} onClick={app.closeSettings} />
     </Sheet>
   );
+}
+
+
+/* ------------------------------------------------------------------ Strava */
+
+/* Six states, and the card has to be honest about which one it is in. The
+   prototype had two — a boolean pretending to be a connection — and "connected"
+   there meant nothing had happened. Here it means the server holds a token. */
+function StravaCard({ app }: { app: App }) {
+  const lang = app.lang;
+  const src = db.mustOne('msc_source', (r) => r.code === 'strava');
+  const etat = app.strava;
+  const lie = app.stravaOn;
+  const occupe = app.stravaJob !== 'idle';
+
+  const vue = (() => {
+    if (!etat) {
+      /* The plan server is not answering. Nothing can be said about Strava. */
+      return {
+        titre: src.titre_off[lang],
+        sous: app.stravaErreur ?? '…',
+        icone: 'download' as const,
+        action: undefined,
+      };
+    }
+    if (!etat.configure) {
+      return {
+        titre: src.titre_absent[lang],
+        sous: src.sous_absent[lang],
+        icone: 'triangle-alert' as const,
+        action: undefined,
+      };
+    }
+    if (app.stravaJob === 'liaison') {
+      return {
+        titre: src.titre_liaison[lang],
+        sous: src.sous_liaison[lang],
+        icone: 'loader' as const,
+        action: undefined,
+      };
+    }
+    if (!lie) {
+      return {
+        titre: src.titre_off[lang],
+        sous: src.sous_off[lang],
+        icone: 'download' as const,
+        action: app.lierStrava,
+      };
+    }
+    if (app.stravaJob === 'synchro') {
+      return {
+        titre: src.titre_on[lang],
+        sous: src.sous_synchro[lang],
+        icone: 'loader' as const,
+        action: undefined,
+      };
+    }
+    /* Linked and idle: when it last ran, and whether it will run by itself. */
+    const quand = etat.derniere_synchro
+      ? `${src.sous_on[lang]} ${ilYA(etat.derniere_synchro, lang)}`
+      : src.jamais[lang];
+    return {
+      titre: etat.athlete?.prenom
+        ? `${src.titre_on[lang]} · ${etat.athlete.prenom}`
+        : src.titre_on[lang],
+      sous: `${quand} · ${(etat.webhook ? src.webhook_on : src.webhook_off)[lang]}`,
+      icone: 'refresh-cw' as const,
+      action: app.synchroniser,
+    };
+  })();
+
+  const teinte = lie ? C.accentDeep : etat && !etat.configure ? C.warning : C.negative;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button
+        type="button"
+        onClick={vue.action}
+        disabled={!vue.action}
+        aria-pressed={lie}
+        style={{
+          borderRadius: 12,
+          background: lie ? C.accentSoft : C.surface,
+          border: `1px solid ${lie ? C.accent : C.border}`,
+          padding: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          cursor: vue.action ? 'pointer' : 'default',
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 9,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: `1px solid ${lie ? C.accent : C.border}`,
+            color: teinte,
+            flexShrink: 0,
+          }}
+        >
+          <Icon name={lie && !occupe ? 'link' : vue.icone} size={18} />
+        </div>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            textAlign: 'left',
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{vue.titre}</div>
+          <div style={{ fontSize: 11, color: C.inkSecondary }}>{vue.sous}</div>
+        </div>
+        {vue.action ? <Icon name={vue.icone} size={18} color={teinte} /> : null}
+      </button>
+
+      {/* An error the card itself could not carry — the sync failed, the quota
+          ran out — rather than a state the card is in. */}
+      {etat && app.stravaErreur ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            padding: '8px 10px',
+            borderRadius: R.md,
+            background: C.warningBg,
+            color: C.warning,
+            fontSize: 11,
+            lineHeight: 1.4,
+          }}
+        >
+          <Icon name="triangle-alert" size={14} />
+          <span>{app.stravaErreur}</span>
+        </div>
+      ) : null}
+
+      {lie ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 2 }}>
+          {/* Activities that matched no session. Worth showing rather than
+              swallowing: they are either a sport the plan does not track, or a
+              session done on the wrong day. */}
+          {app.stravaOrphelines.length > 0 ? (
+            <Mono size={10} color={C.inkQuiet}>
+              {`${app.stravaOrphelines.length} ${src.orphelines[lang]}`}
+            </Mono>
+          ) : null}
+          <button
+            type="button"
+            onClick={app.delierStrava}
+            style={{
+              marginLeft: 'auto',
+              padding: '4px 10px',
+              borderRadius: R.full,
+              border: `1px solid ${C.border}`,
+              background: C.surface,
+              color: C.inkSecondary,
+              fontSize: 11,
+            }}
+          >
+            {src.delier[lang]}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* Intl does the two languages rather than a table of our own — "il y a 4 min"
+   and "4 min temu" are the same call. */
+function ilYA(iso: string, lang: Lang): string {
+  const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto', style: 'short' });
+  const s = Math.round((Date.parse(iso) - Date.now()) / 1000);
+  const abs = Math.abs(s);
+  if (abs < 60) return rtf.format(Math.round(s), 'second');
+  if (abs < 3600) return rtf.format(Math.round(s / 60), 'minute');
+  if (abs < 86_400) return rtf.format(Math.round(s / 3600), 'hour');
+  return rtf.format(Math.round(s / 86_400), 'day');
 }

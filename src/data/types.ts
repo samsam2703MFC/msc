@@ -76,7 +76,8 @@ export interface MscSessionStep {
 /** What Strava returns — aggregates only, never the raw streams. */
 export interface MscActivity {
   id_strava: number;
-  session_id: number;
+  /** The session this activity was. Absent when it matched nothing planned. */
+  session_id?: number;
   date: string;
   sport: string;
   duree_min: number;
@@ -206,14 +207,31 @@ export interface MscSessionStatut {
   statut: StatutCode;
 }
 
+/** A data source and every state its card can be in.
+
+    The strings stay in the database like every other string in the app; only
+    the two figures the card interpolates — how long ago the last sync was, and
+    how many activities matched nothing — are computed at render. */
 export interface MscSource {
   code: string;
   etat: string;
   canal: string;
+  /** The server has no client id or secret: nothing can be linked yet. */
+  titre_absent: Localized;
+  sous_absent: Localized;
   titre_off: Localized;
   sous_off: Localized;
+  /** The athlete is away on the provider's consent screen. */
+  titre_liaison: Localized;
+  sous_liaison: Localized;
   titre_on: Localized;
   sous_on: Localized;
+  sous_synchro: Localized;
+  jamais: Localized;
+  webhook_on: Localized;
+  webhook_off: Localized;
+  orphelines: Localized;
+  delier: Localized;
 }
 
 /** The real life of an athlete: reasons declared, coach's answer. */
