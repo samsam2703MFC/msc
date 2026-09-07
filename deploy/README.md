@@ -48,9 +48,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 Un script, pas un bloc à coller. En root, sur le serveur :
 
 ```sh
-git clone --depth 1 https://github.com/samsam2703MFC/msc /tmp/msc
+git clone --depth 1 -b main https://github.com/samsam2703MFC/msc /tmp/msc
 bash /tmp/msc/deploy/preparer.sh
 ```
+
+Le `-b main` n'est pas décoratif : `git clone` prend la branche **par défaut** du
+dépôt, qui n'est pas forcément celle qu'on déploie. Tant que le défaut n'est pas
+`main` (Settings → Branches), un clone sans `-b` rend une version antérieure —
+sans message d'erreur, et le script manque simplement à l'appel.
 
 Il est idempotent : relancé, il ne régénère ni la clé de déploiement, ni le
 `.env`, ni le mot de passe de la base — ce qui existe est laissé et signalé. Il
