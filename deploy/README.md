@@ -45,6 +45,25 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ## Le serveur, une fois
 
+Un script, pas un bloc à coller. En root, sur le serveur :
+
+```sh
+git clone --depth 1 https://github.com/samsam2703MFC/msc /tmp/msc
+bash /tmp/msc/deploy/preparer.sh
+```
+
+Il est idempotent : relancé, il ne régénère ni la clé de déploiement, ni le
+`.env`, ni le mot de passe de la base — ce qui existe est laissé et signalé. Il
+finit en disant les trois choses qui restent à la main, dont la seule à copier :
+`base64 -w0 /srv/msc/.ssh/msc_deploy`, en une ligne, dans `DEPLOY_SSH_KEY`.
+
+**Pourquoi un fichier.** Quarante lignes collées dans un terminal se font manger
+dès que la session bronche, et si l'invite n'est pas un shell mais `login`,
+elles partent en tentatives de connexion — mot de passe compris, échoué en clair
+à l'écran. C'est arrivé. Un fichier ne se trompe pas d'interlocuteur.
+
+Le détail de ce qu'il fait, si tu préfères à la main :
+
 ```sh
 # 1 · un utilisateur qui n'est pas root, et l'arborescence
 sudo adduser --system --group --home /srv/msc msc
