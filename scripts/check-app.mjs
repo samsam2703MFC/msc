@@ -57,10 +57,13 @@ try {
   const page = await nav.newPage({ viewport: { width: 420, height: 900 } });
 
   const erreurs = [];
+  /* Pendant la coupure volontaire, les échecs réseau sont ce qu'on teste. */
+  let coupe = false;
   /* Le texte d'une erreur de console ne porte pas l'URL — « Failed to load
      resource » et rien de plus. On écoute donc les requêtes, où elle est. */
   page.on('pageerror', (e) => erreurs.push(`exception : ${e}`));
   page.on('requestfailed', (r) => {
+    if (coupe) return;
     /* Les polices viennent d'un CDN : une machine sans sortie internet n'y
        accède pas, et ce n'est pas un défaut de l'application. */
     if (/fonts\.(googleapis|gstatic)\.com/.test(r.url())) return;
@@ -150,6 +153,47 @@ try {
   await page.waitForTimeout(600);
   check("l'écart de la semaine est calculé",
     /réalisation|Semaine tenue|Écart détecté/i.test(await page.locator('body').innerText()));
+
+  /* Le vrai test du hors-ligne : couper, relire, écrire, remettre, vérifier que
+     ce qui a été tapé est arrivé. Sans ça, « ça marche hors ligne » n'est
+     qu'une intention. */
+  console.log('\n=== sans réseau ===');
+  coupe = true;
+  await page.context().setOffline(true);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('nav', { timeout: 20000 });
+  const horsLigne = await page.locator('body').innerText();
+  check("l'application démarre sur la copie locale", await page.locator('nav').isVisible());
+  check('et elle le dit', /Hors ligne/.test(horsLigne),
+    horsLigne.split('\n').slice(0, 2).join(' · '));
+
+  await page.locator('nav button').first().click();
+  await page.waitForTimeout(500);
+  check('le plan reste lisible', /S\d+/.test(await page.locator('body').innerText()));
+
+  /* Une note tapée sans réseau doit attendre, pas disparaître. */
+  const note = `sans réseau ${Date.now()}`;
+  const champNote = page.locator('textarea, input[placeholder*="Sommeil"]').first();
+  await champNote.fill(note);
+  await champNote.blur();
+  await page.waitForTimeout(800);
+  check('ce qui est tapé part en file d’attente',
+    /en attente d’envoi/.test(await page.locator('body').innerText()),
+    (await page.locator('body').innerText()).split('\n')[0]);
+
+  console.log('\n=== le réseau revient ===');
+  await page.context().setOffline(false);
+  coupe = false;
+  /* L'événement « online » ne part pas tout seul quand c'est Playwright qui
+     rebranche : on le déclenche comme le ferait le navigateur. */
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(2500);
+  check('la file se vide', !/en attente d’envoi/.test(await page.locator('body').innerText()));
+
+  const [journal] = await bd().execute(
+    'SELECT note FROM msc_journal WHERE athlete_id = 1 AND note = ?', [note],
+  );
+  check('et la note est bien arrivée en base', journal.length === 1, note);
 
   console.log('\n=== la déconnexion ===');
   await page.click('[aria-label=Paramètres]');

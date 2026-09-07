@@ -109,6 +109,36 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+          {/* Hors réseau, l'application lit sa copie locale. Le dire vaut mieux
+              que laisser croire que les chiffres viennent d'arriver. */}
+          {(!app.enLigne || app.enAttente > 0) && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 10,
+                color: app.enLigne ? C.accentDeep : C.warning,
+              }}
+            >
+              <Icon name={app.enLigne ? 'refresh-cw' : 'cloud-off'} size={12} />
+              {/* Les deux ensemble, jamais l'un à la place de l'autre : hors
+                  ligne avec trois choses en attente, cacher le compte donnerait
+                  l'impression qu'elles se sont perdues. */}
+              {[
+                app.enLigne
+                  ? null
+                  : app.lang === 'fr'
+                    ? 'Hors ligne · copie locale'
+                    : 'Offline · kopia lokalna',
+                app.enAttente > 0
+                  ? `${app.enAttente} ${app.lang === 'fr' ? 'en attente d’envoi' : 'czeka na wysłanie'}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </div>
+          )}
           <div
             style={{
               fontSize: 11,

@@ -714,6 +714,51 @@ rather than guessed at.
 Photos are served from `/api/photo/:id`, authenticated and athlete-scoped:
 `check:api` asserts that one does not open without the cookie.
 
+## Offline
+
+The app is an installed PWA, so it has to be readable in a tunnel and it has to
+keep what the athlete types when there is no signal. Two mechanisms, and they do
+not have the same status.
+
+**The snapshot is a copy, not a source.** It lives in IndexedDB, is replaced by
+every successful reload, and is erased on logout — one athlete's data must not
+stay readable by the next person to log in on the device. On boot the network
+comes first; only if it fails does the app fall back to the copy, and the header
+says « Hors ligne · copie locale » rather than letting stale figures pass for
+fresh ones.
+
+**The outbox is not a copy.** It is what the athlete typed and the server has not
+received, and it does not get lost. Each write carries the `mutation_id` the
+client draws **before sending**, so replaying it is safe. A network failure
+queues; a *server* refusal does not — a 400 will not become a 200 by being sent
+again, and a queue that retries an impossible write forever is a queue that
+retries nothing.
+
+`navigateFallback` sends navigations to the cached `index.html`, with `/api/`
+excluded: the service worker has no business caching the API, since the app
+keeps its own copy where it can read it back and erase it.
+
+### Two defects the browser check found
+
+**The pending count was hidden while offline.** The indicator showed either
+"offline" or "n waiting", never both — so typing three things with no signal
+showed nothing about them, which reads as having lost them.
+
+**`mutation()` was not atomic**, and that one matters. It did a `SELECT` and
+then an `INSERT`: two concurrent requests with the same id both got past the
+`SELECT`, both did the work, and the second failed on the primary key with a
+500 — exactly what the table exists to prevent. The claim is now the *first*
+write of the transaction, so a second request blocks on the row lock until the
+first commits, then reads its response. `check:api` fires two identical
+mutations in parallel and asserts one row in the database.
+
+The client also serialises replays: `online` and a session opening can land
+together, and the server dedupes them, but making it do the work for nothing is
+not a reason to let it happen.
+
+`check:app` cuts the network for real — `setOffline(true)` — reloads, reads the
+plan, types a note, restores the network and asserts the note reached MySQL.
+
 ## Reference data
 
 `reference/Plan30semainessemi10kmhyroxnatation.xlsx` is the source of truth and

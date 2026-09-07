@@ -12,6 +12,7 @@ import * as db from '../data/db';
 import * as strava from '../data/strava';
 import * as coach from '../data/analyse';
 import * as api from '../data/api';
+import * as cache from '../data/cache';
 import type { Lang, ScreenKey, TypeCode } from '../data/types';
 
 const LANG_KEY = 'msc.lang';
@@ -175,24 +176,87 @@ export function useApp() {
   /* Recharger la base. C'est le geste central du basculement : le serveur est
      la vérité, et tout ce qui écrit se termine par un rechargement plutôt que
      par une écriture parallèle en mémoire. Deux copies divergent toujours. */
-  const recharger = useCallback(async (athleteId?: number | null) => {
-    const instantane = await api.instantane(athleteId);
+  const [enLigne, setEnLigne] = useState(
+    () => typeof navigator === 'undefined' || navigator.onLine,
+  );
+  const [enAttente, setEnAttente] = useState(0);
+
+  const appliquerInstantane = useCallback((instantane: db.Instantane) => {
     db.charger(instantane);
-    setDate((actuelle) => {
-      const position = db.positionDuPlan(actuelle || db.aujourdhuiISO());
-      return position.date;
-    });
+    setDate((actuelle) => db.positionDuPlan(actuelle || db.aujourdhuiISO()).date);
     setVersion((v) => v + 1);
-    return instantane;
   }, []);
+
+  /* Le serveur d'abord, le cache si le réseau manque.
+     La copie locale n'est jamais une source : elle sert à relire son plan dans
+     un tunnel, et le premier rechargement réussi la remplace. */
+  const recharger = useCallback(
+    async (athleteId?: number | null) => {
+      try {
+        const instantane = await api.instantane(athleteId);
+        appliquerInstantane(instantane);
+        setEnLigne(true);
+        const id = instantane.athlete_id ?? athleteId ?? null;
+        if (id) void cache.ecrireInstantane(id, instantane);
+        return instantane;
+      } catch (e) {
+        const id = athleteId ?? db.athleteId;
+        if (!api.estReseau(e) || !id) throw e;
+        const garde = await cache.lireInstantane(id);
+        if (!garde) throw e;
+        appliquerInstantane(garde);
+        setEnLigne(false);
+        return garde;
+      }
+    },
+    [appliquerInstantane],
+  );
+
+  /* Ce que l'athlète a tapé sans réseau part dès qu'il y en a. Le serveur
+     dédoublonne sur l'identifiant de mutation, donc rejouer est sans risque —
+     c'est ce qui permet de le faire sans compter les tentatives. */
+  /* Un seul rejeu à la fois. L'événement « online » et l'ouverture de session
+     peuvent tomber ensemble ; deux rejeux en parallèle enverraient deux fois la
+     même mutation. Le serveur le supporte — il dédoublonne — mais lui faire
+     faire le travail pour rien n'est pas une raison de le laisser arriver. */
+  const rejeuEnCours = useRef(false);
+  const vider = useCallback(async () => {
+    if (rejeuEnCours.current) return;
+    rejeuEnCours.current = true;
+    try {
+      const { envoyees, reste } = await api.rejouerFile();
+      if (!monte.current) return;
+      setEnAttente(reste);
+      if (envoyees > 0) await recharger(db.athleteId);
+    } finally {
+      rejeuEnCours.current = false;
+    }
+  }, [recharger]);
+
+  useEffect(() => {
+    const revenu = () => {
+      setEnLigne(true);
+      void vider();
+    };
+    const parti = () => setEnLigne(false);
+    window.addEventListener('online', revenu);
+    window.addEventListener('offline', parti);
+    return () => {
+      window.removeEventListener('online', revenu);
+      window.removeEventListener('offline', parti);
+    };
+  }, [vider]);
 
   const ouvrir = useCallback(
     async (qui: api.Identite) => {
       setIdentite(qui);
+      void cache.ecrireIdentite(qui);
       await recharger(qui.athletes[0]?.id ?? null);
       setAmorce('pret');
+      /* Ce qui attendait d'une session précédente part maintenant. */
+      void vider();
     },
-    [recharger],
+    [recharger, vider],
   );
 
   /* Au démarrage : qui es-tu, puis ta base. Un 401 n'est pas une erreur, c'est
@@ -203,15 +267,29 @@ export function useApp() {
         await ouvrir(await api.moi());
       } catch (e) {
         if (!monte.current) return;
-        if (e instanceof api.ApiError && e.nonConnecte) setAmorce('connexion');
-        else {
-          setAmorceErreur(message(e));
-          setAmorce('erreur');
+        if (e instanceof api.ApiError && e.nonConnecte) {
+          setAmorce('connexion');
+          return;
         }
+        /* Sans réseau, on démarre sur la copie locale plutôt que sur un écran
+           d'erreur : c'est exactement la situation où l'athlète veut relire sa
+           séance — dans un tunnel, au fond d'une salle. */
+        if (api.estReseau(e)) {
+          const garde = await cache.dernierInstantane();
+          if (garde) {
+            appliquerInstantane(garde);
+            setIdentite((await cache.lireIdentite<api.Identite>()) ?? null);
+            setEnLigne(false);
+            setAmorce('pret');
+            return;
+          }
+        }
+        setAmorceErreur(message(e));
+        setAmorce('erreur');
       }
     })();
     /* Une fois, au montage. */
-  }, [ouvrir]);
+  }, [appliquerInstantane, ouvrir]);
 
   const seConnecter = useCallback(
     async (email: string, motDePasse: string) => {
@@ -240,6 +318,10 @@ export function useApp() {
     /* Vider les tables, et pas seulement l'écran : les données d'un athlète ne
        doivent pas rester lisibles par le suivant qui se connecte ici. */
     db.vider();
+    /* La copie locale part avec : les données d'un athlète ne doivent pas
+       rester lisibles par le suivant qui se connecte sur cet appareil. La file
+       d'attente, elle, survit — elle appartient à celui qui l'a remplie. */
+    void cache.oublierInstantanes();
     stravaAmorce.current = false;
     brutes.current = [];
     details.current.clear();
@@ -444,12 +526,13 @@ export function useApp() {
     if (!db.chargee || db.droit !== 'ecriture') return;
     const session = db.sessionDuJour(date);
     try {
-      await api.ecrireJournal({
+      const r = await api.ecrireJournal({
         date,
         session_id: session?.id ?? null,
         rpe,
         note: note.trim() || undefined,
       });
+      if (api.estDiffere(r) && monte.current) setEnAttente((n) => n + 1);
     } catch (e) {
       if (monte.current) setAnaErreur(message(e));
     }
@@ -483,8 +566,9 @@ export function useApp() {
       setPhotoJob('envoi');
       setPhotoErreur(null);
       try {
-        await api.envoyerPhoto(fichier, date);
-        await recharger(db.athleteId);
+        const r = await api.envoyerPhoto(fichier, date);
+        if (api.estDiffere(r)) setEnAttente((n) => n + 1);
+        else await recharger(db.athleteId);
       } catch (e) {
         if (monte.current) setPhotoErreur(message(e));
       } finally {
@@ -498,8 +582,9 @@ export function useApp() {
     async (corps: { date: string; poids_kg?: number | null; fc_repos?: number | null; rejeter?: boolean }) => {
       setPhotoErreur(null);
       try {
-        await api.confirmerMesure(corps);
-        await recharger(db.athleteId);
+        const r = await api.confirmerMesure(corps);
+        if (api.estDiffere(r)) setEnAttente((n) => n + 1);
+        else await recharger(db.athleteId);
       } catch (e) {
         if (monte.current) setPhotoErreur(message(e));
       }
@@ -611,6 +696,8 @@ export function useApp() {
   return {
     /* l'amorçage */
     amorce,
+    enLigne,
+    enAttente,
     amorceErreur,
     identite,
     seConnecter,

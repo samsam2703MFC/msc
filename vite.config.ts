@@ -35,6 +35,13 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        /* Une PWA installée est ouverte sur une route, pas sur un fichier :
+           sans ce repli, /semaine hors réseau donne une page blanche. L'API en
+           est exclue — elle n'a rien à faire dans le cache du service worker,
+           l'application garde sa copie elle-même, dans IndexedDB, où elle peut
+           la relire et l'effacer à la déconnexion. */
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             // Archivo / Inter / JetBrains Mono come from the design system's CDN.

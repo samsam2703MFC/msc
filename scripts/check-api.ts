@@ -200,6 +200,35 @@ try {
   });
   check('la même mutation rejouée est reconnue', rejoue.corps.rejoue === true);
 
+  /* Deux rejeux en parallèle du même identifiant : c'est ce qu'une file
+     d'attente produit quand « online » et une relance manuelle tombent
+     ensemble. Le travail doit être fait une fois, pas deux. */
+  const jumelles = await Promise.all([
+    c.appel('/api/journal', {
+      method: 'POST',
+      body: JSON.stringify({
+        mutation_id: '00000000-0000-4000-8000-0000000dbeef',
+        date: '2026-10-21', rpe: 4, note: 'une seule fois',
+      }),
+    }),
+    c.appel('/api/journal', {
+      method: 'POST',
+      body: JSON.stringify({
+        mutation_id: '00000000-0000-4000-8000-0000000dbeef',
+        date: '2026-10-21', rpe: 4, note: 'une seule fois',
+      }),
+    }),
+  ]);
+  check('deux envois simultanés réussissent tous les deux',
+    jumelles.every((r) => r.statut === 200), jumelles.map((r) => r.statut).join(' '));
+  check('et un seul a fait le travail',
+    jumelles.filter((r) => r.corps.rejoue === true).length === 1,
+    JSON.stringify(jumelles.map((r) => r.corps)));
+  const [comptees] = (await bd().execute(
+    'SELECT COUNT(*) AS n FROM msc_journal WHERE athlete_id = 1 AND date = ?', ['2026-10-21'],
+  )) as any;
+  check('une seule ligne en base', comptees[0].n === 1, String(comptees[0].n));
+
   const apres = await c.appel('/api/db/instantane');
   const entree = apres.corps.msc_journal.find((j: any) => j.date === jour);
   check('elle apparaît dans l’instantané suivant', entree?.rpe_ressenti === 6, `RPE ${entree?.rpe_ressenti}`);
@@ -365,7 +394,7 @@ try {
   }
 } finally {
   serveur.kill('SIGTERM');
-  await bd().execute('DELETE FROM msc_journal WHERE date = ?', ['2026-10-20']);
+  await bd().execute('DELETE FROM msc_journal WHERE date IN (?, ?)', ['2026-10-20', '2026-10-21']);
   await bd().execute('DELETE FROM msc_mesure WHERE date = ?', ['2030-02-02']);
   /* Les photos que ce contrôle a envoyées, et rien d'autre : celles auxquelles
      plus aucune mesure ne renvoie. */
@@ -374,7 +403,9 @@ try {
        AND id NOT IN (SELECT photo_id FROM msc_mesure WHERE photo_id IS NOT NULL)`,
   );
   await bd().execute('DELETE FROM msc_mesure WHERE date = ?', ['2026-10-20']);
-  await bd().execute('DELETE FROM msc_mutation WHERE id = ?', ['00000000-0000-4000-8000-00000000cafe']);
+  await bd().execute('DELETE FROM msc_mutation WHERE id IN (?, ?)', [
+    '00000000-0000-4000-8000-00000000cafe', '00000000-0000-4000-8000-0000000dbeef',
+  ]);
   await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `autre-${EMAIL}`]);
   await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Athlète du contrôle']);
   await fermer();

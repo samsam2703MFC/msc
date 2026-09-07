@@ -11,6 +11,7 @@
    sûre le jour où elle existera, et en attendant ça protège déjà du double clic
    et du renvoi après une coupure. */
 
+import * as cache from './cache';
 import type { Instantane } from './vives';
 import type { MscActivity, MscCompetition } from './types';
 
@@ -53,6 +54,96 @@ async function appeler<T>(chemin: string, init: RequestInit = {}): Promise<T> {
 
 function idMutation(): string {
   return crypto.randomUUID();
+}
+
+/** Vrai quand ce qui a échoué est le réseau, pas le serveur. */
+export function estReseau(e: unknown): boolean {
+  return e instanceof ApiError && e.statut === 0;
+}
+
+export interface Differe {
+  differe: true;
+  mutation_id: string;
+}
+
+export function estDiffere(v: unknown): v is Differe {
+  return Boolean(v && typeof v === 'object' && (v as Differe).differe === true);
+}
+
+/**
+ * Une écriture, ou une écriture en attente.
+ *
+ * Si le réseau manque, elle part dans la file plutôt que de se perdre — et
+ * l'identifiant de mutation est tiré **avant** l'envoi, donc le rejeu ne
+ * produira pas de doublon : le serveur reconnaît ce qu'il a déjà vu.
+ *
+ * Un refus du serveur, lui, n'est pas mis en file : un 400 ne deviendra pas un
+ * 200 en le renvoyant, et une file qui rejoue indéfiniment une écriture
+ * impossible est une file qui ne rejoue plus rien.
+ */
+async function ecrire<T>(
+  chemin: string,
+  corps: unknown,
+  operation: string,
+  init?: { type?: string; brut?: Blob },
+): Promise<T | Differe> {
+  const mutation_id = idMutation();
+  const charge = init?.brut ?? { ...(corps as object), mutation_id };
+  try {
+    return await appeler<T>(chemin, {
+      method: 'POST',
+      ...(init?.brut
+        ? { headers: { 'content-type': init.type ?? 'application/octet-stream' }, body: init.brut }
+        : { body: JSON.stringify(charge) }),
+    });
+  } catch (e) {
+    if (!estReseau(e)) throw e;
+    await cache.filer({
+      id: mutation_id,
+      chemin,
+      corps: charge,
+      type: init?.type,
+      operation,
+      cree_le: Date.now(),
+    });
+    return { differe: true, mutation_id };
+  }
+}
+
+/**
+ * Rejoue ce qui attend, dans l'ordre.
+ *
+ * S'arrête au premier échec réseau — inutile d'insister, et l'ordre compte.
+ * Une mutation refusée par le serveur est marquée et laissée de côté : elle ne
+ * bloque pas les suivantes, et l'application peut dire qu'elle a été perdue
+ * plutôt que de la faire disparaître en silence.
+ */
+export async function rejouerFile(): Promise<{ envoyees: number; refusees: number; reste: number }> {
+  const attente = await cache.enAttente();
+  let envoyees = 0;
+  let refusees = 0;
+
+  for (const m of attente) {
+    if (m.refus) continue;
+    try {
+      const brut = m.corps instanceof Blob;
+      await appeler(m.chemin, {
+        method: 'POST',
+        ...(brut
+          ? { headers: { 'content-type': m.type ?? 'application/octet-stream' }, body: m.corps as Blob }
+          : { body: JSON.stringify(m.corps) }),
+      });
+      await cache.retirer(m.id);
+      envoyees += 1;
+    } catch (e) {
+      if (estReseau(e)) break;
+      await cache.marquerRefus(m, e instanceof ApiError ? e.message : String(e));
+      refusees += 1;
+    }
+  }
+
+  const { attente: reste } = await cache.etatFile();
+  return { envoyees, refusees, reste };
 }
 
 /* --------------------------------------------------------------- la session */
@@ -120,11 +211,8 @@ export interface EcritureJournal {
   douleurs?: string[];
 }
 
-export function ecrireJournal(corps: EcritureJournal): Promise<{ journal_id: number }> {
-  return appeler('/journal', {
-    method: 'POST',
-    body: JSON.stringify({ ...corps, mutation_id: idMutation() }),
-  });
+export function ecrireJournal(corps: EcritureJournal) {
+  return ecrire<{ journal_id: number }>('/journal', corps, 'journal');
 }
 
 export interface EcritureMesure {
@@ -136,14 +224,15 @@ export interface EcritureMesure {
   note?: string;
 }
 
-export function ecrireMesure(corps: EcritureMesure): Promise<{ date: string }> {
-  return appeler('/mesure', {
-    method: 'POST',
-    body: JSON.stringify({ ...corps, mutation_id: idMutation() }),
-  });
+export function ecrireMesure(corps: EcritureMesure) {
+  return ecrire<{ date: string }>('/mesure', corps, 'mesure');
 }
 
-/** Les activités appariées par le navigateur, rangées par le serveur. */
+/** Les activités appariées par le navigateur, rangées par le serveur.
+
+    Celles-ci ne vont PAS dans la file : elles viennent de Strava, qui n'était
+    joignable que s'il y avait du réseau. Les mettre en attente rejouerait un
+    appariement périmé sur des données que la synchro suivante refera mieux. */
 export function ecrireActivites(activites: MscActivity[]): Promise<{ ecrites: number }> {
   return appeler('/activites', {
     method: 'POST',
@@ -183,12 +272,13 @@ export interface LecturePhoto {
  * Pas de multipart : un seul fichier par requête, et le serveur n'a donc pas
  * d'analyseur multipart à embarquer pour ça. Le type vient de l'en-tête.
  */
-export async function envoyerPhoto(fichier: File, date?: string): Promise<LecturePhoto> {
+export function envoyerPhoto(fichier: File, date?: string) {
   const q = date ? `?date=${date}` : '';
-  return appeler<LecturePhoto>(`/photo${q}`, {
-    method: 'POST',
-    headers: { 'content-type': fichier.type },
-    body: fichier,
+  /* Une photo prise sans réseau attend dans la file comme le reste — c'est même
+     le cas le plus probable : on se pèse le matin, pas devant sa box. */
+  return ecrire<LecturePhoto>(`/photo${q}`, null, 'photo', {
+    type: fichier.type,
+    brut: fichier,
   });
 }
 
@@ -202,11 +292,10 @@ export function confirmerMesure(corps: {
   poids_kg?: number | null;
   fc_repos?: number | null;
   rejeter?: boolean;
-}): Promise<{ date: string; etat: string; corrige?: boolean }> {
-  return appeler('/mesure/confirmer', {
-    method: 'POST',
-    body: JSON.stringify({ ...corps, mutation_id: idMutation() }),
-  });
+}) {
+  return ecrire<{ date: string; etat: string; corrige?: boolean }>(
+    '/mesure/confirmer', corps, 'mesure.confirmer',
+  );
 }
 
 /* ------------------------------------------------------- le back office */

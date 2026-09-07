@@ -394,20 +394,36 @@ export async function instantane(athleteId) {
  * d'attente hors-ligne sûre : elle peut rejouer, le double n'arrive pas.
  */
 export async function mutation(athleteId, id, operation, travail) {
-  if (id) {
-    const deja = await ligne('SELECT reponse FROM msc_mutation WHERE id = :id', { id });
-    if (deja) return { ...(json(deja.reponse) ?? {}), rejoue: true };
-  }
-  return transaction(async (cnx) => {
-    const reponse = (await travail(cnx)) ?? {};
-    if (id) {
+  if (!id) return (await transaction(travail)) ?? {};
+
+  /* La réservation de l'identifiant est la PREMIÈRE écriture de la transaction,
+     pas une lecture qui la précède.
+     
+     Un « SELECT puis INSERT » laisse deux requêtes concurrentes franchir le
+     SELECT toutes les deux, faire le travail deux fois, et la seconde échouer
+     sur la clé primaire — ce que cette table existe précisément pour empêcher.
+     Ici, la seconde bloque sur le verrou de ligne jusqu'au commit de la
+     première, puis échoue en doublon et lit la réponse qui vient d'être
+     écrite. Une file d'attente hors-ligne qui rejoue deux fois en parallèle —
+     l'événement « online » et une relance manuelle, par exemple — n'enregistre
+     donc rien deux fois. */
+  try {
+    return await transaction(async (cnx) => {
       await cnx.execute(
-        'INSERT INTO msc_mutation (id, athlete_id, operation, reponse) VALUES (?, ?, ?, ?)',
-        [id, athleteId, operation, JSON.stringify(reponse)],
+        'INSERT INTO msc_mutation (id, athlete_id, operation) VALUES (?, ?, ?)',
+        [id, athleteId, operation],
       );
-    }
-    return reponse;
-  });
+      const reponse = (await travail(cnx)) ?? {};
+      await cnx.execute('UPDATE msc_mutation SET reponse = ? WHERE id = ?', [
+        JSON.stringify(reponse), id,
+      ]);
+      return reponse;
+    });
+  } catch (e) {
+    if (e?.code !== 'ER_DUP_ENTRY') throw e;
+    const deja = await ligne('SELECT reponse FROM msc_mutation WHERE id = :id', { id });
+    return { ...(json(deja?.reponse) ?? {}), rejoue: true };
+  }
 }
 
 /** Le RPE et la note du jour. Une ligne par athlète, jour et séance. */
