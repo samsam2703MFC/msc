@@ -88,6 +88,13 @@ défaut est un mot de passe public. `compte -- lister` le signale par
 à la même chose : ce qui est dans *Variables* est lisible par qui voit le
 dépôt, ce qui est dans *Secrets* ne se relit plus une fois posé.
 
+Les cinq `DEPLOY_*` ci-dessous sont des **Variables** — un nom d'hôte n'est pas
+un secret, et pouvoir le relire quand un déploiement se comporte bizarrement
+vaut mieux que de le masquer. Mais le workflow accepte un secret du même nom :
+se tromper d'onglet est l'erreur qu'on fait une fois, et refuser de partir pour
+ça ne protège personne. Les deux clés SSH, elles, n'ont leur place que dans
+*Secrets*.
+
 | Secrets | |
 |---|---|
 | `DEPLOY_SSH_KEY` | la clé privée de déploiement, en entier, `-----BEGIN` compris |

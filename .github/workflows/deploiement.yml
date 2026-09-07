@@ -56,12 +56,29 @@ jobs:
 
       - name: envoyer
         env:
-          HOTE: ${{ vars.DEPLOY_HOST }}
-          UTILISATEUR: ${{ vars.DEPLOY_USER }}
-          RACINE: ${{ vars.DEPLOY_PATH }}
-          PORT: ${{ vars.DEPLOY_PORT || '22' }}
+          # Une variable, ou un secret du même nom. Un nom d'hôte n'est pas un
+          # secret et sa place est dans « Variables » — mais le poser dans
+          # l'autre onglet est l'erreur qu'on fait une fois, et refuser de
+          # partir pour ça ne protège personne.
+          HOTE: ${{ vars.DEPLOY_HOST || secrets.DEPLOY_HOST }}
+          UTILISATEUR: ${{ vars.DEPLOY_USER || secrets.DEPLOY_USER }}
+          RACINE: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+          PORT: ${{ vars.DEPLOY_PORT || secrets.DEPLOY_PORT || '22' }}
         run: |
-          test -n "$HOTE" || { echo "variable DEPLOY_HOST manquante"; exit 1; }
+          # Toutes les manquantes d'un coup. S'arrêter à la première oblige à
+          # relancer le déploiement une fois par variable pour découvrir la
+          # suivante, ce qui est un jeu de piste, pas un diagnostic.
+          manque=""
+          for paire in HOTE:DEPLOY_HOST UTILISATEUR:DEPLOY_USER RACINE:DEPLOY_PATH; do
+            nom="${paire%%:*}"
+            [ -n "${!nom}" ] || manque="$manque ${paire##*:}"
+          done
+          if [ -n "$manque" ]; then
+            echo "manquant :$manque"
+            echo "Settings → Secrets and variables → Actions → onglet « Variables »"
+            echo "(un secret du même nom fait l'affaire aussi)"
+            exit 1
+          fi
           CIBLE="$RACINE/releases/${{ github.sha }}"
           SSH="ssh -i ~/.ssh/id_deploy -p $PORT"
           $SSH "$UTILISATEUR@$HOTE" "mkdir -p '$CIBLE' '$RACINE/var'"
@@ -82,17 +99,21 @@ jobs:
 
       - name: migrer et basculer
         env:
-          HOTE: ${{ vars.DEPLOY_HOST }}
-          UTILISATEUR: ${{ vars.DEPLOY_USER }}
-          RACINE: ${{ vars.DEPLOY_PATH }}
-          PORT: ${{ vars.DEPLOY_PORT || '22' }}
+          # Une variable, ou un secret du même nom. Un nom d'hôte n'est pas un
+          # secret et sa place est dans « Variables » — mais le poser dans
+          # l'autre onglet est l'erreur qu'on fait une fois, et refuser de
+          # partir pour ça ne protège personne.
+          HOTE: ${{ vars.DEPLOY_HOST || secrets.DEPLOY_HOST }}
+          UTILISATEUR: ${{ vars.DEPLOY_USER || secrets.DEPLOY_USER }}
+          RACINE: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+          PORT: ${{ vars.DEPLOY_PORT || secrets.DEPLOY_PORT || '22' }}
         run: |
           ssh -i ~/.ssh/id_deploy -p "$PORT" "$UTILISATEUR@$HOTE" \
             "bash '$RACINE/releases/${{ github.sha }}/liberer.sh' '$RACINE' '${{ github.sha }}'"
 
       - name: vérifier
         env:
-          URL: ${{ vars.DEPLOY_URL }}
+          URL: ${{ vars.DEPLOY_URL || secrets.DEPLOY_URL }}
         run: |
           if [ -z "$URL" ]; then
             echo "variable DEPLOY_URL non définie — pas de vérification en ligne"
