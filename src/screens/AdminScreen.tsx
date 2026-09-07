@@ -15,6 +15,7 @@ import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { AccentButton, Card, Grid, Mono, SectionLabel } from '../components/primitives';
 import type { App } from '../state/useApp';
+import { BackOffice } from './BackOffice';
 
 /** mm:ss → seconds. */
 function versSecondes(texte: string): number {
@@ -111,7 +112,58 @@ const OBJECTIF_VIDE: Objectif = {
   principal: false,
 };
 
+const SECTIONS = {
+  fr: { plan: 'Plan', courses: 'Courses' },
+  pl: { plan: 'Plan', courses: 'Zawody' },
+} as const;
+
+/* L'écran Créer porte deux choses différentes : fabriquer un plan, et tenir le
+   registre des courses. Une bascule plutôt qu'un sixième onglet — la barre en a
+   déjà cinq, et un back office n'est pas un écran qu'on ouvre tous les jours. */
 export function AdminScreen({ app }: { app: App }) {
+  const [section, setSection] = useState<'plan' | 'courses'>('plan');
+  const libelles = SECTIONS[app.lang];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 3,
+          padding: 3,
+          borderRadius: R.full,
+          background: C.surfaceAlt,
+          border: `1px solid ${C.border}`,
+        }}
+      >
+        {(['plan', 'courses'] as const).map((cle) => (
+          <button
+            key={cle}
+            type="button"
+            onClick={() => setSection(cle)}
+            aria-pressed={section === cle}
+            style={{
+              flex: 1,
+              padding: '7px 12px',
+              borderRadius: R.full,
+              fontSize: 12,
+              fontWeight: 600,
+              background: section === cle ? C.surface : 'transparent',
+              color: section === cle ? C.ink : C.inkSecondary,
+              boxShadow: section === cle ? C.shadowCard : 'none',
+            }}
+          >
+            {libelles[cle]}
+          </button>
+        ))}
+      </div>
+
+      {section === 'courses' ? <BackOffice app={app} /> : <Generateur app={app} />}
+    </div>
+  );
+}
+
+function Generateur({ app }: { app: App }) {
   const fr = app.lang === 'fr';
   const seed = db.athlete;
 

@@ -552,6 +552,38 @@ export function useApp() {
     [recharger],
   );
 
+  /* --------------------------------------------------------- le back office */
+
+  const [coursesErreur, setCoursesErreur] = useState<string | null>(null);
+
+  const enregistrerCompetition = useCallback(
+    async (c: Parameters<typeof api.ecrireCompetition>[0]) => {
+      setCoursesErreur(null);
+      try {
+        await api.ecrireCompetition(c);
+        await recharger(db.athleteId);
+        return true;
+      } catch (e) {
+        if (monte.current) setCoursesErreur(message(e));
+        return false;
+      }
+    },
+    [recharger],
+  );
+
+  const supprimerCompetition = useCallback(
+    async (id: number) => {
+      setCoursesErreur(null);
+      try {
+        await api.supprimerCompetition(id);
+        await recharger(db.athleteId);
+      } catch (e) {
+        if (monte.current) setCoursesErreur(message(e));
+      }
+    },
+    [recharger],
+  );
+
   /* ------------------------------------------------------------- la photo */
 
   const [photoJob, setPhotoJob] = useState<'idle' | 'envoi'>('idle');
@@ -752,6 +784,10 @@ export function useApp() {
     toggleAdjustment,
     enregistrerJournal,
     accepter,
+
+    coursesErreur,
+    enregistrerCompetition,
+    supprimerCompetition,
 
     photoJob,
     photoErreur,

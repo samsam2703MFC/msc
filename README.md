@@ -759,6 +759,50 @@ not a reason to let it happen.
 `check:app` cuts the network for real — `setOffline(true)` — reloads, reads the
 plan, types a note, restores the network and asserts the note reached MySQL.
 
+## The back office
+
+The **Créer** tab carries two things now, behind a segmented control: building a
+plan, and keeping the register of races. A switch rather than a sixth tab — the
+bar already has five, and a back office is not a screen you open every day.
+
+### Competitions
+
+Encoded by hand: date, name, place, distance, time, placing, starters. A race
+belongs to the athlete and not to the plan, which is what lets results outlive
+the plans that aimed at them.
+
+The pace is never typed: it is time ÷ distance, and the distance is on the
+competition. An empty time is not a result of zero — it is a race still to come,
+and clearing it removes the result rather than storing a zero.
+
+### Two charts, never two axes
+
+Weight is in kilograms and pace in seconds per kilometre. Putting them on two
+vertical axes in one frame is the most reliable way to make a reader see a
+correlation that is not there, so they are **two cards, one series each**.
+
+Colour therefore carries no identity — the title names the series and there is
+no legend to have. Both hues pass the checks that apply to a lone series
+(lightness band, chroma floor, 3:1 contrast on white), run through the palette
+validator rather than eyeballed; the adjacent-pair checks do not apply, since
+the two never meet in the same frame.
+
+**Progression is the 10 km equivalent, not the raw pace.** A half-marathon at
+5:00/km and a 10 km at 5:00/km are not the same fitness. Riegel converts them —
+the same function the generator already uses to set a block's reference, so
+there is one definition of "equivalent" in the codebase rather than two.
+
+A falling weight gets a **neutral** badge, not the green one a falling pace gets.
+Losing weight is not automatically good for an endurance athlete, and two of the
+plan's own adjustment rules exist because of it.
+
+### What looking at it caught
+
+The palette validator checks colour, not geometry. Rendered and looked at, the
+point markers were **ovals**: `preserveAspectRatio="none"` stretches the viewBox
+horizontally, which flattens a line correctly and deforms every circle on it.
+The chart now measures its container and draws in real pixels.
+
 ## Reference data
 
 `reference/Plan30semainessemi10kmhyroxnatation.xlsx` is the source of truth and

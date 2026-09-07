@@ -36,6 +36,10 @@ await bd().execute(
   [c.insertId],
 );
 
+/* Ce contrôle encode des courses ; il doit partir d'une table propre, sinon
+   « un seul résultat » n'est vrai qu'à la première exécution. */
+await bd().execute("DELETE FROM msc_competition WHERE nom LIKE '%de contrôle'");
+
 const serveur = spawn(process.execPath, ['server/index.mjs'], {
   env: { ...process.env, PORT: String(PORT), NODE_ENV: 'test', MSC_ATHLETE_ID: '' },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -157,6 +161,61 @@ try {
   /* Le vrai test du hors-ligne : couper, relire, écrire, remettre, vérifier que
      ce qui a été tapé est arrivé. Sans ça, « ça marche hors ligne » n'est
      qu'une intention. */
+  /* Le back office : encoder une course, la voir apparaître, et voir la courbe
+     se tracer une fois qu'il y a deux résultats à comparer. */
+  console.log('\n=== le back office ===');
+  await page.locator('nav button').last().click();
+  await page.waitForTimeout(600);
+  await page.click('text=Courses');
+  await page.waitForTimeout(600);
+  /* Les intitulés de section sont mis en majuscules par le CSS, et innerText
+     rend le texte affiché. */
+  check('la section Courses s’ouvre',
+    /compétitions/i.test(await page.locator('body').innerText()));
+
+  const tracesAvant = await page.locator('svg[role=img]').count();
+
+  const encoder = async (nom, date, distance, temps) => {
+    await page.click('text=Encoder une course');
+    await page.waitForTimeout(400);
+    await page.fill('input[type=date]', date);
+    const champs = page.locator('input:not([type=date])');
+    await champs.nth(0).fill(String(distance));   // distance
+    await champs.nth(1).fill(nom);                // nom
+    await champs.nth(3).fill(temps);              // temps
+    await page.click('text=Enregistrer');
+    await page.waitForTimeout(1400);
+  };
+
+  await encoder('Corrida de contrôle', '2026-03-01', 10, '0:44:00');
+  check('la course encodée apparaît',
+    (await page.locator('body').innerText()).includes('Corrida de contrôle'));
+  check('et son allure est calculée, pas saisie',
+    /4:24\/km/.test(await page.locator('body').innerText()),
+    (await page.locator('body').innerText()).match(/\d:\d\d\/km/g)?.join(' ') ?? '');
+
+  /* Un seul résultat n'a pas de pente à montrer, mais il a une valeur : la
+     montrer vaut mieux que refuser de rien dire. La carte du poids, elle, a
+     déjà de quoi tracer — on regarde donc la carte de progression seule. */
+  /* Compter les tracés de la page est plus robuste que deviner quelle carte
+     est laquelle dans un DOM sans classes : le poids en a déjà un, la
+     progression n'en aura un qu'au deuxième résultat. */
+  const tracesApres1 = await page.locator('svg[role=img]').count();
+  check('un seul résultat affiche sa valeur sans tracer de pente',
+    /4:24\/km/.test(await page.locator('body').innerText()) && tracesApres1 === tracesAvant,
+    `${tracesAvant} → ${tracesApres1}`);
+
+  await encoder('Semi de contrôle', '2026-06-01', 21.1, '1:36:00');
+  await page.waitForTimeout(600);
+  const tracesApres2 = await page.locator('svg[role=img]').count();
+  check('avec deux résultats, la courbe se trace', tracesApres2 === tracesApres1 + 1,
+    `${tracesApres1} → ${tracesApres2}`);
+  /* Riegel : un semi en 1h36 vaut mieux qu'un 10 km en 44 min. La courbe doit
+     donc descendre, et le badge afficher un progrès. */
+  const bo = await page.locator('body').innerText();
+  check('les distances sont ramenées à l’équivalent 10 km',
+    /−\d:\d\d/.test(bo), bo.match(/[−+]\d:\d\d/g)?.join(' ') ?? '');
+
   console.log('\n=== sans réseau ===');
   coupe = true;
   await page.context().setOffline(true);
@@ -212,6 +271,7 @@ try {
 } finally {
   if (nav) await nav.close();
   serveur.kill('SIGTERM');
+  await bd().execute("DELETE FROM msc_competition WHERE nom LIKE '%de contrôle'");
   await bd().execute('DELETE FROM compte WHERE email = ?', [EMAIL]);
   await fermer();
 }
