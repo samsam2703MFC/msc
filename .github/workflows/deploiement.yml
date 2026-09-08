@@ -273,7 +273,21 @@ jobs:
             echo "de DEPLOY_HOST, au caractère près."
             echo "Si elles diffèrent, ce n'est pas le même serveur."
             echo "Si ssh a dit « Permission denied », l'empreinte est bonne et"
-            echo "c'est la clé publique qui manque dans authorized_keys."
+            echo "c'est la clé publique qui manque dans authorized_keys —"
+            echo "ou bien on ne frappe pas à la bonne porte :"
+            # DEPLOY_USER et DEPLOY_PATH masqués, on ne peut pas les lire dans
+            # le journal. Une comparaison, elle, n'est pas un secret : elle dit
+            # ce qu'il faut savoir sans rien divulguer. C'est aussi pourquoi ces
+            # deux-là ont leur place dans « Variables » — un nom d'utilisateur
+            # masqué coûte un aller-retour à chaque diagnostic.
+            [ "$UTILISATEUR" = "msc" ] \
+              && echo "  DEPLOY_USER vaut bien « msc »" \
+              || echo "  ⚠ DEPLOY_USER ne vaut PAS « msc » — c'est là qu'est le refus."
+            [ "$RACINE" = "/srv/msc" ] \
+              && echo "  DEPLOY_PATH vaut bien « /srv/msc »" \
+              || echo "  ⚠ DEPLOY_PATH ne vaut PAS « /srv/msc »."
+            echo "  (preparer.sh installe la clé pour l'utilisateur « msc »"
+            echo "   dans « /srv/msc » ; tout autre couple frappe ailleurs.)"
             exit 1
           fi
 
