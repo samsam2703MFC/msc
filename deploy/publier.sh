@@ -307,9 +307,20 @@ else
   echo "   script reprend exactement ici."
   exit 1
 fi
-systemctl list-timers 2>/dev/null | grep -q certbot \
-  && echo "   renouvellement automatique : minuterie certbot active" \
-  || echo "   ⚠ pas de minuterie certbot — le certificat expirera dans 90 jours"
+# `systemctl list-timers` sans --all ne montre que les minuteries actives, et
+# le paquet Debian installe AUSSI un cron. Chercher la seule minuterie répondait
+# « rien ne renouvelle » à une machine qui renouvelle très bien — ou l'inverse,
+# ce qui est pire.
+if systemctl list-timers --all 2>/dev/null | grep -q certbot \
+   || [ -f /etc/cron.d/certbot ]; then
+  echo "   renouvellement automatique : en place"
+else
+  echo "   ⚠ RIEN ne renouvellera ce certificat. Il expirera, comme les autres."
+  echo "     certbot annonce « a scheduled task » sans vérifier qu'elle existe."
+  echo "     À regarder :  systemctl list-timers --all | grep certbot"
+  echo "                   ls -l /etc/cron.d/certbot"
+  echo "                   certbot renew --dry-run"
+fi
 
 dire "6 · l'essai"
 # Ce que le déploiement va demander, demandé ici, où l'erreur est lisible.
