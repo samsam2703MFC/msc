@@ -181,19 +181,25 @@ echo "   sudoers : $UTILISATEUR peut redémarrer msc, et rien d'autre"
 
 dire "Ce qui reste à faire, à la main"
 cat <<EOF
-   1. Le secret GitHub DEPLOY_SSH_KEY — une seule ligne, sans rien qui se casse :
+   1. Le secret GitHub DEPLOY_SSH_KEY. En lignes COURTES, qui ne se replient
+      pas — le déploiement enlève les blancs avant de décoder :
 
-        base64 -w0 $CLE; echo
+        base64 -w 60 $CLE
+
+      Une longue ligne unique s'affiche repliée, et une sélection à la souris y
+      prend le visible : tantôt il en manque la fin, tantôt elle emporte
+      l'invite d'à côté. Des lignes de 60 caractères tiennent dans n'importe
+      quel terminal, et se sélectionnent en bloc sans surprise.
 
       Ne la colle nulle part ailleurs : celle-là est privée.
 
-      Longueur attendue : $(base64 -w0 "$CLE" | wc -c) caractères
-      Empreinte          : $(base64 -w0 "$CLE" | sha256sum | cut -c1-12)
+      Longueur attendue : $(base64 -w0 "$CLE" | tr -d '\n' | wc -c) caractères
+      Empreinte          : $(base64 -w0 "$CLE" | tr -d '\n' | sha256sum | cut -c1-12)
 
-      Le déploiement affiche ces deux nombres pour ce qu'il a REÇU. S'ils
-      diffèrent, la ligne a été tronquée au collage — c'est ce qui arrive quand
-      on sélectionne à la souris une ligne que le terminal a repliée. Dans
-      PuTTY, un triple-clic prend la ligne logique entière, replis compris.
+      Le déploiement affiche ces deux nombres pour ce qu'il a REÇU, calculés de
+      la même façon — blancs retirés. S'ils diffèrent, ce n'est pas la même
+      chose des deux côtés : trop court, il manque la fin ; trop long, la
+      sélection a emporté autre chose avec.
 
    2. Les variables GitHub, si ce n'est pas déjà fait :
         DEPLOY_HOST=$(hostname -I | awk '{print $1}')  DEPLOY_USER=$UTILISATEUR  DEPLOY_PATH=$RACINE

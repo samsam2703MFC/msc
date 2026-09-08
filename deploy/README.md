@@ -155,17 +155,21 @@ ssh-keygen -t ed25519 -f ~/.ssh/msc_deploy -C "deploiement msc" -N ""
 # la moitié publique va sur le serveur
 ssh-copy-id -i ~/.ssh/msc_deploy.pub msc@<domaine>
 
-# la privée dans le secret GitHub — SUR UNE LIGNE, en base64
-base64 -w0 ~/.ssh/msc_deploy   # → secret DEPLOY_SSH_KEY
+# la privée dans le secret GitHub, en base64 sur des lignes courtes
+base64 -w 60 ~/.ssh/msc_deploy   # → secret DEPLOY_SSH_KEY
 ```
 
-**Colle-la en base64.** Une clé PEM fait une douzaine de lignes qui commencent
-par des tirets, et c'est exactement ce qu'une sélection à la souris ou un champ
-de formulaire ampute : le déploiement répond alors « error in libcrypto » puis
-« Permission denied », deux messages qui ne disent pas que le problème est un
-collage. Le base64 n'a ni tiret, ni saut de ligne, ni barre verticale — rien à
-perdre. Le workflow le décode, et accepte aussi la forme PEM quand elle arrive
-intacte.
+**Colle-la en base64, sur des lignes courtes.** Une clé PEM commence par des
+tirets, qu'un champ de formulaire ampute ; une longue ligne unique s'affiche
+repliée, et la sélection à la souris y prend le visible — tantôt il en manque la
+fin, tantôt elle emporte l'invite d'à côté. Le déploiement répond alors « error
+in libcrypto », qui ne dit rien de tout ça. Des lignes de 60 caractères de
+base64 n'ont ni tiret ni repli : le workflow retire les blancs et décode, et
+accepte aussi la forme PEM quand elle arrive intacte.
+
+`preparer.sh` imprime la longueur et une empreinte de ce qu'il faut coller ; le
+déploiement imprime les mêmes pour ce qu'il a reçu. Les comparer dit en un coup
+d'œil si le transfert est exact.
 
 Les clés d'hôte, elles, sont déjà dans `deploy/known_hosts` : rien à coller.
 
