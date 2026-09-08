@@ -51,6 +51,30 @@ echo "→ current → $SHA"
 if systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
   sudo systemctl restart "$SERVICE"
   echo "→ $SERVICE redémarré"
+
+  # `systemctl restart` rend la main sans attendre que le processus tienne : un
+  # service qui meurt au démarrage ressemble alors à un déploiement réussi. On
+  # demande donc à l'application elle-même, ICI, sur la boucle locale.
+  #
+  # C'est aussi ce qui sépare deux échecs qu'on confond sinon : l'application
+  # qui ne démarre pas, et l'application qui tourne mais qu'on n'atteint pas de
+  # l'extérieur — une URL fausse, un port fermé, un proxy absent. Le premier est
+  # un déploiement raté ; le second ne l'est pas.
+  PORT_APP="$(sed -n 's/^PORT=//p' "$RACINE/.env" 2>/dev/null | head -1)"
+  PORT_APP="${PORT_APP:-8787}"
+  SANTE=""
+  for _ in $(seq 1 20); do
+    SANTE="$(curl -fsS --max-time 3 "http://127.0.0.1:$PORT_APP/api/sante" 2>/dev/null)" && break
+    sleep 1
+  done
+  if [ -n "$SANTE" ]; then
+    echo "→ l'application répond sur 127.0.0.1:$PORT_APP"
+    echo "  $SANTE"
+  else
+    echo "✗ l'application ne répond pas sur 127.0.0.1:$PORT_APP après 20 s."
+    echo "  Le journal dit pourquoi :  journalctl -u $SERVICE -n 40 --no-pager"
+    exit 1
+  fi
 else
   echo "⚠ le service $SERVICE n'est pas connu de systemd — redémarre à la main"
 fi
