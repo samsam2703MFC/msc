@@ -93,6 +93,14 @@ BASE_OK=0
 printf '[client]\n' > "$CNF"      # socket d'abord : c'est le cas Debian/Ubuntu
 if admin -e 'SELECT 1' > /dev/null 2>&1; then
   echo "   accès administrateur par socket"; BASE_OK=1
+elif [ -r /etc/mysql/debian.cnf ] \
+     && mysql --defaults-file=/etc/mysql/debian.cnf -e 'SELECT 1' > /dev/null 2>&1; then
+  # Debian et Ubuntu installent un compte d'entretien à droits complets, dont
+  # les identifiants sont dans ce fichier lisible par root seul. C'est la porte
+  # prévue pour ça, et elle évite de demander un mot de passe que personne n'a
+  # forcément sous la main.
+  cp /etc/mysql/debian.cnf "$CNF"
+  echo "   accès administrateur par /etc/mysql/debian.cnf (debian-sys-maint)"; BASE_OK=1
 elif [ -n "${MYSQL_ROOT_PASSWORD:-}" ] \
      && identifiants "$MYSQL_ROOT_PASSWORD" && admin -e 'SELECT 1' > /dev/null 2>&1; then
   echo "   accès administrateur par MYSQL_ROOT_PASSWORD"; BASE_OK=1
