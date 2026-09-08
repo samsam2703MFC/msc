@@ -89,26 +89,22 @@ trap 'rm -f "$CNF"' EXIT
 admin() { mysql --defaults-extra-file="$CNF" "$@"; }
 identifiants() { printf '[client]\nuser=root\npassword=%s\n' "$1" > "$CNF"; }
 
+BASE_OK=0
 printf '[client]\n' > "$CNF"      # socket d'abord : c'est le cas Debian/Ubuntu
 if admin -e 'SELECT 1' > /dev/null 2>&1; then
-  echo "   accès administrateur par socket"
+  echo "   accès administrateur par socket"; BASE_OK=1
 elif [ -n "${MYSQL_ROOT_PASSWORD:-}" ] \
      && identifiants "$MYSQL_ROOT_PASSWORD" && admin -e 'SELECT 1' > /dev/null 2>&1; then
-  echo "   accès administrateur par MYSQL_ROOT_PASSWORD"
+  echo "   accès administrateur par MYSQL_ROOT_PASSWORD"; BASE_OK=1
 elif [ -t 0 ]; then
   echo "   le root MySQL de cette machine demande un mot de passe."
   read -rsp "   mot de passe root MySQL : " mdp_root; echo
   identifiants "$mdp_root"; unset mdp_root
-  admin -e 'SELECT 1' > /dev/null 2>&1 || {
+  if admin -e 'SELECT 1' > /dev/null 2>&1; then
+    echo "   accès administrateur accordé"; BASE_OK=1
+  else
     echo "   refusé."
-    echo "   Relance avec : MYSQL_ROOT_PASSWORD='…' bash $0"
-    exit 1
-  }
-  echo "   accès administrateur accordé"
-else
-  echo "   pas d'accès administrateur MySQL, et pas de terminal pour le demander."
-  echo "   Relance avec : MYSQL_ROOT_PASSWORD='…' bash $0"
-  exit 1
+  fi
 fi
 
 ENV="$RACINE/.env"
@@ -118,13 +114,27 @@ if [ -f "$ENV" ]; then
 else
   MDP=$(openssl rand -base64 24)
 fi
-admin -e "CREATE DATABASE IF NOT EXISTS \`$BASE\`
-            CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-          CREATE USER IF NOT EXISTS '$UTILISATEUR'@'localhost' IDENTIFIED BY '$MDP';
-          ALTER USER '$UTILISATEUR'@'localhost' IDENTIFIED BY '$MDP';
-          GRANT ALL PRIVILEGES ON \`$BASE\`.* TO '$UTILISATEUR'@'localhost';
-          FLUSH PRIVILEGES;"
-echo "   base « $BASE », utilisateur « $UTILISATEUR » avec droits sur elle seule"
+SQL="CREATE DATABASE IF NOT EXISTS \`$BASE\`
+       CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+     CREATE USER IF NOT EXISTS '$UTILISATEUR'@'localhost' IDENTIFIED BY '<le mot de passe de MSC_DB_PASSWORD>';
+     GRANT ALL PRIVILEGES ON \`$BASE\`.* TO '$UTILISATEUR'@'localhost';
+     FLUSH PRIVILEGES;"
+
+if [ "$BASE_OK" = 1 ]; then
+  admin -e "CREATE DATABASE IF NOT EXISTS \`$BASE\`
+              CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            CREATE USER IF NOT EXISTS '$UTILISATEUR'@'localhost' IDENTIFIED BY '$MDP';
+            ALTER USER '$UTILISATEUR'@'localhost' IDENTIFIED BY '$MDP';
+            GRANT ALL PRIVILEGES ON \`$BASE\`.* TO '$UTILISATEUR'@'localhost';
+            FLUSH PRIVILEGES;"
+  echo "   base « $BASE », utilisateur « $UTILISATEUR » avec droits sur elle seule"
+else
+  # La base n'est pas ce qui bloque un déploiement : le SSH l'est. Continuer
+  # laisse l'essai de connexion se faire, qui est ce qu'on est venu vérifier.
+  BASE_A_FAIRE=1
+  echo "   pas d'accès administrateur — la base est LAISSÉE À FAIRE."
+  echo "   Le reste continue : ce qui bloque un déploiement, c'est le SSH."
+fi
 
 dire "5 · le .env"
 if [ -f "$ENV" ]; then deja "$ENV"
@@ -215,6 +225,18 @@ fi
 echo "   empreinte de la clé : $(ssh-keygen -lf "$CLE" | cut -d' ' -f1,2)"
 
 dire "Ce qui reste à faire, à la main"
+if [ "${BASE_A_FAIRE:-0}" = 1 ]; then
+  cat <<EOF
+   0. LA BASE, qui n'a pas pu être créée faute d'accès administrateur MySQL.
+      Là où tu administres MySQL, avec le mot de passe qui est déjà dans
+      $ENV (ligne MSC_DB_PASSWORD) :
+
+$SQL
+
+      Ou relance ce script avec : MYSQL_ROOT_PASSWORD='…' bash \$0
+
+EOF
+fi
 cat <<EOF
    1. Le secret GitHub DEPLOY_SSH_KEY. En lignes COURTES, qui ne se replient
       pas — le déploiement enlève les blancs avant de décoder :
