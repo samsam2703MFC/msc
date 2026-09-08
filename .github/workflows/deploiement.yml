@@ -90,8 +90,12 @@ jobs:
           #     tiret, ni barre verticale, ni saut de ligne — rien qu'une
           #     sélection à la souris ou un champ de formulaire puisse manger.
           #        base64 -w0 ~/.ssh/msc_deploy
-          if ! valide && tr -d '\n' < ~/.ssh/id_deploy.recu | grep -qE '^[A-Za-z0-9+/=]+$'; then
-            if tr -d '\n' < ~/.ssh/id_deploy.recu | base64 -d > ~/.ssh/id_deploy 2>/dev/null; then
+          #     Tout blanc est retiré, retour chariot compris : un champ de
+          #     formulaire rendu depuis un navigateur Windows insère des CRLF,
+          #     et un seul \r suffit à faire échouer le test « est-ce du
+          #     base64 » comme le décodage lui-même.
+          if ! valide && tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu | grep -qE '^[A-Za-z0-9+/=]+$'; then
+            if tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu | base64 -d > ~/.ssh/id_deploy 2>/dev/null; then
               chmod 600 ~/.ssh/id_deploy
               valide && echo "::warning::clé décodée depuis du base64."
             fi
