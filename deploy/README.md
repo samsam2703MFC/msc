@@ -19,8 +19,14 @@ outils/db-seed.mjs         le classeur, empaqueté par le runner
 
 Le serveur sert lui-même `dist/` : un processus au lieu de deux, et surtout la
 **même origine** — plus de CORS, un cookie de session qui voyage normalement, et
-un service worker qui contrôle vraiment la page. Un nginx devant reste une bonne
-idée pour TLS et la compression, mais il n'est pas nécessaire au fonctionnement.
+un service worker qui contrôle vraiment la page.
+
+Il écoute en revanche sur la boucle locale, et **nginx devant n'est pas une
+option** : en production le cookie de session porte `Secure`, donc sans TLS le
+navigateur ne le renvoie jamais. L'application répondrait `{"ok":true}` et
+personne ne pourrait se connecter — deux symptômes qui n'ont rien à voir. Cette
+page a longtemps dit « bonne idée, mais pas nécessaire au fonctionnement » ;
+c'est faux, et `deploy/publier.sh` s'en occupe.
 
 Prérequis sur le serveur : Node 22 ou plus (`--env-file-if-exists` en dépend),
 MySQL 8 (ou MariaDB 10.11), et de quoi faire du TLS.
@@ -113,6 +119,33 @@ disparaissent — c'est pourquoi le script de déploiement ne l'appelle jamais.
 Le seed crée un compte **sans mot de passe utilisable** : un mot de passe par
 défaut est un mot de passe public. `compte -- lister` le signale par
 `⚠ sans mot de passe`.
+
+### La porte d'entrée
+
+Un second script, même posture — nginx, le certificat, la redirection :
+
+```sh
+bash /tmp/msc/deploy/publier.sh <domaine>          # + un courriel, si tu veux
+                                                  # les avis d'expiration
+```
+
+Il faut un **nom**, pas une IP : Let's Encrypt ne certifie pas les adresses.
+Sans domaine à toi, `185.180.206.46.sslip.io` en est un — sslip.io résout
+`<ip>.sslip.io` vers cette IP, sans compte ni DNS à configurer, et Let's
+Encrypt le certifie comme n'importe quel autre nom. C'est laid dans la barre
+d'adresse, ça marche, et le jour où tu as un vrai domaine il suffit de relancer
+le script avec : rien à défaire.
+
+Il vérifie que le nom pointe bien ici **avant** d'appeler certbot — une
+validation ratée consomme un des cinq essais horaires de Let's Encrypt, et
+apprendre ça après coup coûte une heure d'attente. Le mandataire vit dans
+`snippets/msc-proxy.conf`, toujours réécrit ; le bloc `server` n'est écrit
+qu'une fois, parce que certbot l'édite ensuite et le réécrire effacerait son
+travail.
+
+Ports **80 et 443** ouverts tous les deux : 80 n'est pas facultatif, la
+validation du certificat passe par lui. Le script ouvre ufw s'il tourne ; un
+pare-feu d'hébergeur, lui, ne se voit pas de l'intérieur de la machine.
 
 ## Ce que le dépôt doit savoir
 
@@ -292,6 +325,9 @@ WantedBy=multi-user.target
 ```
 
 ### nginx — TLS, compression, et rien d'autre
+
+`deploy/publier.sh` écrit exactement ceci. La version à la main, pour relire ce
+qu'il pose :
 
 ```nginx
 server {

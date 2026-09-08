@@ -687,8 +687,11 @@ it targets.
 `deploy/README.md` is the runbook. The short version: one Node process serves
 the built PWA **and** the API from the same origin — no CORS, a session cookie
 that travels normally, and a service worker that actually controls the page.
-An nginx in front is good for TLS and compression but is not required for it to
-work.
+An nginx in front is **not** optional, though, and this page said the opposite
+for a while: in production the session cookie carries `Secure`, so without TLS
+the browser never sends it back. The app answers `{"ok":true}` and nobody can
+log in — two symptoms with nothing in common. `deploy/publier.sh` sets it up,
+and takes `<ip>.sslip.io` when there is no domain yet.
 
 `NODE_ENV=production` is not optional: it condemns the `MSC_ATHLETE_ID`
 development back door and puts `Secure` on the session cookie. `check:api`

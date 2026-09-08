@@ -271,7 +271,24 @@ cat <<EOF
 
    3. Dans $ENV : ANTHROPIC_API_KEY et les identifiants Strava.
 
-   4. Après le premier déploiement, sur la base neuve seulement :
-        cd $RACINE/current && npm run db:seed && npm run compte -- creer <email> <nom>
-      db:seed vide les tables du plan : JAMAIS sur une base qui sert.
+   4. La porte d'entrée — l'application n'écoute que sur la boucle locale :
+        bash $(dirname "$0")/publier.sh <domaine>
+      nginx, le certificat et la redirection. Sans TLS le cookie de session
+      porte « Secure » et n'est jamais renvoyé : personne ne peut se connecter.
+      Sans domaine à toi : $(hostname -I | awk '{print $1}').sslip.io en est un.
+
+   5. Après le premier déploiement, sur la base neuve SEULEMENT :
+        cd $RACINE/current
+        sudo -u $UTILISATEUR npm run db:seed:serveur
+        sudo -u $UTILISATEUR npm run compte -- creer <email> "<nom>"
+        sudo -u $UTILISATEUR npm run compte -- acces <email> 1 ecriture
+
+      db:seed:serveur, et surtout pas db:seed : celui-ci empaquette des sources
+      qui ne partent pas au serveur, installe esbuild sur la production et
+      échoue sur des imports absents. Le runner a empaqueté le classeur dans
+      outils/db-seed.mjs, qui n'a besoin que de mysql2.
+
+      Il vide les tables du plan avant de les remplir : JAMAIS sur une base
+      qui sert. Le compte créé est sans mot de passe utilisable — un mot de
+      passe par défaut est un mot de passe public.
 EOF

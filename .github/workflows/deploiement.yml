@@ -338,11 +338,31 @@ jobs:
             echo "variable DEPLOY_URL non définie — pas de vérification en ligne"
             exit 0
           fi
-          for i in $(seq 1 20); do
-            REPONSE=$(curl -fsS --max-time 10 "$URL/api/sante" 2>/dev/null) && break
+          # Cinq essais, pas vingt : l'étape précédente a déjà obtenu une
+          # réponse sur la boucle locale, donc l'application est debout et
+          # n'a pas besoin qu'on l'attende. Vingt essais de dix secondes,
+          # c'était quatre minutes pour apprendre la même chose.
+          for _ in $(seq 1 5); do
+            SORTIE=$(curl -fsS --max-time 10 "$URL/api/sante" 2>&1) \
+              && { REPONSE=$SORTIE; break; }
             sleep 3
           done
-          test -n "${REPONSE:-}" || { echo "le serveur ne répond pas après le déploiement"; exit 1; }
+          if [ -z "${REPONSE:-}" ]; then
+            # Ce que curl a dit, plutôt que ce que j'en déduis. Jeter cette
+            # ligne dans /dev/null a déjà coûté six diagnostics sur la clé SSH.
+            echo "::error::l'application tourne, l'adresse ne répond pas"
+            echo "curl : $SORTIE"
+            echo
+            echo "L'étape d'avant a eu {\"ok\":true} sur 127.0.0.1 : ce n'est donc"
+            echo "pas un déploiement à défaire, c'est la porte d'entrée qui manque."
+            echo "Sur le serveur, en root :  bash deploy/publier.sh <domaine>"
+            echo "Sans domaine : <ip>.sslip.io en est un, gratuit et immédiat."
+            echo
+            echo "Et si DEPLOY_URL est un secret, mets-la en variable : masquée,"
+            echo "une URL fausse reste invisible ici, ce qui est exactement le"
+            echo "moment où on aurait besoin de la lire."
+            exit 1
+          fi
           echo "$REPONSE"
           # `ok` seul ne dit pas que tout est configuré : les trois autres
           # drapeaux disent ce qui manque encore.
