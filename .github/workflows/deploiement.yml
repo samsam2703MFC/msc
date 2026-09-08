@@ -147,6 +147,15 @@ jobs:
                    tete=$(tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu | head -c 8)
                    echo "  C'est du base64 pur, mais il ne donne pas de clé."
                    echo "  Ses huit premiers caractères : $tete"
+                   # Les deux nombres que preparer.sh imprime de son côté. S'ils
+                   # ne coïncident pas, la ligne a été tronquée au collage — et
+                   # une troncature donne exactement « error in libcrypto », un
+                   # message qui ne parle jamais de longueur.
+                   propre=$(tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu)
+                   echo "  Longueur reçue : $(printf '%s' "$propre" | wc -c) caractères"
+                   echo "  Empreinte reçue : $(printf '%s' "$propre" | sha256sum | cut -c1-12)"
+                   echo "  preparer.sh imprime ces deux nombres pour la clé du serveur."
+                   echo "  S'ils diffèrent, la ligne a été coupée en la copiant."
                    echo "    LS0tLS1C = un PEM encodé, c'est ce qu'on attend"
                    echo "    c3NoLWVk = un .pub encodé — c'est la moitié publique"
                    echo "  Décodé, ça commence par : $(tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu | base64 -di 2>/dev/null | head -c 20 | cat -v)"

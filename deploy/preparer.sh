@@ -187,6 +187,14 @@ cat <<EOF
 
       Ne la colle nulle part ailleurs : celle-là est privée.
 
+      Longueur attendue : $(base64 -w0 "$CLE" | wc -c) caractères
+      Empreinte          : $(base64 -w0 "$CLE" | sha256sum | cut -c1-12)
+
+      Le déploiement affiche ces deux nombres pour ce qu'il a REÇU. S'ils
+      diffèrent, la ligne a été tronquée au collage — c'est ce qui arrive quand
+      on sélectionne à la souris une ligne que le terminal a repliée. Dans
+      PuTTY, un triple-clic prend la ligne logique entière, replis compris.
+
    2. Les variables GitHub, si ce n'est pas déjà fait :
         DEPLOY_HOST=$(hostname -I | awk '{print $1}')  DEPLOY_USER=$UTILISATEUR  DEPLOY_PATH=$RACINE
 
