@@ -224,38 +224,56 @@ else
 fi
 
 dire "5 · le certificat"
-if [ -d "/etc/letsencrypt/live/$DOMAINE" ]; then
-  echo "   déjà émis pour $DOMAINE, laissé tel quel"
+if [ "$RELAIS" = nginx ]; then PLUGIN=python3-certbot-nginx; set -- --nginx
+else                           PLUGIN=python3-certbot-apache; set -- --apache; fi
+command -v certbot > /dev/null || apt-get install -y -qq certbot "$PLUGIN"
+dpkg -s "$PLUGIN" > /dev/null 2>&1 || apt-get install -y -qq "$PLUGIN"
+
+# La lignée qui couvre un domaine ne porte PAS forcément son nom : certbot
+# nomme une lignée d'après le premier domaine de la PREMIÈRE demande, et un
+# panneau d'hébergeur nomme comme il veut. Chercher /etc/letsencrypt/live/<nom>
+# rate donc un certificat qui existe bel et bien — et certbot refuse alors de
+# partir en parlant d'un nom qu'on n'a jamais écrit nulle part.
+EXISTANT=$(certbot certificates 2>/dev/null | awk -v d="$DOMAINE" '
+  /Certificate Name:/ { nom=$NF; type=""; ok=0 }
+  /Key Type:/         { type=tolower($NF) }
+  /Domains:/          { ok=0; for (i=2;i<=NF;i++) if ($i==d) ok=1 }
+  /Expiry Date:/      { if (ok) print nom"\t"type"\t"$3 }' | head -1)
+
+if [ -n "$EXISTANT" ]; then
+  NOM=$(cut -f1 <<< "$EXISTANT")
+  TYPE=$(cut -f2 <<< "$EXISTANT")
+  ECHEANCE=$(cut -f3 <<< "$EXISTANT")
+  echo "   une lignée couvre déjà $DOMAINE : « $NOM », clé $TYPE, jusqu'au $ECHEANCE"
+  echo "   on la réutilise et on l'installe dans $RELAIS"
+  # --key-type doit RÉPÉTER le type existant. Sans lui, certbot applique son
+  # défaut, y voit un changement de type de clé, et s'arrête pour demander
+  # confirmation — ce qui, en --non-interactive, est un échec sec.
+  set -- "$@" --cert-name "$NOM" --key-type "$TYPE" --keep-until-expiring
+fi
+
+if [ -n "$COURRIEL" ]; then set -- "$@" --agree-tos -m "$COURRIEL"
 else
-  if [ "$RELAIS" = nginx ]; then
-    command -v certbot > /dev/null || apt-get install -y -qq certbot python3-certbot-nginx
-    set -- --nginx
-  else
-    command -v certbot > /dev/null || apt-get install -y -qq certbot python3-certbot-apache
-    dpkg -s python3-certbot-apache > /dev/null 2>&1 \
-      || apt-get install -y -qq python3-certbot-apache
-    set -- --apache
-  fi
-  if [ -n "$COURRIEL" ]; then set -- "$@" --agree-tos -m "$COURRIEL"
-  else
-    echo "   sans courriel : pas d'avis avant expiration (le renouvellement reste automatique)"
-    set -- "$@" --agree-tos --register-unsafely-without-email
-  fi
-  # `set -e` tuerait le script sur l'échec de certbot, avec sa propre erreur —
-  # lisible, mais muette sur les causes que cette machine ne voit pas d'ici.
-  if certbot "$@" -d "$DOMAINE" --non-interactive --redirect; then
-    echo "   certificat installé, HTTP redirigé vers HTTPS"
-  else
-    echo
-    echo "   certbot a échoué. Dans l'ordre de probabilité :"
-    echo "     · le port 80 fermé chez l'hébergeur — la validation passe par LUI,"
-    echo "       pas par 443, et un pare-feu externe ne se voit pas d'ici."
-    echo "     · le DNS pointe ailleurs (vu : $resolu ; la machine a : $ADRESSES)"
-    echo "     · cinq essais ratés dans l'heure : Let's Encrypt fait patienter."
-    echo "   Rien n'est cassé — $RELAIS sert $DOMAINE en clair, et relancer ce"
-    echo "   script une fois le port ouvert reprend exactement ici."
-    exit 1
-  fi
+  echo "   sans courriel : pas d'avis avant expiration (le renouvellement reste automatique)"
+  set -- "$@" --agree-tos --register-unsafely-without-email
+fi
+
+# `set -e` tuerait le script sur l'échec de certbot, avec sa propre erreur —
+# précise le plus souvent, mais noyée dans le défilement.
+if certbot "$@" -d "$DOMAINE" --non-interactive --redirect; then
+  echo "   certificat installé, HTTP redirigé vers HTTPS"
+else
+  echo
+  echo "   certbot a échoué. LIS D'ABORD la ligne qu'il vient d'imprimer : il"
+  echo "   nomme souvent la cause exacte, et elle n'est pas toujours ci-dessous."
+  echo "   Sinon, dans l'ordre de probabilité :"
+  echo "     · le port 80 fermé chez l'hébergeur — la validation passe par LUI,"
+  echo "       pas par 443, et un pare-feu externe ne se voit pas d'ici."
+  echo "     · le DNS pointe ailleurs (vu : $resolu ; la machine a : $ADRESSES)"
+  echo "     · cinq essais ratés dans l'heure : Let's Encrypt fait patienter."
+  echo "   Rien n'est cassé — $RELAIS sert $DOMAINE en clair, et relancer ce"
+  echo "   script reprend exactement ici."
+  exit 1
 fi
 systemctl list-timers 2>/dev/null | grep -q certbot \
   && echo "   renouvellement automatique : minuterie certbot active" \

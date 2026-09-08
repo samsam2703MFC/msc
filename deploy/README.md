@@ -154,6 +154,15 @@ apprendre ça après coup coûte une heure d'attente. Le mandataire vit dans
 qu'une fois, parce que certbot l'édite ensuite et le réécrire effacerait son
 travail.
 
+Il réutilise un certificat qui existe déjà, et le cherche **par domaine**, pas
+par nom de fichier. Une lignée certbot ne porte pas forcément le nom du domaine
+qu'elle couvre : elle est nommée d'après le premier domaine de la première
+demande, et un panneau d'hébergeur nomme comme il veut. Sur cette machine, la
+lignée qui couvre `185.180.206.46.sslip.io` s'appelle `185.180.206.46`. Chercher
+`/etc/letsencrypt/live/<domaine>` la manquait, et certbot refusait alors de
+partir en parlant d'un changement de type de clé sur un nom qu'on n'avait écrit
+nulle part. Il repasse maintenant le `--cert-name` et le `--key-type` trouvés.
+
 Ports **80 et 443** ouverts tous les deux : 80 n'est pas facultatif, la
 validation du certificat passe par lui. Le script ouvre ufw s'il tourne ; un
 pare-feu d'hébergeur, lui, ne se voit pas de l'intérieur de la machine.
