@@ -24,7 +24,9 @@ COURRIEL=${2:-${COURRIEL:-}}
 
 dire() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
-IP=$(hostname -I | awk '{print $1}')
+ADRESSES=$(hostname -I)                  # toutes : une machine en a souvent
+IP=$(awk '{print $1}' <<< "$ADRESSES")   # plusieurs, et la première n'est pas
+                                         # forcément celle que le DNS vise
 
 if [ -z "$DOMAINE" ]; then
   cat <<EOF
@@ -55,11 +57,17 @@ if [ -z "$resolu" ]; then
   exit 1
 fi
 echo "   $DOMAINE → $resolu"
-if [ "$resolu" != "$IP" ]; then
-  echo "   ⚠ cette machine se voit en $IP, pas $resolu."
-  echo "     Légitime derrière un NAT ou un répartiteur ; sinon le DNS pointe ailleurs"
-  echo "     et certbot échouera. Pour passer outre : FORCER=1 bash \$0 $DOMAINE"
+# Comparer à TOUTES les adresses de la machine, pas à la première : une
+# interface Docker ou un second réseau suffit à faire passer la bonne en
+# deuxième, et le script refuserait de partir pour une IP parfaitement juste.
+if ! grep -qwF "$resolu" <<< "$ADRESSES"; then
+  echo "   ⚠ le nom pointe vers $resolu, que cette machine n'a pas."
+  echo "     Elle se voit en : $ADRESSES"
+  echo "     Légitime derrière un NAT ou un répartiteur ; sinon le DNS pointe"
+  echo "     ailleurs et certbot échouera. Pour passer outre :"
+  echo "       FORCER=1 bash \$0 $DOMAINE"
   [ "${FORCER:-0}" = 1 ] || exit 1
+  echo "   FORCER=1 — on y va quand même."
 fi
 
 dire "2 · nginx"
