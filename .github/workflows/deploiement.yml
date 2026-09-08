@@ -37,6 +37,13 @@ jobs:
         run: |
           npm ci
           npm run build
+          # Le classeur, empaqueté ici. `db:seed` bundle scripts/db-seed.ts, qui
+          # importe src/data/ — et src/ ne part pas au serveur, à dessein. Le
+          # lancer là-bas installait esbuild sur la production pour échouer sur
+          # des imports absents ; l'empaqueter ici rend un fichier autonome et
+          # laisse la machine de production sans outil de build, ce qui était le
+          # but du découpage.
+          npm run db:seed:paquet
 
       - name: la clé
         env:
@@ -304,6 +311,8 @@ jobs:
             scripts/ "$UTILISATEUR@$HOTE:$CIBLE/scripts/"
           rsync -az -e "$SSH" \
             package.json package-lock.json "$UTILISATEUR@$HOTE:$CIBLE/"
+          rsync -az --delete -e "$SSH" \
+            outils/ "$UTILISATEUR@$HOTE:$CIBLE/outils/"
           rsync -az -e "$SSH" \
             deploy/liberer.sh "$UTILISATEUR@$HOTE:$CIBLE/"
 

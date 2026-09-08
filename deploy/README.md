@@ -14,6 +14,7 @@ Un processus Node et une base MySQL. C'est tout.
 ```
 node server/index.mjs      sert la PWA construite (dist/) ET l'API, même origine
 MySQL 8                    la base, migrée et semée une fois
+outils/db-seed.mjs         le classeur, empaqueté par le runner
 ```
 
 Le serveur sert lui-même `dist/` : un processus au lieu de deux, et surtout la
@@ -94,9 +95,16 @@ redémarre. Restent deux gestes qui ne se font qu'une fois, sur la base neuve :
 
 ```sh
 cd /srv/msc/current
-npm run db:seed                      # le classeur — JAMAIS sur une base vivante
-npm run compte -- motdepasse sam@mysmartcoach.local
+sudo -u msc npm run db:seed:serveur          # le classeur — JAMAIS sur une base vivante
+sudo -u msc npm run compte -- creer <email> "<nom>"
+sudo -u msc npm run compte -- acces <email> 1 ecriture
 ```
+
+`db:seed:serveur`, et non `db:seed` : celui-ci empaquette `scripts/db-seed.ts`,
+qui importe `src/data/` — et `src/` ne part pas au serveur. Le lancer là-bas
+installe esbuild sur la production pour échouer sur des imports absents. Le
+runner empaquette le classeur pendant le build et l'envoie dans `outils/` ;
+`db:seed:serveur` lance ce fichier, qui n'a besoin que de `mysql2`.
 
 `db:seed` vide les tables du plan avant de les remplir. Sur une base qui sert,
 c'est le plan de l'athlète et les analyses qui y sont attachées qui

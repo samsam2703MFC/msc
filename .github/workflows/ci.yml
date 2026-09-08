@@ -75,6 +75,11 @@ jobs:
           npm run db:seed
           npm run check:db
 
+      # Le paquet du classeur part au serveur mais n'est lancé par aucun
+      # contrôle : le construire ici est ce qui dit qu'il compile encore.
+      - name: le paquet du classeur
+        run: npm run db:seed:paquet
+
       - name: l'API par HTTP
         # check:api sert la PWA construite : il lui faut un dist/.
         run: |

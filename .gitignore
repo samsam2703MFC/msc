@@ -12,3 +12,6 @@ dev-dist
 
 # les photos reçues de l'app — des données d'athlète, pas du code
 var/
+
+# le classeur empaqueté par le runner, envoyé au serveur
+outils/
