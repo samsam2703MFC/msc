@@ -230,26 +230,49 @@ command -v certbot > /dev/null || apt-get install -y -qq certbot "$PLUGIN"
 dpkg -s "$PLUGIN" > /dev/null 2>&1 || apt-get install -y -qq "$PLUGIN"
 
 # La lignée qui couvre un domaine ne porte PAS forcément son nom : certbot
-# nomme une lignée d'après le premier domaine de la PREMIÈRE demande, et un
-# panneau d'hébergeur nomme comme il veut. Chercher /etc/letsencrypt/live/<nom>
-# rate donc un certificat qui existe bel et bien — et certbot refuse alors de
-# partir en parlant d'un nom qu'on n'a jamais écrit nulle part.
-EXISTANT=$(certbot certificates 2>/dev/null | awk -v d="$DOMAINE" '
-  /Certificate Name:/ { nom=$NF; type=""; ok=0 }
-  /Key Type:/         { type=tolower($NF) }
-  /Domains:/          { ok=0; for (i=2;i<=NF;i++) if ($i==d) ok=1 }
-  /Expiry Date:/      { if (ok) print nom"\t"type"\t"$3 }' | head -1)
+# nomme d'après le premier domaine de la PREMIÈRE demande, et un panneau
+# d'hébergeur nomme comme il veut. Ici la lignée qui couvre
+# 185.180.206.46.sslip.io s'appelle 185.180.206.46.
+#
+# Et on ne la cherche pas dans « certbot certificates » : lire un rapport, c'est
+# dépendre de son format. Cette recherche-là n'a rien rendu pendant que certbot,
+# lui, trouvait très bien la lignée. Les certificats, eux, ne dépendent d'aucun
+# affichage — on leur demande directement quels noms ils couvrent.
+LIGNEE=""; TYPE=""; ECHEANCE=""
+for rep in /etc/letsencrypt/live/*/; do
+  [ -f "$rep/cert.pem" ] || continue
+  openssl x509 -in "$rep/cert.pem" -noout -ext subjectAltName 2>/dev/null \
+    | tr ',' '\n' | tr -d ' ' | grep -qxF "DNS:$DOMAINE" || continue
+  LIGNEE=$(basename "$rep")
+  TYPE=$(sed -n 's/^key_type *= *//p' "/etc/letsencrypt/renewal/$LIGNEE.conf" 2>/dev/null | head -1)
+  if [ -z "$TYPE" ]; then
+    case "$(openssl x509 -in "$rep/cert.pem" -noout -text | grep -m1 'Public Key Algorithm')" in
+      *ecPublicKey*) TYPE=ecdsa ;; *) TYPE=rsa ;;
+    esac
+  fi
+  ECHEANCE=$(openssl x509 -in "$rep/cert.pem" -noout -enddate | cut -d= -f2)
+  break
+done
 
-if [ -n "$EXISTANT" ]; then
-  NOM=$(cut -f1 <<< "$EXISTANT")
-  TYPE=$(cut -f2 <<< "$EXISTANT")
-  ECHEANCE=$(cut -f3 <<< "$EXISTANT")
-  echo "   une lignée couvre déjà $DOMAINE : « $NOM », clé $TYPE, jusqu'au $ECHEANCE"
-  echo "   on la réutilise et on l'installe dans $RELAIS"
+if [ -n "$LIGNEE" ]; then
+  echo "   un certificat couvre déjà $DOMAINE — lignée « $LIGNEE », clé $TYPE"
+  echo "   valable jusqu'au $ECHEANCE : rien de neuf ne sera émis"
   # --key-type doit RÉPÉTER le type existant. Sans lui, certbot applique son
   # défaut, y voit un changement de type de clé, et s'arrête pour demander
   # confirmation — ce qui, en --non-interactive, est un échec sec.
-  set -- "$@" --cert-name "$NOM" --key-type "$TYPE" --keep-until-expiring
+  set -- "$@" --cert-name "$LIGNEE" --key-type "$TYPE" --keep-until-expiring
+else
+  # --cert-name même sans lignée connue. Sans lui, certbot choisit SEUL à quelle
+  # lignée rattacher la demande et peut tomber sur une qu'on n'a pas su lire —
+  # c'est exactement ce qui s'est produit, en refusant de partir au nom d'une
+  # lignée qui n'apparaissait nulle part dans la commande qu'on lui donnait.
+  echo "   aucun certificat ne couvre $DOMAINE ici — demande neuve"
+  # Dire ce qui a été regardé : si certbot trouve malgré tout une lignée, la
+  # liste ci-dessous est la moitié manquante du diagnostic, et l'avoir sous les
+  # yeux tout de suite évite un aller-retour de plus.
+  echo "   (lignées examinées : $(ls -1 /etc/letsencrypt/live 2>/dev/null \
+        | grep -v '^README$' | tr '\n' ' ')${NULL:-})"
+  set -- "$@" --cert-name "$DOMAINE"
 fi
 
 if [ -n "$COURRIEL" ]; then set -- "$@" --agree-tos -m "$COURRIEL"
