@@ -105,6 +105,13 @@ jobs:
           fi
 
           if ! valide; then
+            # Ce que ssh-keygen dit, LUI, sur le meilleur candidat obtenu.
+            # Trois réparations et six diagnostics plus tard, c'est la seule
+            # chose qu'on n'avait jamais regardée : « error in libcrypto » n'est
+            # pas la même chose que « load failed » ni qu'une demande de phrase
+            # de passe, et lui seul fait la différence.
+            echo "Ce que ssh-keygen répond :"
+            ssh-keygen -y -f ~/.ssh/id_deploy 2>&1 > /dev/null | sed 's/^/  /' || true
             cp ~/.ssh/id_deploy.recu ~/.ssh/id_deploy
             chmod 600 ~/.ssh/id_deploy
             echo "DEPLOY_SSH_KEY n'est pas une clé privée exploitable,"
