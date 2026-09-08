@@ -139,13 +139,27 @@ if [ -d "/etc/letsencrypt/live/$DOMAINE" ]; then
 else
   command -v certbot > /dev/null || apt-get install -y -qq certbot python3-certbot-nginx
   if [ -n "$COURRIEL" ]; then
-    certbot --nginx -d "$DOMAINE" --agree-tos -m "$COURRIEL" --non-interactive --redirect
+    set -- --agree-tos -m "$COURRIEL"
   else
     echo "   sans courriel : pas d'avis avant expiration (le renouvellement reste automatique)"
-    certbot --nginx -d "$DOMAINE" --agree-tos --register-unsafely-without-email \
-      --non-interactive --redirect
+    set -- --agree-tos --register-unsafely-without-email
   fi
-  echo "   certificat installé, HTTP redirigé vers HTTPS"
+  # `set -e` tuerait le script sur l'échec de certbot, avec sa propre erreur —
+  # lisible, mais muette sur la cause la plus probable, qui est justement celle
+  # que cette machine ne peut pas voir depuis l'intérieur.
+  if certbot --nginx -d "$DOMAINE" "$@" --non-interactive --redirect; then
+    echo "   certificat installé, HTTP redirigé vers HTTPS"
+  else
+    echo
+    echo "   certbot a échoué. Dans l'ordre de probabilité :"
+    echo "     · le port 80 fermé chez l'hébergeur — la validation passe par LUI,"
+    echo "       pas par 443, et un pare-feu externe ne se voit pas d'ici."
+    echo "     · le DNS pointe ailleurs (ce script a vu $resolu, la machine se voit en $IP)"
+    echo "     · cinq essais ratés dans l'heure : Let's Encrypt fait patienter."
+    echo "   Rien n'est cassé — nginx sert $DOMAINE en clair, et relancer ce"
+    echo "   script une fois le port ouvert reprend exactement ici."
+    exit 1
+  fi
 fi
 systemctl list-timers 2>/dev/null | grep -q certbot \
   && echo "   renouvellement automatique : minuterie certbot active" \
