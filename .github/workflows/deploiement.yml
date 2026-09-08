@@ -90,12 +90,15 @@ jobs:
           #     tiret, ni barre verticale, ni saut de ligne — rien qu'une
           #     sélection à la souris ou un champ de formulaire puisse manger.
           #        base64 -w0 ~/.ssh/msc_deploy
-          #     Tout blanc est retiré, retour chariot compris : un champ de
-          #     formulaire rendu depuis un navigateur Windows insère des CRLF,
-          #     et un seul \r suffit à faire échouer le test « est-ce du
-          #     base64 » comme le décodage lui-même.
-          if ! valide && tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu | grep -qE '^[A-Za-z0-9+/=]+$'; then
-            if tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu | base64 -d > ~/.ssh/id_deploy 2>/dev/null; then
+          #     On ne cherche PAS à reconnaître du base64 avant d'essayer. Une
+          #     version précédente le faisait avec ^[A-Za-z0-9+/=]+$ et refusait
+          #     une clé parfaitement bonne pour un caractère invisible glissé
+          #     par un champ de formulaire. `base64 -di` ignore ce qui n'est pas
+          #     de l'alphabet, et `ssh-keygen` tranche derrière : le seul juge
+          #     utile est « est-ce que ça donne une clé », pas « est-ce que ça
+          #     ressemble à du base64 ».
+          if ! valide; then
+            if tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu | base64 -di > ~/.ssh/id_deploy 2>/dev/null; then
               chmod 600 ~/.ssh/id_deploy
               valide && echo "::warning::clé décodée depuis du base64."
             fi
@@ -120,6 +123,11 @@ jobs:
                 echo "  corps qui manquent, ou la clé est chiffrée par une"
                 echo "  phrase de passe — un runner ne peut pas la taper." ;;
               *) echo "→ ni une clé publique, ni une enveloppe, ni du base64."
+                 # Les caractères hors alphabet, et eux seuls : ils ne peuvent
+                 # pas porter de matière secrète, puisque tout le reste est
+                 # supprimé — et ce sont eux qui font échouer un décodage.
+                 hors=$(tr -d ' \t\r\n' < ~/.ssh/id_deploy.recu | tr -d 'A-Za-z0-9+/=' | head -c 24)
+                 [ -n "$hors" ] && echo "  Caractères hors base64 : $(printf '%s' "$hors" | cat -v)"
                  echo "  Le plus sûr : sur le serveur, « base64 -w0 ~/.ssh/msc_deploy »"
                  echo "  et colle cette unique ligne — elle ne contient rien qu'un"
                  echo "  collage puisse abîmer." ;;
