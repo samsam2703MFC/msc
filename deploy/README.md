@@ -122,7 +122,7 @@ défaut est un mot de passe public. `compte -- lister` le signale par
 
 ### La porte d'entrée
 
-Un second script, même posture — nginx, le certificat, la redirection :
+Un second script, même posture — le relais, le certificat, la redirection :
 
 ```sh
 bash /tmp/msc/deploy/publier.sh <domaine>          # + un courriel, si tu veux
@@ -136,7 +136,18 @@ Encrypt le certifie comme n'importe quel autre nom. C'est laid dans la barre
 d'adresse, ça marche, et le jour où tu as un vrai domaine il suffit de relancer
 le script avec : rien à défaire.
 
-Il vérifie que le nom pointe bien ici **avant** d'appeler certbot — une
+**Il ne suppose pas la machine vierge.** Il regarde d'abord qui tient déjà 80
+et 443 : nginx, Apache, ou personne. Une machine qui sert déjà des sites a déjà
+un serveur web sur ces ports, et lui en poser un second à côté ne produit rien
+d'autre qu'un service qui refuse de démarrer — pendant que le premier continue
+de répondre avec le certificat d'un autre site. Le navigateur dit alors
+`ERR_CERT_COMMON_NAME_INVALID`, qui ne ressemble en rien à la cause. C'est
+arrivé sur cette machine, où Apache sert déjà trois autres domaines ; il les
+laisse intacts et ajoute un vhost nommé à côté. Un relais qu'il ne sait pas
+configurer (haproxy, Caddy) le fait s'arrêter en le disant, plutôt que d'en
+installer un de plus.
+
+Il vérifie aussi que le nom pointe bien ici **avant** d'appeler certbot — une
 validation ratée consomme un des cinq essais horaires de Let's Encrypt, et
 apprendre ça après coup coûte une heure d'attente. Le mandataire vit dans
 `snippets/msc-proxy.conf`, toujours réécrit ; le bloc `server` n'est écrit
@@ -326,8 +337,9 @@ WantedBy=multi-user.target
 
 ### nginx — TLS, compression, et rien d'autre
 
-`deploy/publier.sh` écrit exactement ceci. La version à la main, pour relire ce
-qu'il pose :
+`deploy/publier.sh` écrit ceci quand c'est nginx qui tient les ports, et
+l'équivalent Apache (`ProxyPass`, `LimitRequestBody`, `mod_deflate`) quand c'est
+Apache. La version à la main, pour relire ce qu'il pose :
 
 ```nginx
 server {

@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
-# Ouvre la porte d'entrée : nginx devant l'application, en HTTPS.
+# Ouvre la porte d'entrée : un relais devant l'application, en HTTPS.
 # À lancer en root, sur le serveur, une fois.
 #
 #   bash deploy/publier.sh <domaine> [courriel]
 #
-# L'application écoute sur 127.0.0.1 et n'a jamais été jointe de l'extérieur :
-# c'est la seule étape du déploiement qui n'avait pas son script, et la seule
-# qui manquait. Il est idempotent — relancé, il ne redemande pas de certificat
-# et ne réécrit pas ce que certbot a écrit.
+# L'application écoute sur 127.0.0.1 et n'a jamais été jointe de l'extérieur.
+# Il est idempotent — relancé, il ne redemande pas de certificat et ne réécrit
+# pas ce que certbot a écrit.
 #
 # TLS n'est pas décoratif ici : en production le cookie de session porte
 # `Secure`, donc en HTTP le navigateur ne le renvoie jamais et personne ne peut
 # se connecter. L'application répondrait, et la connexion échouerait sans dire
 # pourquoi.
+#
+# Il ne suppose PAS que la machine est vierge. Une machine qui sert déjà des
+# sites a déjà un serveur web sur 80 et 443, et lui en poser un second à côté
+# ne fait rien d'autre qu'un service qui refuse de démarrer. C'est arrivé — un
+# nginx installé sur un Apache qui tenait déjà les deux ports, et une erreur de
+# certificat dans le navigateur qui n'en disait rien.
 
 set -euo pipefail
 
@@ -70,12 +75,41 @@ if ! grep -qwF "$resolu" <<< "$ADRESSES"; then
   echo "   FORCER=1 — on y va quand même."
 fi
 
-dire "2 · nginx"
-if ! command -v nginx > /dev/null; then
-  apt-get update -qq && apt-get install -y -qq nginx
-  echo "   installé"
-else
-  echo "   $(nginx -v 2>&1)"
+dire "2 · qui tient déjà les ports"
+# La question qu'il fallait poser en premier. Deux serveurs web sur une machine,
+# c'est le second qui ne démarre pas — et rien dans un navigateur ne le dit.
+qui() { ss -tlnp 2>/dev/null | awk -v p=":$1\$" '$4 ~ p' \
+        | grep -oE '"[^"]+"' | head -1 | tr -d '"'; }
+SUR80=$(qui 80 || true)
+SUR443=$(qui 443 || true)
+echo "   port 80  : ${SUR80:-personne}"
+echo "   port 443 : ${SUR443:-personne}"
+
+RELAIS=${SUR443:-${SUR80:-}}
+case "$RELAIS" in
+  apache2|httpd) RELAIS=apache ;;
+  nginx)         RELAIS=nginx ;;
+  "")
+    RELAIS=nginx
+    echo "   personne — on installe nginx"
+    apt-get update -qq && apt-get install -y -qq nginx ;;
+  *)
+    echo
+    echo "   « $RELAIS » tient déjà la porte, et je ne sais pas le configurer."
+    echo "   Poser un second serveur web à côté ne ferait qu'un service qui"
+    echo "   refuse de se lier aux ports. À faire à la main : un mandataire"
+    echo "   vers http://127.0.0.1:PORT pour $DOMAINE, et un certificat."
+    exit 1 ;;
+esac
+echo "   relais retenu : $RELAIS"
+
+# nginx installé par une exécution précédente, alors qu'Apache tenait les
+# ports : il échoue à démarrer à chaque redémarrage de la machine. Le taire.
+if [ "$RELAIS" = apache ] && systemctl list-unit-files nginx.service > /dev/null 2>&1; then
+  if systemctl is-enabled nginx > /dev/null 2>&1 || systemctl is-active nginx > /dev/null 2>&1; then
+    systemctl disable --now nginx > /dev/null 2>&1 || true
+    echo "   nginx arrêté et désactivé : il ne peut pas se lier, Apache a les ports"
+  fi
 fi
 
 PORT=$(sed -n 's/^PORT=//p' "$RACINE/.env" 2>/dev/null | head -1)
@@ -83,11 +117,12 @@ PORT=${PORT:-8787}
 echo "   l'application est attendue sur 127.0.0.1:$PORT"
 
 dire "3 · la configuration du relais"
-# Le mandataire vit dans un fragment à part, TOUJOURS réécrit. Le bloc server,
+# Le mandataire vit dans un fragment à part, TOUJOURS réécrit. Le bloc de site,
 # lui, n'est écrit qu'une fois : certbot l'édite pour y mettre le TLS, et le
 # réécrire ici effacerait son travail à chaque passage.
-install -d /etc/nginx/snippets
-cat > /etc/nginx/snippets/msc-proxy.conf <<EOF
+if [ "$RELAIS" = nginx ]; then
+  install -d /etc/nginx/snippets
+  cat > /etc/nginx/snippets/msc-proxy.conf <<EOF
 # Écrit par deploy/publier.sh — les modifications à la main seront écrasées.
 
 # Une photo de balance envoyée par le téléphone dépasse le défaut d'nginx.
@@ -108,13 +143,13 @@ location / {
   # version que le navigateur refusera de remplacer.
 }
 EOF
-echo "   /etc/nginx/snippets/msc-proxy.conf"
+  echo "   /etc/nginx/snippets/msc-proxy.conf"
 
-SITE=/etc/nginx/sites-available/msc
-if grep -q ssl_certificate "$SITE" 2>/dev/null; then
-  echo "   $SITE porte déjà du TLS, laissé tel quel"
-else
-  cat > "$SITE" <<EOF
+  SITE=/etc/nginx/sites-available/msc
+  if grep -q ssl_certificate "$SITE" 2>/dev/null; then
+    echo "   $SITE porte déjà du TLS, laissé tel quel"
+  else
+    cat > "$SITE" <<EOF
 server {
   listen 80;
   listen [::]:80;
@@ -122,49 +157,102 @@ server {
   include snippets/msc-proxy.conf;
 }
 EOF
-  echo "   $SITE (en clair pour l'instant — certbot y met le TLS juste après)"
-fi
-ln -sfn "$SITE" /etc/nginx/sites-enabled/msc
+    echo "   $SITE (en clair pour l'instant — certbot y met le TLS juste après)"
+  fi
+  ln -sfn "$SITE" /etc/nginx/sites-enabled/msc
+  nginx -t
+  systemctl reload nginx
+  echo "   nginx rechargé"
 
-nginx -t
-systemctl reload nginx
-echo "   nginx rechargé"
+else
+  # mod_proxy et mod_headers ne sont pas actifs par défaut sur Debian.
+  a2enmod proxy proxy_http headers deflate > /dev/null 2>&1 || true
+  cat > /etc/apache2/conf-available/msc-proxy.conf <<EOF
+# Écrit par deploy/publier.sh — les modifications à la main seront écrasées.
+
+# Une photo de balance envoyée par le téléphone dépasse le défaut d'Apache.
+LimitRequestBody 12582912
+
+ProxyPreserveHost On
+ProxyPass        / http://127.0.0.1:$PORT/
+ProxyPassReverse / http://127.0.0.1:$PORT/
+
+# %{REQUEST_SCHEME} et non « https » en dur : ce fragment sert AUSSI le vhost
+# en clair, tant que certbot n'est pas passé. En dur, l'application se croirait
+# derrière du TLS avant qu'il existe.
+RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
+
+AddOutputFilterByType DEFLATE text/css application/javascript application/json application/manifest+json
+
+# Le serveur pose déjà les bons en-têtes de cache — un an sur les fichiers
+# hachés d'assets/, no-cache sur index.html et le service worker. Ne rien
+# réécrire ici : mettre index.html ou sw.js en cache, c'est livrer une version
+# que le navigateur refusera de remplacer.
+EOF
+  echo "   /etc/apache2/conf-available/msc-proxy.conf"
+
+  SITE=/etc/apache2/sites-available/msc.conf
+  if [ -f "$SITE" ]; then
+    echo "   $SITE existe déjà, laissé tel quel"
+  else
+    cat > "$SITE" <<EOF
+<VirtualHost *:80>
+  ServerName $DOMAINE
+  Include conf-available/msc-proxy.conf
+  ErrorLog \${APACHE_LOG_DIR}/msc-error.log
+  CustomLog \${APACHE_LOG_DIR}/msc-access.log combined
+</VirtualHost>
+EOF
+    echo "   $SITE (en clair pour l'instant — certbot y met le TLS juste après)"
+  fi
+  # Nommé : les autres sites de cette machine gardent les leurs, celui-ci ne
+  # répond que pour $DOMAINE.
+  a2ensite msc > /dev/null
+  apache2ctl configtest
+  systemctl reload apache2
+  echo "   apache2 rechargé — les autres sites de la machine sont intacts"
+fi
 
 dire "4 · le pare-feu"
 if command -v ufw > /dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
-  ufw allow 'Nginx Full' > /dev/null
+  if [ "$RELAIS" = nginx ]; then ufw allow 'Nginx Full' > /dev/null
+  else ufw allow 80/tcp > /dev/null; ufw allow 443/tcp > /dev/null; fi
   echo "   ufw : 80 et 443 ouverts"
 else
   echo "   pas d'ufw actif — rien à ouvrir ici."
-  echo "   Si l'hébergeur a son propre pare-feu, 80 ET 443 doivent y être ouverts :"
-  echo "   80 n'est pas facultatif, la validation du certificat passe par lui."
+  echo "   Les deux ports répondent déjà de l'extérieur, donc c'est réglé."
 fi
 
 dire "5 · le certificat"
 if [ -d "/etc/letsencrypt/live/$DOMAINE" ]; then
   echo "   déjà émis pour $DOMAINE, laissé tel quel"
-  echo "   $(certbot certificates 2>/dev/null | sed -n "/$DOMAINE/,/Expiry/p" | tail -1 | sed 's/^ *//')"
 else
-  command -v certbot > /dev/null || apt-get install -y -qq certbot python3-certbot-nginx
-  if [ -n "$COURRIEL" ]; then
-    set -- --agree-tos -m "$COURRIEL"
+  if [ "$RELAIS" = nginx ]; then
+    command -v certbot > /dev/null || apt-get install -y -qq certbot python3-certbot-nginx
+    set -- --nginx
+  else
+    command -v certbot > /dev/null || apt-get install -y -qq certbot python3-certbot-apache
+    dpkg -s python3-certbot-apache > /dev/null 2>&1 \
+      || apt-get install -y -qq python3-certbot-apache
+    set -- --apache
+  fi
+  if [ -n "$COURRIEL" ]; then set -- "$@" --agree-tos -m "$COURRIEL"
   else
     echo "   sans courriel : pas d'avis avant expiration (le renouvellement reste automatique)"
-    set -- --agree-tos --register-unsafely-without-email
+    set -- "$@" --agree-tos --register-unsafely-without-email
   fi
   # `set -e` tuerait le script sur l'échec de certbot, avec sa propre erreur —
-  # lisible, mais muette sur la cause la plus probable, qui est justement celle
-  # que cette machine ne peut pas voir depuis l'intérieur.
-  if certbot --nginx -d "$DOMAINE" "$@" --non-interactive --redirect; then
+  # lisible, mais muette sur les causes que cette machine ne voit pas d'ici.
+  if certbot "$@" -d "$DOMAINE" --non-interactive --redirect; then
     echo "   certificat installé, HTTP redirigé vers HTTPS"
   else
     echo
     echo "   certbot a échoué. Dans l'ordre de probabilité :"
     echo "     · le port 80 fermé chez l'hébergeur — la validation passe par LUI,"
     echo "       pas par 443, et un pare-feu externe ne se voit pas d'ici."
-    echo "     · le DNS pointe ailleurs (ce script a vu $resolu, la machine se voit en $IP)"
+    echo "     · le DNS pointe ailleurs (vu : $resolu ; la machine a : $ADRESSES)"
     echo "     · cinq essais ratés dans l'heure : Let's Encrypt fait patienter."
-    echo "   Rien n'est cassé — nginx sert $DOMAINE en clair, et relancer ce"
+    echo "   Rien n'est cassé — $RELAIS sert $DOMAINE en clair, et relancer ce"
     echo "   script une fois le port ouvert reprend exactement ici."
     exit 1
   fi
@@ -185,9 +273,9 @@ else
   echo "   ÉCHEC. Ce que curl dit :"
   echo "$REPONSE" | sed 's/^/     /'
   echo "   Dans cet ordre :"
-  echo "     systemctl status msc          l'application tourne-t-elle"
-  echo "     curl -s 127.0.0.1:$PORT/api/sante   répond-elle en local"
-  echo "     journalctl -u nginx -n 30     ce que le relais en dit"
+  echo "     systemctl status msc                 l'application tourne-t-elle"
+  echo "     curl -s 127.0.0.1:$PORT/api/sante    répond-elle en local"
+  echo "     journalctl -u $RELAIS* -n 30         ce que le relais en dit"
 fi
 
 dire "Ce qui reste, dans GitHub"
