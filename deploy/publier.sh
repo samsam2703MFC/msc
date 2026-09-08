@@ -174,6 +174,15 @@ else
 LimitRequestBody 12582912
 
 ProxyPreserveHost On
+
+# Le « ! » retire ce chemin du mandataire, et il doit venir AVANT la règle
+# générale : Apache prend la première qui correspond. Sans lui, la validation
+# du certificat part vers l'application Node, qui répond 404 sur un jeton
+# qu'elle n'a jamais vu — et certbot échoue sur un domaine parfaitement joignable.
+# Un ProxyPass qui avale « / » avale aussi /.well-known/acme-challenge/, et
+# l'Alias que pose certbot ne gagne pas contre mod_proxy.
+ProxyPass /.well-known/acme-challenge/ !
+
 ProxyPass        / http://127.0.0.1:$PORT/
 ProxyPassReverse / http://127.0.0.1:$PORT/
 
@@ -192,7 +201,7 @@ EOF
   echo "   /etc/apache2/conf-available/msc-proxy.conf"
 
   SITE=/etc/apache2/sites-available/msc.conf
-  if [ -f "$SITE" ]; then
+  if [ -f "$SITE" ] && grep -q 'Include conf-available/msc-proxy.conf' "$SITE"; then
     echo "   $SITE existe déjà, laissé tel quel"
   else
     cat > "$SITE" <<EOF
