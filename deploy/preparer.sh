@@ -38,8 +38,23 @@ echo "   node $(node --version)"
 }
 
 dire "2 · l'utilisateur et l'arborescence"
-if id "$UTILISATEUR" > /dev/null 2>&1; then deja "utilisateur $UTILISATEUR"
-else adduser --system --group --home "$RACINE" "$UTILISATEUR" > /dev/null; echo "   créé : $UTILISATEUR"; fi
+# `adduser --system` donne /usr/sbin/nologin par défaut. C'est le bon réflexe
+# pour un compte de service, et c'est faux ici : le déploiement ouvre une
+# session pour lancer rsync et le script de bascule. Sans shell, il se fait
+# refuser sans que rien ne dise pourquoi.
+if id "$UTILISATEUR" > /dev/null 2>&1; then
+  deja "utilisateur $UTILISATEUR"
+else
+  adduser --system --group --home "$RACINE" --shell /bin/bash "$UTILISATEUR" > /dev/null
+  echo "   créé : $UTILISATEUR"
+fi
+shell=$(getent passwd "$UTILISATEUR" | cut -d: -f7)
+case "$shell" in
+  */nologin|*/false|"")
+    usermod --shell /bin/bash "$UTILISATEUR"
+    echo "   shell corrigé : $shell → /bin/bash" ;;
+  *) echo "   shell : $shell" ;;
+esac
 install -d -o "$UTILISATEUR" -g "$UTILISATEUR" -m 755 "$RACINE" "$RACINE/releases" "$RACINE/var"
 install -d -o "$UTILISATEUR" -g "$UTILISATEUR" -m 700 "$RACINE/var/photos" "$RACINE/.ssh"
 echo "   $RACINE/{releases,var,var/photos,.ssh}"
@@ -178,6 +193,26 @@ echo "   msc.service installé et activé (il démarrera au premier déploiement
 echo "$UTILISATEUR ALL=(root) NOPASSWD: /bin/systemctl restart msc" > /etc/sudoers.d/msc-restart
 chmod 440 /etc/sudoers.d/msc-restart
 echo "   sudoers : $UTILISATEUR peut redémarrer msc, et rien d'autre"
+
+dire "7 · l'essai de connexion"
+# Le déploiement ouvre une session avec cette clé. Autant l'essayer ICI, où
+# l'erreur est lisible en une seconde, plutôt que de la découvrir par un
+# aller-retour GitHub qui ne dit que « Permission denied ».
+if sudo -u "$UTILISATEUR" ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+     -o ConnectTimeout=5 -i "$CLE" "$UTILISATEUR@127.0.0.1" true 2> /tmp/essai_ssh.log; then
+  echo "   la clé ouvre bien une session $UTILISATEUR@127.0.0.1"
+else
+  echo "   ÉCHEC — le déploiement échouera pareil. Ce que ssh dit :"
+  sed 's/^/     /' /tmp/essai_ssh.log
+  echo "   À regarder, dans cet ordre :"
+  echo "     - le shell de $UTILISATEUR : $(getent passwd "$UTILISATEUR" | cut -d: -f7)"
+  echo "     - les droits : $(stat -c '%a %U' "$RACINE") sur $RACINE,"
+  echo "       $(stat -c '%a %U' "$RACINE/.ssh") sur .ssh,"
+  echo "       $(stat -c '%a %U' "$RACINE/.ssh/authorized_keys") sur authorized_keys"
+  echo "     - sshd : AllowUsers / DenyUsers / PubkeyAuthentication"
+  echo "   sshd explique toujours son refus dans /var/log/auth.log."
+fi
+echo "   empreinte de la clé : $(ssh-keygen -lf "$CLE" | cut -d' ' -f1,2)"
 
 dire "Ce qui reste à faire, à la main"
 cat <<EOF
