@@ -142,36 +142,33 @@ if [ "$RELAIS" = nginx ]; then
   echo "   nginx rechargé"
 else
   a2enmod proxy proxy_http headers deflate > /dev/null 2>&1 || true
+
+  # Tout le mandataire tient dans un « <Location $MONTAGE/> ». C'est ce qui le
+  # rend posable GLOBALEMENT sans rien faire déborder : les réglages ne valent
+  # que sous ce chemin, jamais pour le reste d'un vhost.
+  #
+  # Pourquoi global. Sur une machine qui sert déjà des sites, l'adresse nue est
+  # servie par le vhost qui se charge en premier avec ce ServerName — souvent un
+  # « 000-catchall » qu'on ne possède pas. Notre propre vhost est bien listé et
+  # n'est jamais choisi. Plutôt que d'éditer le sien (fragile : un configtest qui
+  # casse, un fichier à restaurer), on active le mandataire dans conf-enabled,
+  # que TOUS les vhosts héritent — le catch-all comme les autres. Rien de sa
+  # configuration n'est touché.
   {
     echo "# Écrit par deploy/publier.sh — les modifications à la main seront écrasées."
     echo
-    echo "ProxyPreserveHost On"
-    if [ "$MODE" = domaine ]; then
-      echo
-      echo "# Le « ! » retire ce chemin du mandataire, et il doit venir AVANT la règle"
-      echo "# générale : Apache prend la première qui correspond. Sans lui, la"
-      echo "# validation du certificat part vers l'application, qui répond 404 sur un"
-      echo "# jeton qu'elle n'a jamais vu. L'Alias que pose certbot ne gagne pas"
-      echo "# contre mod_proxy."
-      echo "ProxyPass $MONTAGE/.well-known/acme-challenge/ !"
-    fi
     if [ -n "$MONTAGE" ]; then
-      echo
       echo "# Sans barre finale, « $MONTAGE » ne correspond à aucune règle et tombe sur"
       echo "# le site par défaut de la machine — un 404 signé Apache, déroutant."
       echo "RedirectMatch ^$MONTAGE\$ $MONTAGE/"
+      echo
     fi
-    echo
-    echo "# Les barres obliques finales des DEUX côtés : c'est elles qui retirent le"
-    echo "# préfixe. « $MONTAGE/api/sante » arrive au serveur comme « /api/sante », et"
-    echo "# le serveur Node continue d'ignorer où il est monté."
-    echo "ProxyPass        $MONTAGE/ http://127.0.0.1:$PORT/"
-    echo "ProxyPassReverse $MONTAGE/ http://127.0.0.1:$PORT/"
-    echo
-    echo "# Ce fragment peut être inclus dans un vhost qui ne nous appartient pas —"
-    echo "# celui qui possède déjà l'adresse. Tout ce qui pourrait changer SON"
-    echo "# comportement est donc enfermé ici, sous le seul chemin de l'application."
     echo "<Location $MONTAGE/>"
+    echo "  # La barre finale des deux côtés retire le préfixe : « $MONTAGE/api/sante »"
+    echo "  # arrive au serveur comme « /api/sante », qui ignore où il est monté."
+    echo "  ProxyPass        http://127.0.0.1:$PORT/"
+    echo "  ProxyPassReverse http://127.0.0.1:$PORT/"
+    echo
     echo "  # Une photo de balance envoyée par le téléphone dépasse le défaut d'Apache."
     echo "  LimitRequestBody 12582912"
     echo
@@ -183,61 +180,52 @@ else
     echo "</Location>"
     echo
     echo "# Le serveur pose déjà les bons en-têtes de cache — un an sur les fichiers"
-    echo "# hachés d'assets/, no-cache sur index.html et le service worker. Ne rien"
-    echo "# réécrire ici : mettre index.html en cache, c'est livrer une version que"
-    echo "# le navigateur refusera de remplacer."
+    echo "# hachés d'assets/, no-cache sur index.html et le service worker."
   } > /etc/apache2/conf-available/msc-proxy.conf
-  echo "   /etc/apache2/conf-available/msc-proxy.conf  (montage : ${MONTAGE:-/})"
+  echo "   /etc/apache2/conf-available/msc-proxy.conf  (montage : $MONTAGE)"
 
-  SITE=/etc/apache2/sites-available/msc.conf
-  {
-    echo "<VirtualHost *:80>"
-    echo "  ServerName $CIBLE"
-    echo "  Include conf-available/msc-proxy.conf"
-    echo "  ErrorLog \${APACHE_LOG_DIR}/msc-error.log"
-    echo "  CustomLog \${APACHE_LOG_DIR}/msc-access.log combined"
-    echo "</VirtualHost>"
-  } > "$SITE"
-  echo "   $SITE"
-  a2ensite msc > /dev/null
+  # Un reste d'une version précédente qui éditait le vhost : on le retire.
+  rm -f /etc/apache2/sites-available/*.avant-msc 2>/dev/null || true
 
-  # Apache prend le PREMIER vhost dont le ServerName correspond, dans l'ordre de
-  # chargement de sites-enabled. Un « 000-… » qui déclare déjà cette adresse
-  # gagne donc toujours contre « msc.conf » : le nôtre est bien listé par
-  # apache2ctl -S, et n'est jamais choisi. Le symptôme est un 404 d'Apache, qui
-  # ressemble à une application absente alors qu'elle tourne parfaitement.
-  PREMIER=$(grep -lE "^[[:space:]]*ServerName[[:space:]]+$CIBLE[[:space:]]*\$" \
-              /etc/apache2/sites-enabled/*.conf 2>/dev/null | sort | head -1)
-  if [ -n "$PREMIER" ] && [ "$(basename "$PREMIER")" != msc.conf ]; then
-    echo "   ⚠ « $(basename "$PREMIER") » déclare déjà ServerName $CIBLE et se charge"
-    echo "     avant msc.conf : c'est lui qui répond à cette adresse, pas nous."
-    REEL=$(readlink -f "$PREMIER")     # sed/mv sur le lien le remplacerait par un fichier
-    if grep -q 'msc-proxy.conf' "$REEL"; then
-      echo "   il inclut déjà notre mandataire — rien à changer"
-    else
-      # Prendre sa place comme vhost par défaut changerait le comportement de la
-      # machine pour TOUS les hôtes inconnus. Une ligne chez lui ne détourne que
-      # $MONTAGE/ ; le reste de ce vhost est intact, et la sauvegarde le prouve.
-      cp --update=none "$REEL" "$REEL.avant-msc" 2>/dev/null || cp -n "$REEL" "$REEL.avant-msc"
-      TMP=$(mktemp)
-      awk -v l="  Include conf-available/msc-proxy.conf" \
-          '/<\/VirtualHost>/ && !f {print l; f=1} {print}' "$REEL" > "$TMP"
-      cat "$TMP" > "$REEL"; rm -f "$TMP"   # cat et non mv : on garde inode et lien
-      if apache2ctl configtest > /dev/null 2>&1; then
-        echo "   une ligne ajoutée dans $REEL"
-        echo "   sauvegarde : $REEL.avant-msc — seul $MONTAGE/ y est détourné."
-      else
-        cat "$REEL.avant-msc" > "$REEL"
-        echo "   ÉCHEC : l'ajout casse la configuration. Fichier restauré, rien perdu."
-        apache2ctl configtest 2>&1 | sed 's/^/     /'
-        exit 1
-      fi
-    fi
+  if [ "$MODE" = domaine ]; then
+    # Un vrai domaine a un ServerName unique : aucun catch-all ne le lui dispute,
+    # et certbot a besoin d'un vhost à ce nom pour y accrocher le certificat. Le
+    # mandataire y est inclus, scellé à ce domaine plutôt que global.
+    a2disconf msc-proxy > /dev/null 2>&1 || true
+    SITE=/etc/apache2/sites-available/msc.conf
+    {
+      echo "<VirtualHost *:80>"
+      echo "  ServerName $CIBLE"
+      echo "  Include conf-available/msc-proxy.conf"
+      echo "  ErrorLog \${APACHE_LOG_DIR}/msc-error.log"
+      echo "  CustomLog \${APACHE_LOG_DIR}/msc-access.log combined"
+      echo "</VirtualHost>"
+    } > "$SITE"
+    a2ensite msc > /dev/null
+    echo "   vhost $CIBLE écrit et activé"
+  else
+    # L'adresse nue : le mandataire va dans conf-enabled, hérité par le vhost qui
+    # possède l'adresse. Notre vhost autonome ne gagnerait jamais contre lui, on
+    # le désactive pour ne pas laisser deux fois le même ServerName.
+    a2dissite msc > /dev/null 2>&1 || true
+    a2enconf msc-proxy > /dev/null
+    echo "   mandataire activé globalement (conf-enabled)"
+    echo "   → le vhost qui possède $CIBLE en hérite, son fichier n'est pas touché"
   fi
 
-  apache2ctl configtest
-  systemctl reload apache2
-  echo "   apache2 rechargé — les autres sites de la machine sont intacts"
+  # Un configtest qui échoue ne doit pas laisser Apache avec une config qu'il
+  # refusera de recharger au prochain redémarrage. On le vérifie AVANT de
+  # recharger, et on dit quoi défaire si ça casse.
+  if apache2ctl configtest 2>&1 | grep -qiE 'Syntax OK'; then
+    systemctl reload apache2
+    echo "   apache2 rechargé — les autres sites de la machine sont intacts"
+  else
+    echo "   ÉCHEC du configtest — Apache N'A PAS été rechargé, rien n'a changé :"
+    apache2ctl configtest 2>&1 | sed 's/^/     /'
+    [ "$MODE" = domaine ] && echo "   défaire : a2dissite msc" \
+                          || echo "   défaire : a2disconf msc-proxy"
+    exit 1
+  fi
 fi
 
 dire "5 · le pare-feu"

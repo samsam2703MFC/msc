@@ -142,20 +142,24 @@ service, sans quoi la connexion serait impossible (voir *Les variables*).
 **Sur un nom**, HTTPS avec certificat, à la racine ou sous un chemin — le
 script lit le chemin dans le `dist/` déployé plutôt que de le supposer.
 
-**Un vhost peut déjà posséder l'adresse.** Apache choisit le premier vhost dont
-le `ServerName` correspond, dans l'ordre de chargement de `sites-enabled`. Sur
-cette machine un `000-ip-catchall.conf` déclare déjà `ServerName
-185.180.206.46` et se charge avant `msc.conf` : le nôtre apparaissait bien dans
-`apache2ctl -S`, et n'était jamais choisi — un 404 d'Apache, qui ressemble à
-une application absente alors qu'elle tourne. Le script le détecte et ajoute
-une ligne `Include` dans ce vhost-là, avec une sauvegarde `.avant-msc` et un
-`configtest` qui restaure le fichier si l'ajout casse quoi que ce soit.
+**Un vhost peut déjà posséder l'adresse.** Apache sert une adresse par le
+premier vhost dont le `ServerName` correspond, dans l'ordre de chargement de
+`sites-enabled`. Sur cette machine un `000-ip-catchall.conf` déclare déjà
+`ServerName 185.180.206.46` et se charge avant tout le reste : notre propre
+vhost apparaissait dans `apache2ctl -S`, et n'était jamais choisi — un 404
+d'Apache, qui ressemble à une application absente alors qu'elle tourne.
 
-Prendre sa place comme vhost par défaut aurait aussi marché, et aurait changé
-le comportement de la machine pour tous les hôtes inconnus. C'est pourquoi tout
-ce qui pourrait déborder — `LimitRequestBody`, `RequestHeader`, la compression —
-est enfermé dans un `<Location /msc/>` : chez un vhost qui ne nous appartient
-pas, on ne détourne que notre chemin.
+Plutôt que d'éditer le fichier de ce vhost (fragile — un `configtest` qui casse,
+un fichier à restaurer), le mandataire est posé dans `conf-enabled`, que **tous**
+les vhosts héritent, le catch-all compris. Aucun de tes fichiers n'est touché.
+Et pour que ce mandataire global ne déborde sur rien, tout est enfermé dans un
+`<Location /msc/>` : seul ce chemin est détourné, sur cette machine comme sur
+n'importe quelle autre. Un vrai domaine, lui, a un `ServerName` unique qu'aucun
+catch-all ne dispute : le mandataire va alors dans son propre vhost, et non en
+global, parce que certbot a besoin de ce vhost pour y accrocher le certificat.
+
+Défaire : `a2disconf msc-proxy` (mode IP) ou `a2dissite msc` (mode domaine),
+puis `systemctl reload apache2`.
 
 Le chemin `/msc` vient du build : `MSC_BASE`, `/msc/` par défaut, posé sur le
 runner (variable GitHub `MSC_BASE`). **Le montage du relais et le `base` du
