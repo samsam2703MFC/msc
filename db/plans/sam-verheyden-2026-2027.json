@@ -1,0 +1,1312 @@
+{
+ "source": "db/plans/PLAN_MUSCULATION_DETAILLEE.xlsx — feuille « PLAN 44 SEMAINES », lue telle quelle",
+ "athlete": "Sam Verheyden",
+ "premier_lundi": "2026-09-07",
+ "references": {
+  "actuelle": "4:10",
+  "cible": "3:46",
+  "pourquoi": "4:10/km : ce que supposent les 2×3' @4:00 de la première semaine ; 3:46/km : l'équivalent 10 km d'un marathon en 3h00 (4:16/km), l'objectif principal."
+ },
+ "parts": {
+  "RECONDI": 0,
+  "BUILD 10K": 0.35,
+  "BUILD SEMI→MARA": 0.7,
+  "ROME PEAK": 1,
+  "RECUP ROME": 0.3,
+  "LBL+BUILD": 0.6,
+  "ALPSMAN PEAK": 1,
+  "RECUP": 0.5,
+  "STONE": 0.6
+ },
+ "parts_pourquoi": "Où chaque phase se situe entre la référence actuelle (0) et la cible (1). Posé à la main d'après l'intention de la phase : les allures du classeur, prises telles quelles, donneraient des sauts (des répétitions de 9' @3:45 en BUILD 10K supposent un 10 km en 35:50, plus vite que l'objectif).",
+ "competitions": [
+  {
+   "date": "2026-11-30",
+   "nom": "10 km",
+   "discipline": "Course à pied",
+   "distance_km": 10,
+   "cible": "38–39 min",
+   "cible_s": 2280,
+   "cible_haute_s": 2340,
+   "principal": false
+  },
+  {
+   "date": "2027-02-21",
+   "nom": "Semi-marathon",
+   "discipline": "Course à pied",
+   "distance_km": 21.097,
+   "cible": "1h30",
+   "cible_s": 5400,
+   "cible_haute_s": 5400,
+   "principal": false
+  },
+  {
+   "date": "2027-03-14",
+   "nom": "Marathon de Rome",
+   "discipline": "Course à pied",
+   "distance_km": 42.195,
+   "cible": "3h00",
+   "cible_s": 10800,
+   "cible_haute_s": 10800,
+   "principal": true
+  },
+  {
+   "date": "2027-05-02",
+   "nom": "Liège–Bastogne–Liège Challenge",
+   "discipline": "Vélo",
+   "distance_km": 260,
+   "cible": "finir (≈10 h)",
+   "cible_s": 36000,
+   "cible_haute_s": 36000,
+   "principal": false
+  },
+  {
+   "date": "2027-06-06",
+   "nom": "Stelvio Santini (Alpsman)",
+   "discipline": "Vélo",
+   "distance_km": 200,
+   "cible": "finir (8–9 h)",
+   "cible_s": 28800,
+   "cible_haute_s": 32400,
+   "principal": false
+  }
+ ],
+ "a_preciser": [
+  "STONE ⭐⭐ (27/06) : épreuve inconnue — discipline et distance à renseigner",
+  "IBIZA (24–30/04) : semaine de stage, pas une course"
+ ],
+ "semaines": [
+  {
+   "semaine": 1,
+   "lundi": "07/09",
+   "phase": "RECONDI",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 1.0km\n200m crawl\n6×100m crawl 1:50/30s",
+    "MERCREDI": "FRAC\n10m warm\n2×3m @4:00\n10m cool",
+    "JEUDI": "VÉLO 60m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 90m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "1.0",
+    "frac_min": 40,
+    "velo_min": 60,
+    "long_min": 90,
+    "muscu": "—",
+    "total_h": "5.8"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 2,
+   "lundi": "14/09",
+   "phase": "RECONDI",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 1.2km\n200m crawl\n8×100m crawl 1:50/30s",
+    "MERCREDI": "FRAC\n10m warm\n2×3m @4:00\n10m cool",
+    "JEUDI": "VÉLO 65m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 95m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "1.2",
+    "frac_min": 40,
+    "velo_min": 65,
+    "long_min": 95,
+    "muscu": "—",
+    "total_h": "6.2"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 3,
+   "lundi": "21/09",
+   "phase": "RECONDI",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 1.5km\n200m crawl\n10×100m crawl 1:45/30s",
+    "MERCREDI": "FRAC\n10m warm\n3×3m @4:00\n10m cool",
+    "JEUDI": "VÉLO 70m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 105m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "1.5",
+    "frac_min": 40,
+    "velo_min": 70,
+    "long_min": 105,
+    "muscu": "—",
+    "total_h": "6.8"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 4,
+   "lundi": "28/09",
+   "phase": "RECONDI",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 1.5km\n200m crawl\n10×100m crawl 1:45/30s",
+    "MERCREDI": "FRAC\n10m warm\n3×3m @3:55\n10m cool",
+    "JEUDI": "VÉLO 75m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 110m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "1.5",
+    "frac_min": 40,
+    "velo_min": 75,
+    "long_min": 110,
+    "muscu": "—",
+    "total_h": "6.9"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 5,
+   "lundi": "05/10",
+   "phase": "RECONDI",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 1.8km\n200m crawl\n8×150m crawl 2:40/30s",
+    "MERCREDI": "FRAC\n10m warm\n3×4m @3:55\n10m cool",
+    "JEUDI": "VÉLO 80m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 115m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "1.8",
+    "frac_min": 40,
+    "velo_min": 80,
+    "long_min": 115,
+    "muscu": "—",
+    "total_h": "7.4"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 6,
+   "lundi": "12/10",
+   "phase": "RECONDI",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.0km\n200m crawl\n10×150m crawl 2:35/20s",
+    "MERCREDI": "FRAC\n10m warm\n3×4m @3:55\n10m cool",
+    "JEUDI": "VÉLO 85m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 115m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "2.0",
+    "frac_min": 40,
+    "velo_min": 85,
+    "long_min": 115,
+    "muscu": "—",
+    "total_h": "7.7"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 7,
+   "lundi": "19/10",
+   "phase": "BUILD 10K",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.0km\n200m crawl\n10×150m crawl 2:35/20s",
+    "MERCREDI": "FRAC\n10m warm\n3×4m @3:55\n10m cool",
+    "JEUDI": "VÉLO 90m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 120m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "2.0",
+    "frac_min": 40,
+    "velo_min": 90,
+    "long_min": 120,
+    "muscu": "—",
+    "total_h": "7.9"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 8,
+   "lundi": "26/10",
+   "phase": "BUILD 10K",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.2km\n200m crawl\n8×200m crawl 3:30/20s",
+    "MERCREDI": "FRAC\n10m warm\n3×4m @3:55\n10m cool",
+    "JEUDI": "VÉLO 90m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 125m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "2.2",
+    "frac_min": 40,
+    "velo_min": 90,
+    "long_min": 125,
+    "muscu": "—",
+    "total_h": "8.2"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 9,
+   "lundi": "02/11",
+   "phase": "BUILD 10K",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.3km\n200m crawl\n6×200m 3:25/20s + 4×100m 1:40",
+    "MERCREDI": "FRAC\n10m warm\n3×5m @3:50\n10m cool",
+    "JEUDI": "VÉLO 95m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 130m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "2.3",
+    "frac_min": 40,
+    "velo_min": 95,
+    "long_min": 130,
+    "muscu": "—",
+    "total_h": "8.5"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 10,
+   "lundi": "09/11",
+   "phase": "BUILD 10K",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.5km\n300m warm\n3×500m crawl 8:15/45s",
+    "MERCREDI": "FRAC\n10m warm\n3×5m @3:50\n10m cool",
+    "JEUDI": "VÉLO 100m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 140m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "2.5",
+    "frac_min": 40,
+    "velo_min": 100,
+    "long_min": 140,
+    "muscu": "—",
+    "total_h": "8.9"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 11,
+   "lundi": "16/11",
+   "phase": "BUILD 10K",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.5km\n300m warm\n3×500m crawl 8:15/45s",
+    "MERCREDI": "FRAC\n10m warm\n2×7m @3:45\n10m cool",
+    "JEUDI": "VÉLO 105m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 145m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "2.5",
+    "frac_min": 40,
+    "velo_min": 105,
+    "long_min": 145,
+    "muscu": "—",
+    "total_h": "9.1"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 12,
+   "lundi": "23/11",
+   "phase": "BUILD 10K",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.5km\n300m warm\n3×500m crawl 8:15/45s",
+    "MERCREDI": "FRAC\n10m warm\n2×8m @3:45\n10m cool",
+    "JEUDI": "VÉLO 105m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 150m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "2.5",
+    "frac_min": 40,
+    "velo_min": 105,
+    "long_min": 150,
+    "muscu": "—",
+    "total_h": "9.2"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 13,
+   "lundi": "30/11",
+   "phase": "BUILD 10K",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.8km\n300m warm\n2×1000m 16:30/1m + 4×100m 1:35",
+    "MERCREDI": "FRAC\n10m warm\n2×9m @3:45\n10m cool",
+    "JEUDI": "VÉLO 110m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": null,
+    "DIMANCHE": "🏆 RACE\n10 KM (30/11)"
+   },
+   "totaux": {
+    "nat_km": "2.8",
+    "frac_min": 40,
+    "velo_min": 110,
+    "long_min": 150,
+    "muscu": "—",
+    "total_h": "9.6"
+   },
+   "race": "10 KM (30/11)",
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 14,
+   "lundi": "07/12",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 3.0km\n300m warm\n3×800m 13:00/45s + 4×100m 1:35",
+    "MERCREDI": "FRAC\n10m warm\n2×9m @3:45\n10m cool",
+    "JEUDI": "VÉLO 110m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 155m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "3.0",
+    "frac_min": 40,
+    "velo_min": 110,
+    "long_min": 155,
+    "muscu": "—",
+    "total_h": "9.9"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 15,
+   "lundi": "14/12",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 3.2km\n300m warm\n2×1200m 19:30/1m + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n2×10m @3:40\n10m cool",
+    "JEUDI": "VÉLO 110m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 160m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "3.2",
+    "frac_min": 40,
+    "velo_min": 110,
+    "long_min": 160,
+    "muscu": "—",
+    "total_h": "10.2"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 16,
+   "lundi": "21/12",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 3.5km\n300m warm\n2×1500m 24:00/1m + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n2×11m @3:40\n10m cool",
+    "JEUDI": "VÉLO 115m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 165m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "3.5",
+    "frac_min": 40,
+    "velo_min": 115,
+    "long_min": 165,
+    "muscu": "—",
+    "total_h": "10.7"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 17,
+   "lundi": "28/12",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 3.8km\n300m warm\n3×1000m 16:00/45s + 2×200m 3:15",
+    "MERCREDI": "FRAC\n10m warm\n2×11m @3:40\n10m cool",
+    "JEUDI": "VÉLO 120m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 170m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "3.8",
+    "frac_min": 40,
+    "velo_min": 120,
+    "long_min": 170,
+    "muscu": "—",
+    "total_h": "11.2"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 18,
+   "lundi": "04/01",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 4.0km\n400m warm\n2×1500m 23:45/1m + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n2×10m @3:35\n10m cool",
+    "JEUDI": "VÉLO 120m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 170m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "4.0",
+    "frac_min": 40,
+    "velo_min": 120,
+    "long_min": 170,
+    "muscu": "—",
+    "total_h": "11.4"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 19,
+   "lundi": "11/01",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 4.2km\n400m warm\n3×1000m 16:00/45s + 4×150m 2:20",
+    "MERCREDI": "FRAC\n10m warm\n2×10m @3:35\n10m cool",
+    "JEUDI": "VÉLO 125m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 165m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "4.2",
+    "frac_min": 40,
+    "velo_min": 125,
+    "long_min": 165,
+    "muscu": "—",
+    "total_h": "11.7"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 20,
+   "lundi": "18/01",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 4.5km\n400m warm\n2×1500m 23:30/1m + 4×150m 2:20",
+    "MERCREDI": "FRAC\n10m warm\n3×7m @3:35\n10m cool",
+    "JEUDI": "VÉLO 130m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 160m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "4.5",
+    "frac_min": 40,
+    "velo_min": 130,
+    "long_min": 160,
+    "muscu": "—",
+    "total_h": "12.0"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 21,
+   "lundi": "25/01",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 4.8km\n400m warm\n3×1200m 19:15/45s + 4×150m 2:15",
+    "MERCREDI": "FRAC\n10m warm\n3×7m @3:30\n10m cool",
+    "JEUDI": "VÉLO 130m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 160m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "4.8",
+    "frac_min": 40,
+    "velo_min": 130,
+    "long_min": 160,
+    "muscu": "—",
+    "total_h": "12.3"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 22,
+   "lundi": "01/02",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 5.0km\n400m warm\n2×2000m 32:00/1:30 + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n3×8m @3:30\n10m cool",
+    "JEUDI": "VÉLO 135m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 165m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "5.0",
+    "frac_min": 40,
+    "velo_min": 135,
+    "long_min": 165,
+    "muscu": "—",
+    "total_h": "12.7"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 23,
+   "lundi": "08/02",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 5.2km\n400m warm\n3×1200m 19:00/45s + 4×200m 3:10",
+    "MERCREDI": "FRAC\n10m warm\n3×8m @3:30\n10m cool",
+    "JEUDI": "VÉLO 140m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 170m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "5.2",
+    "frac_min": 40,
+    "velo_min": 140,
+    "long_min": 170,
+    "muscu": "—",
+    "total_h": "13.1"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 24,
+   "lundi": "15/02",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 5.5km\n400m warm\n2×2000m 31:45/1:30 + 4×150m 2:15",
+    "MERCREDI": "FRAC\n10m warm\n3×9m @3:30\n10m cool",
+    "JEUDI": "VÉLO 140m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 170m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "5.5",
+    "frac_min": 40,
+    "velo_min": 140,
+    "long_min": 170,
+    "muscu": "—",
+    "total_h": "13.4"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 25,
+   "lundi": "22/02",
+   "phase": "BUILD SEMI→MARA",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 6.0km\n400m warm\n2×2000m 31:30/1:30 + 4×200m 3:05",
+    "MERCREDI": "FRAC\n10m warm\n2×12m @3:30\n10m cool",
+    "JEUDI": "VÉLO 145m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": null,
+    "DIMANCHE": "🏆 RACE\nSEMI (21/02)"
+   },
+   "totaux": {
+    "nat_km": "6.0",
+    "frac_min": 40,
+    "velo_min": 145,
+    "long_min": 145,
+    "muscu": "—",
+    "total_h": "13.7"
+   },
+   "race": "SEMI (21/02)",
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 26,
+   "lundi": "01/03",
+   "phase": "ROME PEAK",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 6.5km\n500m warm\n2×2000m 31:00/1:30 + 4×200m 3:00",
+    "MERCREDI": "FRAC\n10m warm\n3×6m @4:16\n10m cool",
+    "JEUDI": "VÉLO 80m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 150m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "6.5",
+    "frac_min": 40,
+    "velo_min": 80,
+    "long_min": 150,
+    "muscu": "—",
+    "total_h": "13.2"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 27,
+   "lundi": "08/03",
+   "phase": "ROME PEAK",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 7.0km\n500m warm\n3×1500m 23:00/1m + 4×250m 3:50",
+    "MERCREDI": "FRAC\n10m warm\n2×8m @4:16\n10m cool",
+    "JEUDI": "VÉLO 70m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 160m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "7.0",
+    "frac_min": 40,
+    "velo_min": 70,
+    "long_min": 160,
+    "muscu": "—",
+    "total_h": "13.8"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 28,
+   "lundi": "15/03",
+   "phase": "ROME PEAK",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 6.0km\n400m warm\n2×2000m 31:30/1:30 + 4×200m 3:05",
+    "MERCREDI": "FRAC\n10m warm\n2×5m @4:16\n10m cool",
+    "JEUDI": "VÉLO 50m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": null,
+    "DIMANCHE": "🏆 RACE\nROME ⭐ (14/03)"
+   },
+   "totaux": {
+    "nat_km": "6.0",
+    "frac_min": 40,
+    "velo_min": 50,
+    "long_min": 120,
+    "muscu": "—",
+    "total_h": "11.7"
+   },
+   "race": "ROME ⭐ (14/03)",
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 29,
+   "lundi": "22/03",
+   "phase": "RECUP ROME",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 4.0km\n400m warm\n2×1500m 23:45/1m + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n2×4m @5:00\n10m cool",
+    "JEUDI": "VÉLO 50m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 90m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "4.0",
+    "frac_min": 40,
+    "velo_min": 50,
+    "long_min": 90,
+    "muscu": "—",
+    "total_h": "8.9"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 30,
+   "lundi": "29/03",
+   "phase": "RECUP ROME",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 3.5km\n300m warm\n2×1500m 24:00/1m + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n2×4m @4:50\n10m cool",
+    "JEUDI": "VÉLO 60m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 100m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "3.5",
+    "frac_min": 40,
+    "velo_min": 60,
+    "long_min": 100,
+    "muscu": "—",
+    "total_h": "8.7"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 31,
+   "lundi": "05/04",
+   "phase": "RECUP ROME",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 4.0km\n400m warm\n2×1500m 23:45/1m + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n2×5m @4:50\n10m cool",
+    "JEUDI": "VÉLO 70m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 110m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "4.0",
+    "frac_min": 40,
+    "velo_min": 70,
+    "long_min": 110,
+    "muscu": "—",
+    "total_h": "9.6"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 32,
+   "lundi": "12/04",
+   "phase": "RECUP ROME",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 4.5km\n400m warm\n2×1500m 23:30/1m + 4×150m 2:20",
+    "MERCREDI": "FRAC\n10m warm\n2×5m @4:45\n10m cool",
+    "JEUDI": "VÉLO 80m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 120m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "4.5",
+    "frac_min": 40,
+    "velo_min": 80,
+    "long_min": 120,
+    "muscu": "—",
+    "total_h": "10.5"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 33,
+   "lundi": "19/04",
+   "phase": "LBL+BUILD",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 4.5km\n400m warm\n2×1500m 23:30/1m + 4×150m 2:20",
+    "MERCREDI": "FRAC\n10m warm\n2×5m @4:40\n10m cool",
+    "JEUDI": "VÉLO 80m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": null,
+    "DIMANCHE": "🏆 RACE\nIBIZA (24-30/04)"
+   },
+   "totaux": {
+    "nat_km": "4.5",
+    "frac_min": 40,
+    "velo_min": 80,
+    "long_min": 130,
+    "muscu": "—",
+    "total_h": "10.7"
+   },
+   "race": "IBIZA (24-30/04)",
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 34,
+   "lundi": "26/04",
+   "phase": "LBL+BUILD",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 5.0km\n400m warm\n2×2000m 32:00/1:30 + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n2×5m @4:35\n10m cool",
+    "JEUDI": "VÉLO 90m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 135m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "5.0",
+    "frac_min": 40,
+    "velo_min": 90,
+    "long_min": 135,
+    "muscu": "—",
+    "total_h": "11.5"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 35,
+   "lundi": "03/05",
+   "phase": "LBL+BUILD",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 5.2km\n400m warm\n3×1200m 19:00/45s + 4×200m 3:10",
+    "MERCREDI": "FRAC\n10m warm\n2×6m @4:30\n10m cool",
+    "JEUDI": "VÉLO 100m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 140m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "5.2",
+    "frac_min": 40,
+    "velo_min": 100,
+    "long_min": 140,
+    "muscu": "—",
+    "total_h": "11.9"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 36,
+   "lundi": "10/05",
+   "phase": "LBL+BUILD",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 5.5km\n400m warm\n2×2000m 31:45/1:30 + 4×150m 2:15",
+    "MERCREDI": "FRAC\n10m warm\n2×6m @4:30\n10m cool",
+    "JEUDI": "VÉLO 110m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 145m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "5.5",
+    "frac_min": 40,
+    "velo_min": 110,
+    "long_min": 145,
+    "muscu": "—",
+    "total_h": "12.5"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 37,
+   "lundi": "17/05",
+   "phase": "LBL+BUILD",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 5.8km\n400m warm\n3×1500m 23:30/1m + 4×150m 2:15",
+    "MERCREDI": "FRAC\n10m warm\n2×6m @4:25\n10m cool",
+    "JEUDI": "VÉLO 120m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": null,
+    "DIMANCHE": "🏆 RACE\nLBL (2/05)"
+   },
+   "totaux": {
+    "nat_km": "5.8",
+    "frac_min": 40,
+    "velo_min": 120,
+    "long_min": 150,
+    "muscu": "—",
+    "total_h": "13.1"
+   },
+   "race": "LBL (2/05)",
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 38,
+   "lundi": "24/05",
+   "phase": "ALPSMAN PEAK",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 6.0km\n400m warm\n2×2000m 31:30/1:30 + 4×200m 3:05",
+    "MERCREDI": "FRAC\n10m warm\n2×6m @4:16\n10m cool",
+    "JEUDI": "VÉLO 140m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 160m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "6.0",
+    "frac_min": 40,
+    "velo_min": 140,
+    "long_min": 160,
+    "muscu": "—",
+    "total_h": "13.8"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 39,
+   "lundi": "31/05",
+   "phase": "ALPSMAN PEAK",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 6.2km\n400m warm\n3×1500m 23:15/1m + 4×200m 3:05",
+    "MERCREDI": "FRAC\n10m warm\n2×7m @4:16\n10m cool",
+    "JEUDI": "VÉLO 150m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 170m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "6.2",
+    "frac_min": 40,
+    "velo_min": 150,
+    "long_min": 170,
+    "muscu": "—",
+    "total_h": "14.4"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 40,
+   "lundi": "07/06",
+   "phase": "ALPSMAN PEAK",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 6.0km\n400m warm\n2×2000m 31:30/1:30 + 4×200m 3:05",
+    "MERCREDI": "FRAC\n10m warm\n2×8m @4:16\n10m cool",
+    "JEUDI": "VÉLO 160m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 170m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "6.0",
+    "frac_min": 40,
+    "velo_min": 160,
+    "long_min": 170,
+    "muscu": "—",
+    "total_h": "14.3"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 41,
+   "lundi": "14/06",
+   "phase": "ALPSMAN PEAK",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 6.5km\n500m warm\n2×2000m 31:00/1:30 + 4×200m 3:00",
+    "MERCREDI": "FRAC\n10m warm\n2×5m @4:10\n10m cool",
+    "JEUDI": "VÉLO 140m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 150m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "6.5",
+    "frac_min": 40,
+    "velo_min": 140,
+    "long_min": 150,
+    "muscu": "—",
+    "total_h": "14.2"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 42,
+   "lundi": "21/06",
+   "phase": "ALPSMAN PEAK",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.0km\n200m crawl\n10×150m crawl 2:35/20s",
+    "MERCREDI": "FRAC\n10m warm\n45m facile\n10m cool",
+    "JEUDI": "VÉLO 40m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": null,
+    "DIMANCHE": "🏆 RACE\nALPSMAN (5-6/06)"
+   },
+   "totaux": {
+    "nat_km": "2.0",
+    "frac_min": 40,
+    "velo_min": 40,
+    "long_min": 30,
+    "muscu": "—",
+    "total_h": "5.6"
+   },
+   "race": "ALPSMAN (5-6/06)",
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 43,
+   "lundi": "28/06",
+   "phase": "RECUP",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 2.0km\n200m crawl\n10×150m crawl 2:35/20s",
+    "MERCREDI": "FRAC\n10m warm\n45m facile\n10m cool",
+    "JEUDI": "VÉLO 60m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": "VÉLO Z2\nOU\nREPOS",
+    "DIMANCHE": "LONG 60m\n@6:45→6:00"
+   },
+   "totaux": {
+    "nat_km": "2.0",
+    "frac_min": 40,
+    "velo_min": 60,
+    "long_min": 60,
+    "muscu": "—",
+    "total_h": "6.4"
+   },
+   "race": null,
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  },
+  {
+   "semaine": 44,
+   "lundi": "05/07",
+   "phase": "STONE",
+   "jours": {
+    "LUNDI": "RÉCUP\n45m\n@6:45",
+    "MARDI": "NAT 3.5km\n300m warm\n2×1500m 24:00/1m + 4×100m 1:30",
+    "MERCREDI": "FRAC\n10m warm\n60m trail\n10m cool",
+    "JEUDI": "VÉLO 120m\nZ2 montagne",
+    "VENDREDI": "NAT REC\n20-30m\n@7:00",
+    "SAMEDI": null,
+    "DIMANCHE": "🏆 RACE\nSTONE ⭐⭐ (27/06)"
+   },
+   "totaux": {
+    "nat_km": "3.5",
+    "frac_min": 40,
+    "velo_min": 120,
+    "long_min": 45,
+    "muscu": "—",
+    "total_h": "8.8"
+   },
+   "race": "STONE ⭐⭐ (27/06)",
+   "muscu": {
+    "MARDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "JEUDI": "MUSCU 45m:\nPull-ups 3×(5-8) / Rows 3×8 / Bench 3×8 / Plank 3×20s",
+    "minutes": 90
+   }
+  }
+ ]
+}

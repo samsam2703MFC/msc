@@ -39,6 +39,16 @@ npm ci --omit=dev --no-audit --no-fund
 # juste avant, et ce commentaire ne suffira plus.
 npm run db:migrate
 
+# Le plan de base de Sam, écrit à la main dans db/plans : posé comme plan
+# actif s'il ne l'est pas encore. Rejouable — le même plan déjà actif n'est pas
+# écrit deux fois — et sans effet sur les autres athlètes. Un échec ici ne
+# doit pas faire tomber la bascule : le plan se repose à la main
+# (npm run db:importer-plan -- <fichier> --ecrire), l'application, elle, part.
+if [ -f db/plans/sam-verheyden-2026-2027.json ]; then
+  npm run db:importer-plan -- db/plans/sam-verheyden-2026-2027.json --athlete 1 --ecrire \
+    | tail -3 || echo "⚠ import du plan de base échoué — à relancer à la main"
+fi
+
 # db:seed n'est JAMAIS lancé ici. Il vide les tables du plan avant de les
 # remplir : sur une base vivante, c'est le plan de l'athlète et les analyses qui
 # y sont attachées qui disparaissent. Il ne se lance qu'une fois, à la main, sur

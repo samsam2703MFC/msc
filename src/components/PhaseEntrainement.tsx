@@ -49,13 +49,13 @@ export function PhaseEntrainement({ app }: { app: App }) {
         padding: 14,
       }}
     >
-      {/* la frise */}
-      <div style={{ display: 'flex', gap: 6 }}>
+      {/* la frise — neuf phases tiennent sur deux rangs, quatre sur un */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 6px' }}>
         {blocs.map((b) => {
           const actif = b.code === courant.code;
           const { icon, couleur } = styleDe(b.part);
           return (
-            <div key={b.code} style={{ flex: 1, textAlign: 'center', opacity: actif ? 1 : 0.5 }}>
+            <div key={b.code} style={{ flex: '1 0 62px', minWidth: 0, textAlign: 'center', opacity: actif ? 1 : 0.5 }}>
               <div
                 style={{
                   width: 36,

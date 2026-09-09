@@ -919,6 +919,35 @@ table, never sent back to the screen: the screen knows it is set and sees its
 last four characters. Without `MSC_SECRET_KEY` the server refuses to store one
 rather than storing it in clear.
 
+### Importing a hand-written plan
+
+Not every plan comes out of the generator. Sam's 44-week plan is a spreadsheet
+— a row per week, seven free-text cells (« FRAC / 10m warm / 3×4m @3:55 / 10m
+cool »), a « — MUSCU » row under it, the totals, a RACE column. It lives in
+`db/plans/` twice: the workbook as received, and the same grid as JSON, read
+as is, with what the grid does not say added at the top — the athlete's two
+references, where each phase sits between them (`parts`), the competitions
+with their discipline and target, and what is still to clarify.
+
+```
+npm run db:importer-plan -- db/plans/sam-verheyden-2026-2027.json            # dry run: the report
+npm run db:importer-plan -- db/plans/sam-verheyden-2026-2027.json --ecrire   # writes it as the active plan
+```
+
+The script translates each cell into a session the engine understands — a
+discipline, a type, a duration, a target RPE, zones — and keeps the original
+text in the session's detail, because that is what the athlete wrote. Two
+things it cannot take as they are: the paces (the classeur writes « @3:55 »,
+the engine computes them from the reference and the block's `part`, so the
+file states the intent per phase and the displayed pace is the engine's, with
+the classeur's beside it), and the races (the RACE column names them, not
+always on the right row — the date in the label is what counts, the race
+session lands on that day, the Sunday « 🏆 RACE » cell becomes a rest). It is
+replayable: the same plan already active is not written twice.
+
+`check:db` asserts the seeded workbook is the active plan; on a database where
+this import has run, its plan-shaped assertions fail by construction.
+
 ## Reference data
 
 `reference/Plan30semainessemi10kmhyroxnatation.xlsx` is the source of truth and

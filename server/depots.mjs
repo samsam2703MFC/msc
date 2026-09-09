@@ -1189,7 +1189,7 @@ export async function enregistrerPlan(athleteId, plan, cnx) {
     : transaction((c) => ecrirePlan(c, athleteId, plan));
 }
 
-async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessions, objectifs = [] }) {
+async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessions, objectifs = [], origine }) {
   if (!Array.isArray(blocs) || blocs.length === 0) throw new DepotError('Plan sans bloc.');
   if (!Array.isArray(sessions) || sessions.length === 0) throw new DepotError('Plan sans séance.');
   if (blocs.length > MAX_BLOCS) throw new DepotError(`Plus de ${MAX_BLOCS} blocs.`);
@@ -1205,11 +1205,13 @@ async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessi
     /* Un seul plan actif à la fois. Les autres restent lisibles en base ; ils
        ne sont simplement plus celui que l'application sert. */
     await cnx.execute('UPDATE msc_plan SET actif = 0 WHERE athlete_id = ?', [athleteId]);
+    /* « classeur » pour un plan importé tel qu'écrit par l'athlète ou son coach,
+       « genere » pour ce que le générateur fabrique. */
     const [r] = await cnx.execute(
       `INSERT INTO msc_plan (athlete_id, nom, origine, debut, fin, actif, methode)
-       VALUES (?, ?, 'genere', ?, ?, 1, ?)`,
-      [athleteId, texte(nom || 'Plan généré', 160), dates[0], dates[dates.length - 1],
-       methode ? JSON.stringify(methode) : null],
+       VALUES (?, ?, ?, ?, ?, 1, ?)`,
+      [athleteId, texte(nom || 'Plan généré', 160), origine === 'classeur' ? 'classeur' : 'genere',
+       dates[0], dates[dates.length - 1], methode ? JSON.stringify(methode) : null],
     );
     const planId = r.insertId;
 
@@ -1300,16 +1302,23 @@ async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessi
         [athleteId, o.date, texte(o.nom, 160)],
       );
       if (!c) {
+        /* Une cyclosportive est une compétition comme une autre : la discipline
+           vient de l'objectif quand il la donne, la course à pied sinon. */
         const [rc] = await cnx.execute(
           `INSERT INTO msc_competition (athlete_id, date, nom, discipline, distance_km, officielle)
-           VALUES (?, ?, ?, 'Course à pied', ?, 1)`,
-          [athleteId, o.date, texte(o.nom, 160), Number(o.distance_km) || 10],
+           VALUES (?, ?, ?, ?, ?, 1)`,
+          [athleteId, o.date, texte(o.nom, 160), texte(o.discipline || 'Course à pied', 32),
+           Number(o.distance_km) || 10],
         );
         c = { id: rc.insertId };
       }
       const basse = entier(o.cible_s, 1, 86400, 3600);
       const haute = Math.max(basse, entier(o.cible_haute_s ?? o.cible_s, 1, 86400, basse));
-      const libelle = `${Math.floor(basse / 60)}:${String(basse % 60).padStart(2, '0')}`;
+      /* Le libellé de la cible tel que le plan l'écrit (« 38–39 min », « finir »),
+         sinon le chrono bas en mm:ss. */
+      const libelle = o.cible?.fr
+        ? texte(o.cible.fr, 80)
+        : `${Math.floor(basse / 60)}:${String(basse % 60).padStart(2, '0')}`;
       await cnx.execute(
         `INSERT INTO msc_objectif (plan_id, competition_id, semaine, principal,
            cible_s, cible_haute_s, cible_fr, cible_pl)
@@ -1319,7 +1328,7 @@ async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessi
            Elle se déduit du plan qu'on vient d'écrire ; la demander au
            formulaire serait demander un nombre qu'on connaît déjà. */
         [planId, c.id, semaineDe.get(o.date) ?? 0, o.principal ? 1 : 0,
-         basse, haute, libelle, libelle],
+         basse, haute, libelle, o.cible?.pl ? texte(o.cible.pl, 80) : libelle],
       );
       vises += 1;
     }
