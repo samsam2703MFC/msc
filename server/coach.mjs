@@ -66,11 +66,27 @@ const Adaptation = z.object({
   pourquoi: z.string().describe('Une phrase : ce que l’ajustement protège.'),
 });
 
+/* Les codes du journal, dits comme un entraîneur les dirait. */
+const LIMITE_EN_CLAIR = {
+  rien: 'rien',
+  jambes: 'les jambes (musculaire)',
+  souffle: 'le souffle (cardio-respiratoire)',
+  technique: 'la technique',
+  mental: 'le mental',
+  sommeil: 'le manque de sommeil',
+  nutrition: 'la nutrition',
+  douleur: 'une douleur',
+  chaleur: 'la chaleur',
+};
+
 const Analyse = z.object({
   verdict: z.string().describe(
     "Une à deux phrases : ce qui s'est passé dans cette séance. Tu peux citer les chiffres qui te sont donnés, jamais en inventer.",
   ),
   observations: z.array(Observation).describe('Un bloc « bon », un bloc « attention ». Au plus deux.'),
+  plan: z.string().nullable().describe(
+    "Ce que cette séance change pour l'équilibre du plan, en une à trois phrases : ce qu'elle a coûté ou protégé, et ce que ça veut dire pour la suite de la semaine. Si l'athlète est allé plus vite ou plus fort que prescrit, c'est ici que tu expliques pourquoi ça déséquilibre le plan. null si la séance s'est déroulée comme prévue.",
+  ),
   adaptation: Adaptation.nullable().describe(
     "L'ajustement de la séance suivante, ou null si elle n'a pas besoin de bouger.",
   ),
@@ -91,6 +107,15 @@ Règles absolues :
   « 45 min à 6:20/km ».
 - Tu parles à l'athlète, pas de lui, en phrases courtes.
 - Une séance ratée est une information, pas une faute. Tu ne moralises pas.
+- Quand l'athlète est allé plus vite ou plus fort que ce qui était prescrit, tu le
+  dis sans détour, et tu expliques ce que ça coûte au plan : une séance facile
+  courue trop vite n'est plus une séance facile — elle entame la récupération que
+  la prochaine séance de qualité devait trouver, décale la fatigue sur la semaine,
+  et travaille l'allure du jour au lieu de la référence 10 km d'où le plan tire
+  toutes ses allures. Le plan tient par l'écart entre facile et dur ; aller vite le
+  jour facile ferme cet écart. Tu le dis avec les chiffres fournis, pas d'autres.
+- Ce que l'athlète dit avoir bloqué (jambes, souffle, technique, mental…) nomme
+  le système à protéger ou à travailler ; ton ajustement en tient compte.
 - Si les données ne permettent pas de conclure, tu le dis plutôt que de meubler.`;
 
 /* The app is FR / PL throughout, so the coach is too — one call in the language
@@ -100,8 +125,35 @@ const LANGUE = {
   pl: 'Piszesz po polsku. (Tu écris en polonais.)',
 };
 
-function systeme(langue) {
-  return `${SYSTEM}\n- ${LANGUE[langue] ?? LANGUE.fr}`;
+/* Le coach que l'athlète a choisi. Trois figures, un ton chacune — ce qu'elles
+   disent est le même plan ; c'est comment elles le disent qui change. Le
+   fond (aucun chiffre inventé, aucune séance rattrapée) ne se négocie pas. */
+export const COACHS = ['tortionnaire', 'gentil', 'gros_porc'];
+const PERSONA = {
+  tortionnaire: `Ton personnage : LE TORTIONNAIRE. Tu ne félicites jamais gratuitement. Tu
+exiges, tu relèves chaque écart, tu parles court et sec, tu ne t'excuses pas. La
+motivation vient du défi : tu mets l'athlète au pied du mur et tu attends mieux la
+prochaine fois. Une séance sautée, tu la nommes ; une séance trop rapide, tu la
+nommes aussi — l'indiscipline dans les deux sens. Dur, jamais méchant : pas
+d'insulte, pas d'humiliation, pas de menace. Quand c'est bien fait, tu le dis en
+trois mots, pas plus.`,
+  gentil: `Ton personnage : LE GENTIL. Tu encourages d'abord, tu corriges ensuite, et tu
+expliques toujours pourquoi. Chaleureux, patient, tu rassures sans mentir : une
+séance manquée n'est pas grave, mais tu dis ce qu'elle a coûté. La motivation vient
+du progrès visible — tu le montres avec les chiffres fournis. Le suivi : tu
+proposes, tu ne réclames pas.`,
+  gros_porc: `Ton personnage : LE GROS PORC. Tu parles bouffe, canapé et bière, avec gouaille et
+autodérision ; tu rigoles de tout, de toi d'abord, de l'athlète ensuite — jamais de
+sa santé, de son corps ou d'une douleur. Tu joues la mauvaise influence, et pourtant
+tes consignes sont exactement celles du plan : c'est ça, la blague. La motivation
+vient du rire. Le suivi : tu remarques tout, l'air de rien. Familier et un peu
+vulgaire (« bordel », « merde »), jamais d'injure envers l'athlète, jamais
+d'alcool ou de bouffe conseillés pour de vrai.`,
+};
+
+function systeme(langue, coach) {
+  const persona = PERSONA[COACHS.includes(coach) ? coach : 'gentil'];
+  return `${SYSTEM}\n- ${LANGUE[langue] ?? LANGUE.fr}\n\n${persona}\nLe personnage change le ton, jamais le fond : les règles ci-dessus passent avant lui.`;
 }
 
 /* --------------------------------------------------------------- le repli */
@@ -178,7 +230,17 @@ function contexteSeance({ athlete, session, allures, activite, journal, stats })
     lignes.push('', 'Ce que l’athlète a noté :');
     lignes.push(`  RPE ressenti ${journal.rpe_ressenti}${journal.sommeil ? ` · ${journal.sommeil} h de sommeil` : ''}`);
     if (journal.douleurs?.length) lignes.push(`  Douleurs : ${journal.douleurs.join(', ')}`);
+    if (journal.limites?.length) {
+      lignes.push(
+        journal.limites.includes('rien')
+          ? '  Ce qui a bloqué : rien, d’après lui.'
+          : `  Ce qui a bloqué : ${journal.limites.map((l) => LIMITE_EN_CLAIR[l] ?? l).join(', ')}. C’est le point d’entrée de ton ajustement : ce qui a bloqué dit quel système protéger la prochaine fois.`,
+      );
+    }
     if (journal.note) lignes.push(`  Note : ${journal.note}`);
+  }
+  if (journal?.limites_recentes?.length) {
+    lignes.push(`  Sur les séances précédentes, ce qui a bloqué : ${journal.limites_recentes.map((l) => LIMITE_EN_CLAIR[l] ?? l).join(', ')}.`);
   }
 
   if (stats?.length) {
@@ -206,7 +268,7 @@ export async function analyserSeance(corps) {
     {
       model: MODEL,
       max_tokens: 8000,
-      system: systeme(langue),
+      system: systeme(langue, corps.coach),
       thinking: { type: 'adaptive' },
       output_config: { effort: 'medium', format: zodOutputFormat(Analyse) },
       messages: [
@@ -217,7 +279,9 @@ export async function analyserSeance(corps) {
 Lis cette séance. Si tu as accès à Strava, va voir ce que les chiffres ci-dessus
 ne disent pas — la forme de l'effort dans la séance, et comment elle se compare
 aux semaines précédentes. Puis donne ton verdict, ce qui s'est bien passé, ce qui
-mérite d'être surveillé, et l'ajustement de la séance suivante s'il en faut un.`,
+mérite d'être surveillé, ce que la séance change pour l'équilibre du plan — si
+l'athlète est allé trop vite ou trop fort, pourquoi ça le déséquilibre — et
+l'ajustement de la séance suivante s'il en faut un.`,
         },
       ],
     },
@@ -241,7 +305,7 @@ const Reponse = z.object({
   strava_lu: z.array(z.string()).describe("Ce que tu es allé chercher dans Strava. Vide si tu n'y es pas allé."),
 });
 
-export async function repondre({ question, contexte, historique = [], jeton_strava, langue }) {
+export async function repondre({ question, contexte, historique = [], jeton_strava, langue, coach }) {
   if (typeof question !== 'string' || question.trim() === '') {
     throw new Error('question vide');
   }
@@ -263,7 +327,7 @@ export async function repondre({ question, contexte, historique = [], jeton_stra
     {
       model: MODEL,
       max_tokens: 4000,
-      system: `${systeme(langue === 'pl' ? 'pl' : 'fr')}
+      system: `${systeme(langue === 'pl' ? 'pl' : 'fr', coach)}
 
 Ici tu réponds à une question posée dans l'application. Tu es bref. Si la question
 porte sur ce que l'athlète a réellement fait et que tu as accès à Strava, va voir
@@ -396,7 +460,7 @@ export async function recalculerPlan(corps) {
     {
       model: MODEL,
       max_tokens: 12000,
-      system: `${systeme(langue)}\n\n${DOCTRINE}`,
+      system: `${systeme(langue, corps.coach)}\n\n${DOCTRINE}`,
       thinking: { type: 'adaptive' },
       output_config: { effort: 'high', format: zodOutputFormat(Recalcul) },
       messages: [

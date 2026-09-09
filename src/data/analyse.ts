@@ -322,7 +322,9 @@ export function demanderAnalyse(
   session: MscPlanSession,
   options: {
     activite?: MscActivity;
-    journal?: MscJournal & { note?: string };
+    /* `limites_recentes` : ce qui a bloqué sur les séances d'avant, pour que
+       le coach voie « les jambes, trois fois de suite » sans relire le journal. */
+    journal?: MscJournal & { note?: string; limites_recentes?: string[] };
     suivante?: MscPlanSession;
     lang?: Lang;
   } = {},

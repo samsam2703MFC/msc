@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS msc_athlete (
   prenom               VARCHAR(80) NULL COMMENT 'le profil — « nom » reste ce que l''application affiche partout',
   annee_naissance      SMALLINT UNSIGNED NULL,
   surnom               VARCHAR(40) NULL COMMENT 'ce qui s''affiche sous l''avatar, et rien d''autre',
+  coach                VARCHAR(16) NOT NULL DEFAULT 'gentil' COMMENT 'le coach choisi — tortionnaire, gentil, gros_porc — et donc son ton',
   ref_actuelle_s       SMALLINT UNSIGNED NOT NULL COMMENT 'allure 10 km actuelle, s/km — le test de 30 min la réécrit',
   ref_cible_s          SMALLINT UNSIGNED NOT NULL COMMENT 'allure 10 km visée, s/km',
   fc_repos             TINYINT UNSIGNED NULL,
@@ -565,6 +566,18 @@ CREATE TABLE IF NOT EXISTS msc_journal_douleur (
   PRIMARY KEY (journal_id, douleur),
   KEY ix_douleur (douleur),
   CONSTRAINT fk_douleur_journal FOREIGN KEY (journal_id) REFERENCES msc_journal (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Ce qui a bloqué, séance par séance : jambes, souffle, technique, mental,
+-- sommeil, nutrition, douleur, chaleur — ou rien. Même forme que les douleurs,
+-- pour la même raison : « les jambes trois séances de suite » se compte.
+-- C'est ce qui affine les séances suivantes, dans l'analyse et le recalcul.
+CREATE TABLE IF NOT EXISTS msc_journal_limite (
+  journal_id BIGINT UNSIGNED NOT NULL,
+  limite     VARCHAR(24) NOT NULL,
+  PRIMARY KEY (journal_id, limite),
+  KEY ix_limite (limite),
+  CONSTRAINT fk_limite_journal FOREIGN KEY (journal_id) REFERENCES msc_journal (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

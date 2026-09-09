@@ -174,7 +174,7 @@ async function lePlan(planId) {
 }
 
 async function leVecu(athleteId) {
-  const [activites, blocs, journal, douleurs, mesures, attente] = await Promise.all([
+  const [activites, blocs, journal, douleurs, limites, mesures, attente] = await Promise.all([
     lignes('SELECT * FROM msc_activity WHERE athlete_id = :a ORDER BY date, id', { a: athleteId }),
     lignes(
       `SELECT b.* FROM msc_activity_bloc b JOIN msc_activity a ON a.id = b.activity_id
@@ -183,6 +183,9 @@ async function leVecu(athleteId) {
     lignes(
       `SELECT d.* FROM msc_journal_douleur d JOIN msc_journal j ON j.id = d.journal_id
        WHERE j.athlete_id = :a`, { a: athleteId }),
+    lignes(
+      `SELECT l.* FROM msc_journal_limite l JOIN msc_journal j ON j.id = l.journal_id
+       WHERE j.athlete_id = :a ORDER BY l.limite`, { a: athleteId }),
     lignes(
       "SELECT * FROM msc_mesure WHERE athlete_id = :a AND etat = 'confirme' ORDER BY date",
       { a: athleteId }),
@@ -203,6 +206,11 @@ async function leVecu(athleteId) {
     if (!parJournal.has(d.journal_id)) parJournal.set(d.journal_id, []);
     parJournal.get(d.journal_id).push(d.douleur);
   }
+  const limitesPar = new Map();
+  for (const l of limites) {
+    if (!limitesPar.has(l.journal_id)) limitesPar.set(l.journal_id, []);
+    limitesPar.get(l.journal_id).push(l.limite);
+  }
 
   return {
     msc_activity: activites.map((a) => ({
@@ -219,6 +227,7 @@ async function leVecu(athleteId) {
       rpe_ressenti: j.rpe_ressenti ?? 0,
       sommeil: Number(j.sommeil_h ?? 0),
       douleurs: parJournal.get(j.id) ?? [],
+      limites: limitesPar.get(j.id) ?? [],
       note: j.note ?? undefined,
     })),
     /* msc_daily n'existe plus comme table : la FC de repos vit dans les
@@ -391,6 +400,7 @@ export async function instantane(athleteId) {
       id: athlete.id, nom: athlete.nom,
       prenom: athlete.prenom ?? null, surnom: athlete.surnom ?? null,
       annee_naissance: athlete.annee_naissance ?? null,
+      coach: athlete.coach ?? 'gentil',
       ref_actuelle_s: athlete.ref_actuelle_s, ref_cible_s: athlete.ref_cible_s,
       fc_repos: athlete.fc_repos, fc_repos_moy7: athlete.fc_repos_moy7,
       fc_moy_reference: athlete.fc_moy_reference,
@@ -431,13 +441,19 @@ async function apercuDe({ id, droit }) {
       { a: id },
     ),
     ligne(
-      `SELECT rpe_ressenti, date FROM msc_journal
+      `SELECT id, rpe_ressenti, date FROM msc_journal
        WHERE athlete_id = :a AND rpe_ressenti IS NOT NULL AND date <= CURDATE()
        ORDER BY date DESC LIMIT 1`,
       { a: id },
     ),
   ]);
   if (!a) throw new Error(`athlète ${id} inconnu`);
+  /* Ce qui a bloqué sur cette dernière séance : la ligne que le coach lit
+     avant le chiffre. */
+  const limitesRpe = rpe
+    ? (await lignes('SELECT limite FROM msc_journal_limite WHERE journal_id = :j ORDER BY limite', { j: rpe.id }))
+        .map((l) => l.limite)
+    : [];
 
   /* La HRV n'a pas de ligne de base sur l'athlète comme la FC de repos : elle
      se lit sur les trente jours qui précèdent la dernière mesure, celle-ci
@@ -549,7 +565,8 @@ async function apercuDe({ id, droit }) {
     total,
     bloc,
     cette_semaine: cette,
-    dernier_rpe: rpe ? { valeur: rpe.rpe_ressenti, date: rpe.date } : null,
+    coach: a.coach ?? 'gentil',
+    dernier_rpe: rpe ? { valeur: rpe.rpe_ressenti, date: rpe.date, limites: limitesRpe } : null,
     mesure: mesure
       ? {
           date: mesure.date,
@@ -645,7 +662,11 @@ export async function mutation(athleteId, id, operation, travail) {
 }
 
 /** Le RPE et la note du jour. Une ligne par athlète, jour et séance. */
-export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil, note, douleurs }, cnx) {
+/* Le vocabulaire de « ce qui a bloqué ». Fermé : une règle compte sur ces
+   codes, et un mot libre irait dans la note. */
+export const LIMITES = ['rien', 'jambes', 'souffle', 'technique', 'mental', 'sommeil', 'nutrition', 'douleur', 'chaleur'];
+
+export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil, note, douleurs, limites }, cnx) {
   const q = cnx ?? { execute: (...a) => import('./bd.mjs').then((m) => m.bd().execute(...a)) };
   const [r] = await q.execute(
     `INSERT INTO msc_journal (athlete_id, session_id, date, rpe_ressenti, sommeil_h, note)
@@ -665,6 +686,16 @@ export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil,
       await q.execute('INSERT INTO msc_journal_douleur (journal_id, douleur) VALUES (?, ?)', [
         journalId, String(d).slice(0, 48),
       ]);
+    }
+  }
+  /* « rien » est une réponse, pas une absence de réponse : il se range aussi,
+     pour que l'écran sache que la question a été posée. Il exclut les autres. */
+  if (journalId && Array.isArray(limites)) {
+    const admises = [...new Set(limites.map(String).filter((l) => LIMITES.includes(l)))];
+    const gardees = admises.includes('rien') ? ['rien'] : admises;
+    await q.execute('DELETE FROM msc_journal_limite WHERE journal_id = ?', [journalId]);
+    for (const l of gardees) {
+      await q.execute('INSERT INTO msc_journal_limite (journal_id, limite) VALUES (?, ?)', [journalId, l]);
     }
   }
   return { journal_id: journalId };
@@ -687,10 +718,22 @@ export async function ecrireMesure(athleteId, { date, poids_kg, fc_repos, hrv_ms
 }
 
 /** Le profil : ce qu'on voit en touchant l'avatar. `nom` reste l'affichage. */
-export async function ecrireProfil(athleteId, { prenom, nom, surnom, annee_naissance }, cnx) {
+/* Les trois coachs que l'athlète peut choisir. La même liste vit dans
+   server/coach.mjs (le ton) et src/data/coachs.ts (l'avatar) : à garder alignées. */
+export const COACHS = ['tortionnaire', 'gentil', 'gros_porc'];
+
+/** Le coach choisi par l'athlète — ce que /api/analyse, /api/coach et
+    /api/recalcul donnent au modèle pour son ton. */
+export async function coachDe(athleteId) {
+  const a = await ligne('SELECT coach FROM msc_athlete WHERE id = :a', { a: athleteId });
+  return COACHS.includes(a?.coach) ? a.coach : 'gentil';
+}
+
+export async function ecrireProfil(athleteId, { prenom, nom, surnom, annee_naissance, coach }, cnx) {
   const q = cnx ?? (await import('./bd.mjs')).bd();
   const nomNet = texte(nom, 120).trim();
   if (!nomNet) throw new DepotError('Le nom ne peut pas être vide.');
+  if (coach != null && !COACHS.includes(coach)) throw new DepotError('Coach inconnu.');
   const annee = annee_naissance == null || annee_naissance === '' ? null : Number(annee_naissance);
   const cetteAnnee = new Date().getFullYear();
   if (annee != null && (!Number.isInteger(annee) || annee < cetteAnnee - 100 || annee > cetteAnnee - 5)) {
@@ -699,10 +742,11 @@ export async function ecrireProfil(athleteId, { prenom, nom, surnom, annee_naiss
   const prenomNet = prenom ? texte(prenom, 80).trim() || null : null;
   const surnomNet = surnom ? texte(surnom, 40).trim() || null : null;
   await q.execute(
-    'UPDATE msc_athlete SET prenom = ?, nom = ?, surnom = ?, annee_naissance = ? WHERE id = ?',
-    [prenomNet, nomNet, surnomNet, annee, athleteId],
+    `UPDATE msc_athlete SET prenom = ?, nom = ?, surnom = ?, annee_naissance = ?,
+       coach = COALESCE(?, coach) WHERE id = ?`,
+    [prenomNet, nomNet, surnomNet, annee, coach ?? null, athleteId],
   );
-  return { id: athleteId, prenom: prenomNet, nom: nomNet, surnom: surnomNet, annee_naissance: annee };
+  return { id: athleteId, prenom: prenomNet, nom: nomNet, surnom: surnomNet, annee_naissance: annee, coach: coach ?? undefined };
 }
 
 /**

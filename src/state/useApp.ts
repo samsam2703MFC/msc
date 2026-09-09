@@ -76,6 +76,9 @@ export function useApp() {
   const [done, setDone] = useState(true);
   const [rpe, setRpe] = useState(8);
   const [note, setNote] = useState('');
+  /* Ce qui a bloqué sur la séance du jour. Relu depuis le journal à chaque
+     instantané : c'est une réponse rangée, pas un brouillon. */
+  const [limites, setLimites] = useState<string[]>([]);
   const [ana, setAna] = useState<Job>('done');
   const [nextApplied, setNextApplied] = useState(false);
 
@@ -106,6 +109,14 @@ export function useApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [date, version],
   );
+
+  useEffect(() => {
+    if (!db.chargee) return;
+    const session = db.sessionDuJour(date);
+    const j = session ? db.one('msc_journal', (r) => r.session_id === session.id) : undefined;
+    setLimites(j?.limites ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, version]);
 
   /* Nothing async may touch state after the hook is gone. */
   const monte = useRef(true);
@@ -532,7 +543,7 @@ export function useApp() {
   /* Le RPE et la note. Écrits quand l'athlète quitte le champ, et de nouveau
      juste avant une analyse — c'est le moment où ils comptent, puisque c'est ce
      que le coach lit. */
-  const enregistrerJournal = useCallback(async () => {
+  const enregistrerJournal = useCallback(async (surcharge: { limites?: string[] } = {}) => {
     if (!db.chargee || db.droit !== 'ecriture') return;
     const session = db.sessionDuJour(date);
     try {
@@ -541,12 +552,25 @@ export function useApp() {
         session_id: session?.id ?? null,
         rpe,
         note: note.trim() || undefined,
+        limites: surcharge.limites ?? limites,
       });
       if (api.estDiffere(r) && monte.current) setEnAttente((n) => n + 1);
     } catch (e) {
       if (monte.current) setAnaErreur(message(e));
     }
-  }, [date, note, rpe]);
+  }, [date, limites, note, rpe]);
+
+  /* Un toucher par réponse ; « rien » exclut les autres, et une réponse part
+     tout de suite — pas de bouton « enregistrer » pour une question à choix. */
+  const toggleLimite = useCallback((code: string) => {
+    const suivantes = code === 'rien'
+      ? (limites.includes('rien') ? [] : ['rien'])
+      : limites.includes(code)
+        ? limites.filter((l) => l !== code)
+        : [...limites.filter((l) => l !== 'rien'), code];
+    setLimites(suivantes);
+    void enregistrerJournal({ limites: suivantes });
+  }, [enregistrerJournal, limites]);
 
   /* Accepter une proposition du coach. L'état optimiste garde le bouton vif ;
      le rechargement dit le vrai. */
@@ -684,12 +708,23 @@ export function useApp() {
 
         const activite = db.one('msc_activity', (a) => a.session_id === session.id);
         const seed = db.one('msc_journal', (j) => j.session_id === session.id);
+        /* Ce qui a bloqué sur les cinq séances d'avant : le coach voit la
+           répétition sans relire le journal. « rien » ne compte pas. */
+        const recentes = db
+          .select('msc_journal')
+          .filter((j) => j.session_id !== session.id && j.date <= session.date && (j.limites?.length ?? 0) > 0)
+          .sort((x, y) => y.date.localeCompare(x.date))
+          .slice(0, 5)
+          .flatMap((j) => j.limites ?? [])
+          .filter((l) => l !== 'rien');
         const journal = {
           date: session.date,
           session_id: session.id,
           rpe_ressenti: rpe,
           sommeil: seed?.sommeil ?? 0,
           douleurs: seed?.douleurs ?? [],
+          limites,
+          limites_recentes: [...new Set(recentes)],
           note: note.trim() || undefined,
         };
         const suivante = coach.prochaineSeance(session);
@@ -716,7 +751,7 @@ export function useApp() {
         anaRef.current = false;
       }
     })();
-  }, [date, enregistrerJournal, lang, note, rpe]);
+  }, [date, enregistrerJournal, lang, limites, note, rpe]);
 
   /* Recalculating the weeks that follow; a second press folds the result away.
 
@@ -798,6 +833,8 @@ export function useApp() {
     toggleDone: useCallback(() => setDone((v) => !v), []),
     rpe,
     setRpe,
+    limites,
+    toggleLimite,
     note,
     setNote,
     ana,

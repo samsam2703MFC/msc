@@ -93,8 +93,15 @@ export interface MscJournal {
   rpe_ressenti: number;
   sommeil: number;
   douleurs: string[];
+  /** Ce qui a bloqué : codes de `LIMITES`. `['rien']` quand la question a eu
+      sa réponse et que rien n'a bloqué ; vide tant qu'elle n'a pas été posée. */
+  limites?: string[];
   note?: string;
 }
+
+/** Le vocabulaire fermé de « ce qui a bloqué » — le même que le serveur. */
+export const LIMITES = ['rien', 'jambes', 'souffle', 'technique', 'mental', 'sommeil', 'nutrition', 'douleur', 'chaleur'] as const;
+export type Limite = (typeof LIMITES)[number];
 
 export interface MscDaily {
   date: string;
@@ -142,6 +149,14 @@ export interface MscAnalyseBloc {
   items: LocalizedList;
 }
 
+/** Ce que le coach renvoie, rangé tel quel : un ton et des lignes dans la
+    langue de l'appel. « plan » est ce que la séance change à l'équilibre du
+    plan. `Observations` sait lire les deux formes. */
+export interface MscObservation {
+  ton: 'bon' | 'attention' | 'plan';
+  lignes: string[];
+}
+
 /** Output of the Anthropic API, timestamped and kept. */
 export interface MscAnalyse {
   id: number;
@@ -153,7 +168,7 @@ export interface MscAnalyse {
   session_id?: number;
   semaine?: number;
   stats?: MscAnalyseStat[];
-  blocs?: MscAnalyseBloc[];
+  blocs?: Array<MscAnalyseBloc | MscObservation>;
 }
 
 /** Comes out of a session analysis: a proposal, never a direct write.
@@ -379,6 +394,8 @@ export interface MscAthlete {
   prenom?: string | null;
   surnom?: string | null;
   annee_naissance?: number | null;
+  /** Le coach choisi — tortionnaire, gentil, gros_porc. Son ton, pas son fond. */
+  coach?: string;
   /** Current 10 km pace, in seconds per km. The week-5 time trial rewrites it. */
   ref_actuelle_s: number;
   /** Target 10 km pace, in seconds per km. */
@@ -540,7 +557,8 @@ export interface ApercuAthlete {
     volume_prevu_min: number;
     volume_realise_min: number;
   };
-  dernier_rpe: { valeur: number; date: string } | null;
+  coach: string;
+  dernier_rpe: { valeur: number; date: string; limites: string[] } | null;
   mesure: {
     date: string;
     poids_kg: number | null;

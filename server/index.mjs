@@ -271,7 +271,9 @@ async function routesStrava(req, res, url, chemin) {
 /* ------------------------------------------------------------- les routes */
 
 async function router(req, res, url) {
-  const chemin = url.pathname;
+  /* Derrière un relais monté sous /msc, une URL configurée avec sa barre
+     finale arrive ici en « //api/sante » : c'est la même route. */
+  const chemin = url.pathname.replace(/\/{2,}/g, '/');
 
   /* Ce que le serveur sait de lui-même, sans authentification : de quoi
      diagnostiquer une installation avant même d'avoir un compte. */
@@ -436,12 +438,19 @@ async function router(req, res, url) {
       if (!corps[champ]) return json(res, 400, { erreur: `champ manquant : ${champ}` });
     }
     const reponse = await analyserSeance({
-      ...corps, jeton_strava: await strava.jetonCourant(athlete_id),
+      ...corps, coach: await depots.coachDe(athlete_id),
+      jeton_strava: await strava.jetonCourant(athlete_id),
     });
+    /* Ce que la séance change au plan se range avec les observations, comme un
+       troisième bloc : le schéma n'a pas à bouger pour une ligne de plus. */
+    const observations = [
+      ...(reponse.observations ?? []),
+      ...(reponse.plan ? [{ ton: 'plan', lignes: [reponse.plan] }] : []),
+    ];
     const range = await depots.enregistrerAnalyse(athlete_id, {
       session_id: corps.session.id, date: corps.session.date,
       modele: reponse.modele, cout_eur: reponse.cout_eur, strava: reponse.strava,
-      verdict: reponse.verdict, observations: reponse.observations, stats: corps.stats,
+      verdict: reponse.verdict, observations, stats: corps.stats,
       adaptation: reponse.adaptation, suivante_id: corps.session.suivante?.id,
       langue: corps.langue,
     });
@@ -455,7 +464,8 @@ async function router(req, res, url) {
       if (corps[champ] === undefined) return json(res, 400, { erreur: `champ manquant : ${champ}` });
     }
     const reponse = await recalculerPlan({
-      ...corps, jeton_strava: await strava.jetonCourant(athlete_id),
+      ...corps, coach: await depots.coachDe(athlete_id),
+      jeton_strava: await strava.jetonCourant(athlete_id),
     });
     const base = await depots.instantane(athlete_id);
     const range = base.plan
@@ -476,7 +486,8 @@ async function router(req, res, url) {
     const { jeton_strava: _c, ...corps } = await lireCorps(req);
     if (!corps.question) return json(res, 400, { erreur: 'champ manquant : question' });
     const reponse = await repondre({
-      ...corps, jeton_strava: await strava.jetonCourant(athlete_id),
+      ...corps, coach: await depots.coachDe(athlete_id),
+      jeton_strava: await strava.jetonCourant(athlete_id),
     });
     if (corps.fil) {
       await depots.ajouterAuChat(athlete_id, String(corps.fil).slice(0, 48), [

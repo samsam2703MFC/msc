@@ -7,7 +7,11 @@
 import {
   Activity,
   ArrowRight,
+  Bandage,
   BatteryLow,
+  Brain,
+  ThermometerSun,
+  Utensils,
   Bed,
   Beer,
   Bike,
@@ -145,5 +149,10 @@ export const ICONS: Record<string, LucideIcon> = {
   'waves': Waves,
   'wind': Wind,
   'wine': Wine,
+  /* le journal : ce qui a bloqué, et le motif « trop mangé » */
+  'bandage': Bandage,
+  'brain': Brain,
+  'thermometer-sun': ThermometerSun,
+  'utensils': Utensils,
   'zap': Zap,
 };

@@ -10,7 +10,7 @@ export function SansPlan({ app }: { app: App }) {
   const fr = app.lang === 'fr';
   return (
     <Card featured gap={12}>
-      <IconLine icon="calendar-off" color={C.inkSecondary}>
+      <IconLine icon="calendar-x" color={C.inkSecondary}>
         <span style={{ fontWeight: 600, color: C.ink }}>
           {fr ? 'Pas encore de plan' : 'Jeszcze bez planu'}
         </span>

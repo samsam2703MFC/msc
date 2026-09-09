@@ -8,7 +8,10 @@ import * as db from '../data/db';
 import { appliquerAdaptation } from '../data/analyse';
 import type { Lang, MscPlanSession } from '../data/types';
 import { C, F, R } from '../design/theme';
+import { CoachAvatar } from '../components/CoachAvatar';
 import { Icon } from '../components/Icon';
+import { Limites } from '../components/Limites';
+import { Observations } from '../components/Observations';
 import {
   AccentButton,
   BarChart,
@@ -159,6 +162,16 @@ export function TodayScreen({ app }: { app: App }) {
           />
         </div>
 
+        {/* Ce qui a bloqué — demandé après chaque séance, et poussé dès que
+            Strava en ramène une sans réponse. Le coach le lit avant d'ajuster. */}
+        <Limites
+          lang={lang}
+          valeur={app.limites}
+          onToggle={app.toggleLimite}
+          disabled={db.droit !== 'ecriture'}
+          nudge={app.limites.length === 0 && !!db.one('msc_activity', (a) => a.session_id === session.id)}
+        />
+
         <textarea
           placeholder={ui.notePlaceholder}
           rows={2}
@@ -182,9 +195,13 @@ export function TodayScreen({ app }: { app: App }) {
       {/* Claude's read of the session — only where there is one */}
       <Card borderColor={anaDone ? C.accent : C.border} gap={14}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <SectionLabel icon="sparkles" color={C.teal}>
-            {ui.anaLabel}
-          </SectionLabel>
+          {/* Le coach choisi, en tête : c'est lui qui parle. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CoachAvatar code={db.athlete.coach} taille={30} />
+            <SectionLabel icon="sparkles" color={C.teal}>
+              {ui.anaLabel}
+            </SectionLabel>
+          </div>
           <Mono size={10} color={C.inkQuiet}>
             {analyse?.modele ?? '—'}
           </Mono>
@@ -319,6 +336,9 @@ function Analyse({
       )}
 
       <div style={{ fontSize: 14, lineHeight: 1.5, color: C.inkBody }}>{analyse.verdict[lang]}</div>
+
+      {/* ce qui va, ce qui ne va pas, ce que ça change au plan */}
+      <Observations analyse={analyse} lang={lang} />
 
       {/* La proposition est une zone et une part ; les minutes et l'allure se
           calculent ici, avec le moteur, donc elles suivent la référence. */}

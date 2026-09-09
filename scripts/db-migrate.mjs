@@ -65,6 +65,7 @@ try {
     ['msc_athlete', 'prenom', "ADD COLUMN prenom VARCHAR(80) NULL AFTER nom"],
     ['msc_athlete', 'annee_naissance', "ADD COLUMN annee_naissance SMALLINT UNSIGNED NULL AFTER prenom"],
     ['msc_athlete', 'surnom', "ADD COLUMN surnom VARCHAR(40) NULL AFTER annee_naissance"],
+    ['msc_athlete', 'coach', "ADD COLUMN coach VARCHAR(16) NOT NULL DEFAULT 'gentil' AFTER surnom"],
     ['msc_mesure', 'hrv_ms', "ADD COLUMN hrv_ms SMALLINT UNSIGNED NULL AFTER fc_repos"],
   ];
   for (const [table, colonne, ddl] of AJOUTS) {
@@ -77,6 +78,48 @@ try {
       await cnx.query(`ALTER TABLE \`${table}\` ${ddl}`);
       console.log(`+ ${table}.${colonne}`);
     }
+  }
+
+  /* Même journal pour le vocabulaire ajouté après coup. Le seed ne repasse
+     jamais sur une base vivante, alors un motif de plus s'insère ici, s'il
+     manque — le même texte que src/data/tables.ts, à garder identique. */
+  const LIGNES = [
+    ['msc_excuse', 'code', 'trop_mange',
+      `INSERT INTO msc_excuse (code, icon, type_code, session_exemple, ordre,
+         label_fr, label_pl, reponse_fr, reponse_pl, remplacement_fr, remplacement_pl)
+       VALUES ('trop_mange', 'utensils', 'recup', NULL, 5,
+         'J’ai mangé comme un porc, j’arrive même plus à bouger',
+         'Zjadłem jak świnia, nie mogę się ruszyć',
+         'La digestion prend le sang que les jambes réclament. On laisse passer deux heures, puis vingt-cinq minutes très faciles : la qualité attend demain, la routine ne casse pas.',
+         'Trawienie zabiera krew, o którą proszą nogi. Odczekujemy dwie godziny, potem 25 minut bardzo lekko: jakość czeka do jutra, rutyna się nie łamie.',
+         'Récup 25 min · 6:30/km, deux heures après le repas',
+         'Regeneracja 25 min · 6:30/km, dwie godziny po posiłku')`],
+  ];
+  for (const [table, cle, valeur, sql] of LIGNES) {
+    const [[{ n }]] = await cnx.query(`SELECT COUNT(*) AS n FROM \`${table}\` WHERE \`${cle}\` = ?`, [valeur]);
+    if (n === 0) {
+      await cnx.query(sql);
+      console.log(`+ ${table} ${cle}=${valeur}`);
+    }
+  }
+
+  /* Les libellés d'écran vivent dans msc_ui — un JSON par langue, copié de
+     src/data/tables.ts au seed. Ceux qui changent après coup se rejouent ici,
+     clé par clé ; les mêmes textes que tables.ts, à garder identiques. */
+  const LIBELLES = [
+    ['fr', { anaLabel: 'Le coach', anaIdle: 'Il en pense quoi le coach ?',
+             anaRunning: 'Le coach lit ta séance…', anaDoneBtn: 'Redemander au coach' }],
+    ['pl', { anaLabel: 'Trener', anaIdle: 'Co na to trener?',
+             anaRunning: 'Trener czyta twój trening…', anaDoneBtn: 'Zapytaj trenera ponownie' }],
+  ];
+  for (const [langue, cles] of LIBELLES) {
+    const paires = Object.entries(cles).flatMap(([k, v]) => [`$.${k}`, v]);
+    const [r] = await cnx.query(
+      `UPDATE msc_ui SET chaines = JSON_SET(chaines, ${Object.keys(cles).map(() => '?, ?').join(', ')})
+       WHERE langue = ?`,
+      [...paires, langue],
+    );
+    if (r.changedRows) console.log(`~ msc_ui ${langue} : ${Object.keys(cles).join(', ')}`);
   }
 
   const [tables] = await cnx.query(

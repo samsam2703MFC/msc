@@ -206,7 +206,7 @@ export const msc_ui: Record<Lang, MscUiStrings> = {
     tabs: { today: "Aujourd'hui", week: 'Semaine', form: 'Forme', coach: 'Coach', admin: 'Créer' },
     doneOn: 'Séance faite', doneOff: 'Marquer la séance faite',
     rpeLabel: 'RPE ressenti', notePlaceholder: 'Sommeil, douleurs, sensations',
-    anaLabel: 'Analyse de la séance', anaIdle: 'Analyser avec Claude', anaRunning: 'Claude analyse…', anaDoneBtn: 'Relancer l’analyse',
+    anaLabel: 'Le coach', anaIdle: 'Il en pense quoi le coach ?', anaRunning: 'Le coach lit ta séance…', anaDoneBtn: 'Redemander au coach',
     nextLabel: 'La séance suivante s’adapte', applyOn: 'Appliqué', applyOff: 'Appliquer',
     legendLabel: 'Types d’entraînement', gapLabel: 'Écart détecté', gapNone: 'Semaine tenue',
     recalcIdle: 'Recalculer le plan', recalcRunning: 'Claude recalcule le plan…', recalcDoneBtn: 'Plan recalculé',
@@ -221,7 +221,7 @@ export const msc_ui: Record<Lang, MscUiStrings> = {
     tabs: { today: 'Dzisiaj', week: 'Tydzień', form: 'Forma', coach: 'Trener', admin: 'Utwórz' },
     doneOn: 'Wykonane', doneOff: 'Oznacz jako wykonane',
     rpeLabel: 'Odczuwany RPE', notePlaceholder: 'Sen, bóle, odczucia',
-    anaLabel: 'Analiza treningu', anaIdle: 'Przeanalizuj z Claude', anaRunning: 'Claude analizuje…', anaDoneBtn: 'Ponów analizę',
+    anaLabel: 'Trener', anaIdle: 'Co na to trener?', anaRunning: 'Trener czyta twój trening…', anaDoneBtn: 'Zapytaj trenera ponownie',
     nextLabel: 'Kolejny trening się dostosowuje', applyOn: 'Zastosowane', applyOff: 'Zastosuj',
     legendLabel: 'Typy treningów', gapLabel: 'Wykryto odchylenie', gapNone: 'Tydzień utrzymany',
     recalcIdle: 'Przelicz plan', recalcRunning: 'Claude przelicza plan…', recalcDoneBtn: 'Plan przeliczony',
@@ -255,4 +255,10 @@ export const msc_excuse: MscExcuse[] = [
     label: { fr: 'En déplacement, pas de salle', pl: 'W podróży, bez siłowni' },
     reponse: { fr: 'La force sans charge existe : la protection tendineuse ne demande pas de barre.', pl: 'Siła bez obciążenia istnieje: ochrona ścięgien nie wymaga sztangi.' },
     remplacement: { fr: 'Circuit poids du corps 25 min · mollets, fentes, gainage', pl: 'Obwód z ciężarem ciała 25 min · łydki, zakroki, core' } },
+  /* Ajouté après coup : la base vivante le reçoit par db-migrate (LIGNES), pas
+     par le seed. Garder les deux textes identiques. */
+  { code: 'trop_mange', icon: 'utensils', type: 'recup', session_id: 1052,
+    label: { fr: 'J’ai mangé comme un porc, j’arrive même plus à bouger', pl: 'Zjadłem jak świnia, nie mogę się ruszyć' },
+    reponse: { fr: 'La digestion prend le sang que les jambes réclament. On laisse passer deux heures, puis vingt-cinq minutes très faciles : la qualité attend demain, la routine ne casse pas.', pl: 'Trawienie zabiera krew, o którą proszą nogi. Odczekujemy dwie godziny, potem 25 minut bardzo lekko: jakość czeka do jutra, rutyna się nie łamie.' },
+    remplacement: { fr: 'Récup 25 min · 6:30/km, deux heures après le repas', pl: 'Regeneracja 25 min · 6:30/km, dwie godziny po posiłku' } },
 ];

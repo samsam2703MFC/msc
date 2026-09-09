@@ -5,7 +5,9 @@ import * as api from '../data/api';
 import * as db from '../data/db';
 import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
+import { COACH, COACHS, coachDe } from '../data/coachs';
 import { Avatar } from './Avatar';
+import { CoachAvatar } from './CoachAvatar';
 import { Sheet, SheetCloseButton } from './Sheet';
 import type { App } from '../state/useApp';
 
@@ -14,13 +16,61 @@ const T: Record<Lang, Record<string, string>> = {
     titre: 'Profil', prenom: 'Prénom', nom: 'Nom', surnom: 'Surnom (sous l’avatar)',
     annee: 'Année de naissance', poids: 'Poids', ans: 'ans', enregistrer: 'Enregistrer',
     enCours: 'Enregistrement…', fermer: 'Fermer', aucunPoids: 'aucune mesure confirmée',
+    coach: 'Ton coach', coachAide: 'Le même plan, pas le même ton — dans l’analyse, le chat et le recalcul.',
   },
   pl: {
     titre: 'Profil', prenom: 'Imię', nom: 'Nazwisko', surnom: 'Pseudonim (pod awatarem)',
     annee: 'Rok urodzenia', poids: 'Waga', ans: 'lat', enregistrer: 'Zapisz',
     enCours: 'Zapisywanie…', fermer: 'Zamknij', aucunPoids: 'brak potwierdzonego pomiaru',
+    coach: 'Twój trener', coachAide: 'Ten sam plan, inny ton — w analizie, czacie i przeliczeniu.',
   },
 };
+
+const ETIQUETTE = {
+  fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' as const,
+  color: C.inkSecondary, fontWeight: 600,
+};
+
+/* Trois têtes, une sélectionnée. La ligne sous la grille dit comment celui-là
+   parle, pour choisir en sachant. */
+function ChoixCoach({ lang, valeur, onChange }: { lang: Lang; valeur: string; onChange: (c: string) => void }) {
+  const t = T[lang];
+  const choisi = coachDe(valeur);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={ETIQUETTE}>{t.coach}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+        {COACHS.map((code) => {
+          const on = valeur === code;
+          return (
+            <button
+              key={code}
+              type="button"
+              className="msc-hover-accent"
+              aria-pressed={on}
+              onClick={() => onChange(code)}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                padding: '10px 6px', borderRadius: R.md,
+                border: `1px solid ${on ? C.accent : C.border}`,
+                background: on ? C.accentSoft : C.surface,
+              }}
+            >
+              <CoachAvatar code={code} taille={52} />
+              <div style={{ fontSize: 12, fontWeight: 600, color: on ? C.accentDeep : C.ink, textAlign: 'center' }}>
+                {COACH[code].nom[lang]}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.45 }}>
+        {choisi.ton[lang]} <span style={{ color: C.inkQuiet }}>{choisi.devise[lang]}</span>
+      </div>
+      <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.4 }}>{t.coachAide}</div>
+    </div>
+  );
+}
 
 function Champ({ label, value, onChange, type = 'text', placeholder }: {
   label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
@@ -52,6 +102,7 @@ export function ProfilSheet({ app }: { app: App }) {
   const [nom, setNom] = useState(athlete.nom);
   const [surnom, setSurnom] = useState(athlete.surnom ?? '');
   const [annee, setAnnee] = useState(athlete.annee_naissance ? String(athlete.annee_naissance) : '');
+  const [coach, setCoach] = useState<string>(coachDe(athlete.coach).code);
   const [poids, setPoids] = useState<number | null | undefined>(undefined);
   const [job, setJob] = useState<'idle' | 'saving'>('idle');
   const [erreur, setErreur] = useState<string | null>(null);
@@ -75,6 +126,7 @@ export function ProfilSheet({ app }: { app: App }) {
       await app.majProfil({
         prenom: prenom.trim() || null, nom: nom.trim(), surnom: surnom.trim() || null,
         annee_naissance: annee ? Number(annee) : null,
+        coach,
       });
       app.closeProfil();
     } catch (e) {
@@ -106,6 +158,8 @@ export function ProfilSheet({ app }: { app: App }) {
       </div>
       <Champ label={t.surnom} value={surnom} onChange={setSurnom} />
       <Champ label={t.annee} value={annee} onChange={setAnnee} type="number" placeholder="1986" />
+
+      <ChoixCoach lang={app.lang} valeur={coach} onChange={setCoach} />
 
       <div style={{ borderRadius: R.md, border: `1px solid ${C.border}`, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary, fontWeight: 600 }}>{t.poids}</span>

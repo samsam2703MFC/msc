@@ -7,9 +7,12 @@ import { useEffect } from 'react';
 import * as db from '../data/db';
 import type { ApercuAthlete, Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
+import { coachDe } from '../data/coachs';
 import { Avatar } from '../components/Avatar';
+import { CoachAvatar } from '../components/CoachAvatar';
 import { FormeJauge } from '../components/FormeJauge';
 import { Icon } from '../components/Icon';
+import { limiteEnClair } from '../components/Limites';
 import type { App } from '../state/useApp';
 
 /* Même lecture que la frise des Paramètres : la phase se lit sur `part`. */
@@ -91,6 +94,23 @@ function Carte({ a, app }: { a: ApercuAthlete; app: App }) {
           sous={`${h(a.cette_semaine.volume_realise_min)} / ${h(a.cette_semaine.volume_prevu_min)}`}
         />
         <Tuile label={t.rpe} valeur={a.dernier_rpe ? String(a.dernier_rpe.valeur) : '—'} sous={a.dernier_rpe?.date ?? ''} />
+      </div>
+
+      {/* son coach, et ce qui a bloqué la dernière fois — la ligne que le
+          coach humain lit avant le chiffre */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: C.inkSecondary }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <CoachAvatar code={a.coach} taille={22} />
+          <span style={{ fontWeight: 600 }}>{coachDe(a.coach).nom[app.lang]}</span>
+        </div>
+        {a.dernier_rpe?.limites?.length ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.inkQuiet }}>
+            <Icon name="circle-question-mark" size={13} />
+            <span>
+              {`${fr ? 'A bloqué' : 'Blokowało'} : ${a.dernier_rpe.limites.map((l) => limiteEnClair(l, app.lang).toLowerCase()).join(', ')}`}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <FormeJauge a={a} lang={app.lang} compact />

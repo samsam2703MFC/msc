@@ -9,6 +9,7 @@ import { ecartDeSemaine, libelleAjustement } from '../data/analyse';
 import type { TourDeChat } from '../data/analyse';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
+import { Observations } from '../components/Observations';
 import {
   AccentButton,
   Card,
@@ -232,18 +233,7 @@ export function CoachScreen({ app }: { app: App }) {
         </div>
       </Card>}
 
-      <Grid cols={2} gap={10}>
-        {(weekly?.blocs ?? []).map((b) => (
-          <Card key={b.icon} padding={14} gap={8}>
-            <Icon name={b.icon} size={18} color={b.couleur} />
-            {b.items[lang].map((item) => (
-              <div key={item} style={{ fontSize: 12, lineHeight: 1.4, color: C.inkBody }}>
-                {item}
-              </div>
-            ))}
-          </Card>
-        ))}
-      </Grid>
+      {weekly && <Observations analyse={weekly} lang={lang} />}
 
       {/* adjustments, accepted one at a time */}
       {adjustments.map((a) => {

@@ -210,6 +210,8 @@ export interface EcritureJournal {
   sommeil?: number;
   note?: string;
   douleurs?: string[];
+  /** Ce qui a bloqué — codes de `LIMITES` ; `['rien']` quand rien n'a bloqué. */
+  limites?: string[];
 }
 
 export function ecrireJournal(corps: EcritureJournal) {
@@ -361,7 +363,7 @@ export function apercu(): Promise<{ athletes: ApercuAthlete[] }> {
 
 /** Le profil : prénom, nom, surnom, année de naissance. */
 export function majProfil(
-  corps: { prenom?: string | null; nom: string; surnom?: string | null; annee_naissance?: number | null },
+  corps: { prenom?: string | null; nom: string; surnom?: string | null; annee_naissance?: number | null; coach?: string },
   athleteId?: number | null,
 ): Promise<{ id: number }> {
   const q = athleteId ? `?athlete=${athleteId}` : '';
