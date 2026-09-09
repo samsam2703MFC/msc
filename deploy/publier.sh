@@ -145,18 +145,21 @@ else
   {
     echo "# Écrit par deploy/publier.sh — les modifications à la main seront écrasées."
     echo
-    echo "# Une photo de balance envoyée par le téléphone dépasse le défaut d'Apache."
-    echo "LimitRequestBody 12582912"
-    echo
     echo "ProxyPreserveHost On"
     if [ "$MODE" = domaine ]; then
       echo
       echo "# Le « ! » retire ce chemin du mandataire, et il doit venir AVANT la règle"
       echo "# générale : Apache prend la première qui correspond. Sans lui, la"
       echo "# validation du certificat part vers l'application, qui répond 404 sur un"
-      echo "# jeton qu'elle n'a jamais vu — et certbot échoue sur un domaine pourtant"
-      echo "# joignable. L'Alias que pose certbot ne gagne pas contre mod_proxy."
+      echo "# jeton qu'elle n'a jamais vu. L'Alias que pose certbot ne gagne pas"
+      echo "# contre mod_proxy."
       echo "ProxyPass $MONTAGE/.well-known/acme-challenge/ !"
+    fi
+    if [ -n "$MONTAGE" ]; then
+      echo
+      echo "# Sans barre finale, « $MONTAGE » ne correspond à aucune règle et tombe sur"
+      echo "# le site par défaut de la machine — un 404 signé Apache, déroutant."
+      echo "RedirectMatch ^$MONTAGE\$ $MONTAGE/"
     fi
     echo
     echo "# Les barres obliques finales des DEUX côtés : c'est elles qui retirent le"
@@ -165,11 +168,19 @@ else
     echo "ProxyPass        $MONTAGE/ http://127.0.0.1:$PORT/"
     echo "ProxyPassReverse $MONTAGE/ http://127.0.0.1:$PORT/"
     echo
-    echo "# %{REQUEST_SCHEME} et non « https » en dur : ce fragment sert aussi le"
-    echo "# vhost en clair, et l'application se croirait derrière du TLS sans lui."
-    echo "RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}"
+    echo "# Ce fragment peut être inclus dans un vhost qui ne nous appartient pas —"
+    echo "# celui qui possède déjà l'adresse. Tout ce qui pourrait changer SON"
+    echo "# comportement est donc enfermé ici, sous le seul chemin de l'application."
+    echo "<Location $MONTAGE/>"
+    echo "  # Une photo de balance envoyée par le téléphone dépasse le défaut d'Apache."
+    echo "  LimitRequestBody 12582912"
     echo
-    echo "AddOutputFilterByType DEFLATE text/css application/javascript application/json application/manifest+json"
+    echo "  # %{REQUEST_SCHEME} et non « https » en dur : ce fragment sert aussi un"
+    echo "  # vhost en clair, et l'application se croirait derrière du TLS sans lui."
+    echo "  RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}"
+    echo
+    echo "  AddOutputFilterByType DEFLATE text/css application/javascript application/json application/manifest+json"
+    echo "</Location>"
     echo
     echo "# Le serveur pose déjà les bons en-têtes de cache — un an sur les fichiers"
     echo "# hachés d'assets/, no-cache sur index.html et le service worker. Ne rien"
@@ -182,9 +193,6 @@ else
   {
     echo "<VirtualHost *:80>"
     echo "  ServerName $CIBLE"
-    # Sans ça, « /msc » sans barre finale ne correspond à aucune règle et tombe
-    # sur le site par défaut de la machine — un 404 signé Apache, déroutant.
-    [ -n "$MONTAGE" ] && echo "  RedirectMatch ^$MONTAGE\$ $MONTAGE/"
     echo "  Include conf-available/msc-proxy.conf"
     echo "  ErrorLog \${APACHE_LOG_DIR}/msc-error.log"
     echo "  CustomLog \${APACHE_LOG_DIR}/msc-access.log combined"
@@ -192,6 +200,41 @@ else
   } > "$SITE"
   echo "   $SITE"
   a2ensite msc > /dev/null
+
+  # Apache prend le PREMIER vhost dont le ServerName correspond, dans l'ordre de
+  # chargement de sites-enabled. Un « 000-… » qui déclare déjà cette adresse
+  # gagne donc toujours contre « msc.conf » : le nôtre est bien listé par
+  # apache2ctl -S, et n'est jamais choisi. Le symptôme est un 404 d'Apache, qui
+  # ressemble à une application absente alors qu'elle tourne parfaitement.
+  PREMIER=$(grep -lE "^[[:space:]]*ServerName[[:space:]]+$CIBLE[[:space:]]*\$" \
+              /etc/apache2/sites-enabled/*.conf 2>/dev/null | sort | head -1)
+  if [ -n "$PREMIER" ] && [ "$(basename "$PREMIER")" != msc.conf ]; then
+    echo "   ⚠ « $(basename "$PREMIER") » déclare déjà ServerName $CIBLE et se charge"
+    echo "     avant msc.conf : c'est lui qui répond à cette adresse, pas nous."
+    REEL=$(readlink -f "$PREMIER")     # sed/mv sur le lien le remplacerait par un fichier
+    if grep -q 'msc-proxy.conf' "$REEL"; then
+      echo "   il inclut déjà notre mandataire — rien à changer"
+    else
+      # Prendre sa place comme vhost par défaut changerait le comportement de la
+      # machine pour TOUS les hôtes inconnus. Une ligne chez lui ne détourne que
+      # $MONTAGE/ ; le reste de ce vhost est intact, et la sauvegarde le prouve.
+      cp --update=none "$REEL" "$REEL.avant-msc" 2>/dev/null || cp -n "$REEL" "$REEL.avant-msc"
+      TMP=$(mktemp)
+      awk -v l="  Include conf-available/msc-proxy.conf" \
+          '/<\/VirtualHost>/ && !f {print l; f=1} {print}' "$REEL" > "$TMP"
+      cat "$TMP" > "$REEL"; rm -f "$TMP"   # cat et non mv : on garde inode et lien
+      if apache2ctl configtest > /dev/null 2>&1; then
+        echo "   une ligne ajoutée dans $REEL"
+        echo "   sauvegarde : $REEL.avant-msc — seul $MONTAGE/ y est détourné."
+      else
+        cat "$REEL.avant-msc" > "$REEL"
+        echo "   ÉCHEC : l'ajout casse la configuration. Fichier restauré, rien perdu."
+        apache2ctl configtest 2>&1 | sed 's/^/     /'
+        exit 1
+      fi
+    fi
+  fi
+
   apache2ctl configtest
   systemctl reload apache2
   echo "   apache2 rechargé — les autres sites de la machine sont intacts"

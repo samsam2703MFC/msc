@@ -142,6 +142,21 @@ service, sans quoi la connexion serait impossible (voir *Les variables*).
 **Sur un nom**, HTTPS avec certificat, à la racine ou sous un chemin — le
 script lit le chemin dans le `dist/` déployé plutôt que de le supposer.
 
+**Un vhost peut déjà posséder l'adresse.** Apache choisit le premier vhost dont
+le `ServerName` correspond, dans l'ordre de chargement de `sites-enabled`. Sur
+cette machine un `000-ip-catchall.conf` déclare déjà `ServerName
+185.180.206.46` et se charge avant `msc.conf` : le nôtre apparaissait bien dans
+`apache2ctl -S`, et n'était jamais choisi — un 404 d'Apache, qui ressemble à
+une application absente alors qu'elle tourne. Le script le détecte et ajoute
+une ligne `Include` dans ce vhost-là, avec une sauvegarde `.avant-msc` et un
+`configtest` qui restaure le fichier si l'ajout casse quoi que ce soit.
+
+Prendre sa place comme vhost par défaut aurait aussi marché, et aurait changé
+le comportement de la machine pour tous les hôtes inconnus. C'est pourquoi tout
+ce qui pourrait déborder — `LimitRequestBody`, `RequestHeader`, la compression —
+est enfermé dans un `<Location /msc/>` : chez un vhost qui ne nous appartient
+pas, on ne détourne que notre chemin.
+
 Le chemin `/msc` vient du build : `MSC_BASE`, `/msc/` par défaut, posé sur le
 runner (variable GitHub `MSC_BASE`). **Le montage du relais et le `base` du
 build doivent coïncider**, sinon la page arrive mais demande ses assets là où
