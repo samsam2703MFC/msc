@@ -322,6 +322,8 @@ export interface MscMesure {
   date: string;
   poids_kg?: number;
   fc_repos?: number;
+  /** La HRV du matin, en ms — l'autre moitié de la forme. */
+  hrv_ms?: number;
   source: 'photo' | 'saisie' | 'import';
   etat: 'propose' | 'confirme' | 'rejete';
 }

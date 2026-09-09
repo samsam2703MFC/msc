@@ -10,6 +10,7 @@ import { Avatar } from './components/Avatar';
 import { ProfilSheet } from './components/ProfilSheet';
 import { SansPlan } from './components/SansPlan';
 import { IOSDevice } from './components/IOSDevice';
+import { MatinSheet } from './components/MatinSheet';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TypeSheet } from './components/TypeSheet';
@@ -268,6 +269,8 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
 
       {app.settingsOpen && <SettingsSheet app={app} />}
       {app.profilOpen && <ProfilSheet app={app} />}
+      {/* par-dessus tout : le matin, deux chiffres avant d'entrer */}
+      {app.matinRequis && <MatinSheet app={app} />}
       {app.sessionId !== null && <SessionSheet app={app} sessionId={app.sessionId} />}
       {app.typeCode !== null && <TypeSheet app={app} code={app.typeCode} />}
     </div>

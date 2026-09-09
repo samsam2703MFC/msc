@@ -39,6 +39,11 @@ await bd().execute(
 /* Ce contrôle encode des courses ; il doit partir d'une table propre, sinon
    « un seul résultat » n'est vrai qu'à la première exécution. */
 await bd().execute("DELETE FROM msc_competition WHERE nom LIKE '%de contrôle'");
+/* Et il passe par le panneau du matin : la mesure saisie du jour, s'il y en a
+   une d'une exécution précédente, doit s'effacer pour que le panneau revienne. */
+await bd().execute(
+  "DELETE FROM msc_mesure WHERE athlete_id = 1 AND date = CURDATE() AND source = 'saisie'",
+);
 
 const serveur = spawn(process.execPath, ['server/index.mjs'], {
   env: { ...process.env, PORT: String(PORT), NODE_ENV: 'test', MSC_ATHLETE_ID: '' },
@@ -104,6 +109,23 @@ try {
   await page.click('button[type=submit]');
   await page.waitForSelector('nav', { timeout: 20000 });
   check("l'application s'ouvre", await page.locator('nav').isVisible());
+
+  /* Le matin : la FC de repos et la HRV avant tout le reste. Le panneau bloque,
+     le bouton ne part pas sans les deux, et il disparaît une fois la mesure
+     rangée — y compris après un rechargement, puisqu'elle est en base. */
+  console.log('\n=== le matin ===');
+  const matin = page.getByRole('dialog');
+  await matin.waitFor({ timeout: 10000 });
+  check('le panneau FC repos + HRV bloque l’entrée', (await matin.count()) === 1);
+  const entrer = matin.getByRole('button', { name: /Enregistrer et entrer/ });
+  check('sans les deux chiffres, il ne part pas', await entrer.isDisabled());
+  await matin.locator('input').nth(0).fill('44');
+  check('avec la FC seule non plus', await entrer.isDisabled());
+  await matin.locator('input').nth(1).fill('68');
+  check('avec les deux, il part', !(await entrer.isDisabled()));
+  await entrer.click();
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), null, { timeout: 15000 });
+  check('et il disparaît une fois la mesure rangée', (await page.getByRole('dialog').count()) === 0);
 
   const aujourdhui = await page.locator('body').innerText();
   check('le plan vient de la base', /S\d+/.test(aujourdhui),

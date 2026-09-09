@@ -241,7 +241,7 @@ async function leVecu(athleteId) {
       .map((m) => ({ date: m.date, fc_repos: m.fc_repos })),
     msc_mesure: mesures.map((m) => ({
       date: m.date, poids_kg: nombre(m.poids_kg), fc_repos: nombre(m.fc_repos),
-      source: m.source, etat: m.etat,
+      hrv_ms: nombre(m.hrv_ms), source: m.source, etat: m.etat,
     })),
     /* Ce qu'un modèle a lu et que l'athlète n'a pas encore vu. Séparé des
        mesures confirmées : tant que ce n'est pas confirmé, ça ne compte dans

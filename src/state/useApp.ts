@@ -118,6 +118,23 @@ export function useApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, version]);
 
+  /* Le matin : rien ne s'ouvre tant que la FC de repos et la HRV du jour ne
+     sont pas rangées. Seulement pour son propre athlète (le premier que le
+     compte voit) et en écriture — un coach qui ouvre un autre athlète n'a pas
+     à saisir le cœur de quelqu'un d'autre. Une écriture partie hors ligne
+     laisse passer : elle arrivera. */
+  const [matinPasse, setMatinPasse] = useState<string | null>(null);
+  const matinRequis = useMemo(() => {
+    if (!db.chargee || db.droit !== 'ecriture') return false;
+    if (identite && identite.athletes[0]?.id !== db.athleteId) return false;
+    const jour = db.aujourdhuiISO();
+    if (matinPasse === jour) return false;
+    return !db
+      .select('msc_mesure')
+      .some((m) => m.date === jour && m.etat === 'confirme' && m.fc_repos != null && m.hrv_ms != null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identite, matinPasse, version]);
+
   /* Nothing async may touch state after the hook is gone. */
   const monte = useRef(true);
 
@@ -686,6 +703,21 @@ export function useApp() {
     [recharger],
   );
 
+  /* La mesure du matin, saisie : confirmée d'emblée, c'est l'athlète qui l'a
+     tapée. Le rechargement fait tomber le panneau ; hors ligne, la date
+     retenue le fait tomber aussi. */
+  const validerMatin = useCallback(
+    async (corps: { fc_repos: number; hrv_ms: number; poids_kg?: number }) => {
+      const jour = db.aujourdhuiISO();
+      const r = await api.ecrireMesure({ date: jour, ...corps, source: 'saisie', etat: 'confirme' });
+      if (!monte.current) return;
+      if (api.estDiffere(r)) setEnAttente((n) => n + 1);
+      else await recharger(db.athleteId);
+      if (monte.current) setMatinPasse(jour);
+    },
+    [recharger],
+  );
+
   /* ------------------------------------------------------------ le reste */
 
   /* Claude reads the session back and answers.
@@ -872,6 +904,8 @@ export function useApp() {
     photoErreur,
     envoyerPhoto,
     confirmerMesure,
+    matinRequis,
+    validerMatin,
 
     settingsOpen,
     openSettings: useCallback(() => setSettingsOpen(true), []),

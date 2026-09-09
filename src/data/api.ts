@@ -222,6 +222,7 @@ export interface EcritureMesure {
   date: string;
   poids_kg?: number;
   fc_repos?: number;
+  hrv_ms?: number;
   source?: 'photo' | 'saisie' | 'import';
   etat?: 'propose' | 'confirme' | 'rejete';
   note?: string;

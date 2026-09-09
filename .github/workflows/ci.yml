@@ -81,9 +81,13 @@ jobs:
         run: npm run db:seed:paquet
 
       - name: l'API par HTTP
-        # check:api sert la PWA construite : il lui faut un dist/.
+        # check:api et check:app servent la PWA construite : il leur faut un
+        # dist/ — monté à la racine, puisque le serveur de contrôle n'a pas de
+        # relais devant lui. Le défaut de MSC_BASE est « /msc/ » (le
+        # déploiement) ; construit ainsi, l'écran de connexion ne s'affichait
+        # pas dans le navigateur de contrôle : ses fichiers étaient sous /msc/.
         run: |
-          npm run build
+          MSC_BASE=/ npm run build
           npm run check:api
 
       # Le seul contrôle qui exerce le client. Les autres diraient que le moteur
