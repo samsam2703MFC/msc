@@ -7,6 +7,7 @@
        npm run compte -- lister
        npm run compte -- creer sam@exemple.tld "Sam" [--coach]
        npm run compte -- motdepasse sam@exemple.tld
+       npm run compte -- athlete "Léa Martin" 4:15 3:50 [lea@exemple.tld]
        npm run compte -- acces sam@exemple.tld 1 ecriture
 
    Le mot de passe se saisit, il ne se passe pas en argument : la ligne de
@@ -23,7 +24,24 @@ const USAGE = `usage :
   npm run compte -- lister
   npm run compte -- creer <email> <nom> [--coach]
   npm run compte -- motdepasse <email>
+  npm run compte -- athlete <nom> <allure_actuelle> <allure_cible> [email]
   npm run compte -- acces <email> <athlete_id> [lecture|ecriture]`;
+
+/* Une allure, en secondes par km. Le moteur ne connaît que ça — c'est le seul
+   nombre dont il part. On accepte l'écriture humaine « 4:00 » et les secondes
+   brutes « 240 » : la première pour taper vite, la seconde parce qu'un script
+   la donne déjà comme ça. */
+function secondesParKm(x) {
+  const s = String(x).trim();
+  if (/^\d+$/.test(s)) return Number(s);
+  const m = s.match(/^(\d{1,2}):([0-5]\d)$/);
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
+  throw new Error(`Allure illisible : « ${x} ». Attendu des secondes (240) ou mm:ss (4:00).`);
+}
+
+function mmss(s) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 async function demanderMotDePasse() {
   /* Sans terminal — un pipe, un script de déploiement — les deux questions
@@ -96,6 +114,47 @@ try {
     ]);
     if (r.affectedRows === 0) throw new Error(`Aucun compte pour ${email}.`);
     console.log('mot de passe changé');
+  } else if (commande === 'athlete') {
+    const [nom, actuelle, cible, email] = args;
+    if (!nom || !actuelle || !cible) throw new Error(USAGE);
+    const a = secondesParKm(actuelle);
+    const c = secondesParKm(cible);
+    /* Une allure de course tient entre 2:00 et 15:00 au km. Hors de là, c'est
+       une faute de frappe — des secondes prises pour des minutes, le plus
+       souvent — et il vaut mieux la refuser que semer un athlète intenable. */
+    for (const [libelle, v] of [['actuelle', a], ['cible', c]]) {
+      if (v < 120 || v > 900) {
+        throw new Error(`Allure ${libelle} hors plage (2:00–15:00 /km) : ${mmss(v)}.`);
+      }
+    }
+    /* compte_id NULL : un athlète existe par lui-même, un login se rattache
+       après (msc_acces). Le schéma le prévoit — « un athlète encodé par un
+       coach, sans login à lui ». `debut` par défaut à aujourd'hui. */
+    const debut = new Date().toISOString().slice(0, 10);
+    const [r] = await bd().execute(
+      `INSERT INTO msc_athlete (compte_id, nom, ref_actuelle_s, ref_cible_s, debut)
+       VALUES (NULL, ?, ?, ?, ?)`,
+      [nom, a, c, debut],
+    );
+    const id = r.insertId;
+    console.log(`athlète #${id} « ${nom} » — actuelle ${mmss(a)}, cible ${mmss(c)} /km`);
+    if (email) {
+      const compte = await ligne('SELECT id FROM compte WHERE email = :e', {
+        e: email.trim().toLowerCase(),
+      });
+      if (compte) {
+        await bd().execute(
+          `INSERT INTO msc_acces (compte_id, athlete_id, droit) VALUES (?, ?, 'ecriture')
+           ON DUPLICATE KEY UPDATE droit = VALUES(droit)`,
+          [compte.id, id],
+        );
+        console.log(`  relié à ${email} (écriture)`);
+      } else {
+        console.log(`  ⚠ aucun compte « ${email} » — crée-le d'abord (creer), puis : acces ${email} ${id}`);
+      }
+    } else {
+      console.log(`  sans login à lui. Pour lui en donner un : acces <email> ${id}`);
+    }
   } else if (commande === 'acces') {
     const [email, athleteId, droit = 'ecriture'] = args;
     if (!email || !athleteId) throw new Error(USAGE);

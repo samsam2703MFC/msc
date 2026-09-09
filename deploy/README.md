@@ -108,6 +108,16 @@ sudo -u msc npm run compte -- creer <email> "<nom>"
 sudo -u msc npm run compte -- acces <email> 1 ecriture
 ```
 
+Pour un athlète de plus — le générateur ne part que de deux nombres, l'allure
+10 km actuelle et la cible :
+
+```sh
+sudo -u msc npm run compte -- athlete "<nom>" <actuelle> <cible> [email]
+#   allures en mm:ss (4:15) ou en secondes (255). Avec un email déjà créé,
+#   l'athlète lui est relié en écriture ; sans, il vit sans login (athlète de
+#   coach), à relier plus tard par « acces <email> <id> ».
+```
+
 `db:seed:serveur`, et non `db:seed` : celui-ci empaquette `scripts/db-seed.ts`,
 qui importe `src/data/` — et `src/` ne part pas au serveur. Le lancer là-bas
 installe esbuild sur la production pour échouer sur des imports absents. Le
