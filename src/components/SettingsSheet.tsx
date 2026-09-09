@@ -5,8 +5,11 @@ import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from './Icon';
 import { Mono, SectionLabel } from './primitives';
+import { PhaseEntrainement } from './PhaseEntrainement';
 import { Sheet, SheetCloseButton } from './Sheet';
 import type { App } from '../state/useApp';
+
+const PHASE_LABEL: Record<Lang, string> = { fr: 'Période d’entraînement', pl: 'Okres treningowy' };
 
 const SETTINGS_TITLE: Record<Lang, string> = { fr: 'Paramètres', pl: 'Ustawienia' };
 const LANG_LABEL: Record<Lang, string> = { fr: 'Langue', pl: 'Język' };
@@ -32,6 +35,13 @@ export function SettingsSheet({ app }: { app: App }) {
         >
           {SETTINGS_TITLE[lang]}
         </div>
+      </div>
+
+      <div>
+        <SectionLabel icon="calendar-days" color={C.teal}>
+          {PHASE_LABEL[lang]}
+        </SectionLabel>
+        <PhaseEntrainement app={app} />
       </div>
 
       <StravaCard app={app} />

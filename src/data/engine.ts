@@ -61,6 +61,11 @@ export function blocDeSemaine(semaine: number): MscBloc {
   return tables.msc_bloc.find((b) => week >= b.de && week <= b.a) ?? tables.msc_bloc[0];
 }
 
+/** Tous les blocs du plan, dans l'ordre des semaines. */
+export function blocs(): MscBloc[] {
+  return [...tables.msc_bloc].sort((a, b) => a.de - b.de);
+}
+
 /** The block's 10 km reference pace, in seconds per km. */
 export function reference(blocCode: string, who: MscAthlete = athleteCourant): number {
   const b = bloc(blocCode);
