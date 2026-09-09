@@ -33,6 +33,7 @@ import * as depots from './depots.mjs';
 import { construireMethode } from './methode.mjs';
 import * as photo from './photo.mjs';
 import { analyserSeance, recalculerPlan, repondre } from './coach.mjs';
+import * as params from './params.mjs';
 import * as strava from './strava.mjs';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -280,7 +281,7 @@ async function router(req, res, url) {
   if (chemin === '/api/sante') {
     return json(res, 200, {
       ok: true,
-      cle: Boolean(process.env.ANTHROPIC_API_KEY),
+      cle: Boolean(await params.param('anthropic.cle')),
       strava: strava.configure(),
       scellement: scellementPret(),
     });
@@ -318,6 +319,21 @@ async function router(req, res, url) {
       ? [{ id: identite.athlete_id, nom: identite.compte.nom, droit: 'ecriture' }]
       : await athletesVisibles(identite.compte.id);
     return json(res, 200, { athletes: await depots.apercu(athletes) });
+  }
+
+  /* Les réglages (msc_param) : lecture et écriture pour un coach ou un admin.
+     La porte de service (MSC_ATHLETE_ID) passe aussi — c'est le poste de
+     développement, sans compte. */
+  if (chemin === '/api/param' && (req.method === 'GET' || req.method === 'PUT')) {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    if (!identite.bypass && !['coach', 'admin'].includes(identite.compte.role)) {
+      return json(res, 403, { erreur: 'Réservé à un compte coach ou admin.' });
+    }
+    if (req.method === 'GET') return json(res, 200, { params: await params.tous() });
+    const corps = await lireCorps(req, 8_000);
+    if (!corps.cle) return json(res, 400, { erreur: 'champ manquant : cle' });
+    return json(res, 200, { param: await params.ecrire(String(corps.cle), corps.valeur ?? null) });
   }
 
   if (chemin === '/api/athlete/profil' && req.method === 'PUT') {
@@ -541,6 +557,7 @@ const server = createServer(async (req, res) => {
     if (e instanceof photo.PhotoError) return json(res, e.code, { erreur: e.message });
     if (e instanceof depots.DepotError) return json(res, e.code, { erreur: e.message });
     if (e instanceof BdError) return json(res, 500, { erreur: e.message });
+    if (e instanceof params.ParamError) return json(res, e.statut, { erreur: e.message });
 
     /* Le SDK lève avant la requête quand il ne résout aucun credential, donc
        ce cas n'atteint jamais un 401 de l'API. */
@@ -549,7 +566,7 @@ const server = createServer(async (req, res) => {
     if (sansCle) {
       return json(res, 401, {
         erreur:
-          "Clé Anthropic absente ou invalide. Exporte ANTHROPIC_API_KEY puis relance le serveur (voir .env.example).",
+          "Clé Anthropic absente ou invalide. Renseigne-la dans le back office (Réglages) ou exporte ANTHROPIC_API_KEY (voir .env.example).",
       });
     }
     if (/ECONNREFUSED|ER_ACCESS_DENIED|ER_BAD_DB_ERROR|ENOTFOUND/.test(String(e?.code ?? e?.message))) {
@@ -561,18 +578,20 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`plan server → http://localhost:${PORT}`);
   stat(join(DIST, 'index.html')).then(
     () => console.log(`PWA servie depuis ${DIST}`),
     () => console.log(`pas de build dans ${DIST} — l'API seule (npm run build pour en produire un)`),
   );
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('⚠  ANTHROPIC_API_KEY non défini : les routes du coach renverront 401.');
+  /* Les réglages d'abord : la configuration Strava les lit sans attendre. */
+  await params.precharger();
+  if (!(await params.param('anthropic.cle'))) {
+    console.warn('⚠  Clé Anthropic absente (back office → Réglages, ou ANTHROPIC_API_KEY) : les routes du coach renverront 401.');
   }
   if (!strava.configure()) {
     console.warn(
-      '⚠  STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET non définis : la liaison Strava renverra 501.',
+      '⚠  Strava non configuré (back office → Réglages, ou STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET) : la liaison renverra 501.',
     );
   }
   if (!scellementPret()) {

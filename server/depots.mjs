@@ -22,6 +22,7 @@
    même RPE. */
 
 import { lignes, ligne, transaction } from './bd.mjs';
+import { param, publics as paramsPublics } from './params.mjs';
 
 /**
  * Un refus que l'athlète doit lire.
@@ -108,6 +109,8 @@ async function vocabulaire() {
       orphelines: L(s, 'orphelines'), delier: L(s, 'delier'),
     })),
     msc_ui: Object.fromEntries(ui.map((u) => [u.langue, json(u.chaines)])),
+    /* Les réglages que le moteur du navigateur lit — jamais un secret. */
+    msc_param: await paramsPublics(),
   };
 }
 
@@ -576,7 +579,7 @@ async function apercuDe({ id, droit }) {
         }
       : null,
     base,
-    forme: forme(mesure, base),
+    forme: forme(mesure, base, await seuilsForme()),
     charge: { passee_7j: Number(passee?.c ?? 0), a_venir_7j: Number(aVenir?.c ?? 0) },
   };
 }
@@ -587,7 +590,15 @@ async function apercuDe({ id, droit }) {
    du protocole : FC de repos à +3 (stress sympathique), HRV en chute de 10 %
    (fatigue accumulée). Sans mesure, pas de score — plutôt rien qu'un chiffre
    inventé. */
-function forme(mesure, base) {
+/* Les deux seuils du protocole, réglables dans le back office (msc_param). */
+async function seuilsForme() {
+  return {
+    fc: Number(await param('forme.fc_repos_delta')) || 3,
+    hrv: (Number(await param('forme.hrv_chute_pct')) || 10) / 100,
+  };
+}
+
+function forme(mesure, base, seuils = { fc: 3, hrv: 0.1 }) {
   if (!mesure) return null;
   const fc = mesure.fc_repos ?? null;
   const hrv = mesure.hrv_ms ?? null;
@@ -601,7 +612,7 @@ function forme(mesure, base) {
     if (d >= 5) score -= 6;
     else if (d >= 3) score -= 3;
     else if (d >= 1) score -= 1;
-    if (d >= 3) alertes.push('fc_repos_haute');
+    if (d >= seuils.fc) alertes.push('fc_repos_haute');
   }
   if (hrv != null && base.hrv_ms) {
     compare += 1;
@@ -609,7 +620,7 @@ function forme(mesure, base) {
     if (p <= -0.2) score -= 6;
     else if (p <= -0.08) score -= 3;
     else if (p < 0.08) score -= 1;
-    if (p <= -0.1) alertes.push('hrv_chute');
+    if (p <= -seuils.hrv) alertes.push('hrv_chute');
   }
   /* Une mesure sans rien à quoi la comparer ne dit pas « en forme » : elle ne
      dit rien. Un 10 par défaut serait un mensonge rassurant. */

@@ -14,6 +14,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
+import { cleAnthropic } from './params.mjs';
 
 const MODEL = 'claude-opus-5';
 
@@ -82,7 +83,7 @@ ${blocs.map((b) => `- ${b.code} : semaines ${b.de} à ${b.a}, référence 10 km 
 }
 
 export async function construireMethode({ athlete, objectifs, contraintes, blocs }) {
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey: await cleAnthropic() });
   const contexte = brief(athlete, objectifs, contraintes, blocs);
 
   /* 1 — la recherche. Claude va lire ce qui se fait, et cite ce qu'il a lu. */

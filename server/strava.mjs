@@ -23,6 +23,7 @@
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { bd, desceller, ligne, sceller } from './bd.mjs';
+import { paramSync } from './params.mjs';
 
 const AUTORISATION = 'https://www.strava.com/oauth/authorize';
 const JETON = 'https://www.strava.com/oauth/token';
@@ -53,12 +54,15 @@ export class StravaError extends Error {
 
 /* ------------------------------------------------------------ configuration */
 
+/* Les identifiants viennent de msc_param (le back office), avec les variables
+   d'environnement en repli — `paramSync` sait les deux. L'URL de retour, elle,
+   dépend de la machine, pas du réglage : elle reste dans l'environnement. */
 export function config() {
   return {
-    clientId: process.env.STRAVA_CLIENT_ID ?? '',
-    clientSecret: process.env.STRAVA_CLIENT_SECRET ?? '',
+    clientId: String(paramSync('strava.client_id') ?? ''),
+    clientSecret: String(paramSync('strava.client_secret') ?? ''),
     redirectUri: process.env.STRAVA_REDIRECT_URI ?? 'http://localhost:8787/api/strava/callback',
-    verifyToken: process.env.STRAVA_VERIFY_TOKEN ?? '',
+    verifyToken: String(paramSync('strava.verify_token') ?? ''),
     /* Where to send the browser once the round-trip is done. */
     retour: process.env.STRAVA_APP_ORIGIN ?? process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   };

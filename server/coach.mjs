@@ -21,8 +21,16 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
+import { cleAnthropic, param } from './params.mjs';
 
-const MODEL = 'claude-opus-5';
+/* La clé et le modèle viennent de msc_param (le back office), l'environnement
+   en repli : c'est le seul endroit où le coach les demande. */
+async function coachClient() {
+  return {
+    client: new Anthropic({ apiKey: await cleAnthropic() }),
+    MODELE: String((await param('coach.modele')) || 'claude-opus-5'),
+  };
+}
 const MCP_STRAVA = process.env.STRAVA_MCP_URL ?? 'https://mcp.strava.com/mcp';
 const MCP_BETA = 'mcp-client-2025-11-20';
 
@@ -259,14 +267,14 @@ function contexteSeance({ athlete, session, allures, activite, journal, stats })
 }
 
 export async function analyserSeance(corps) {
-  const client = new Anthropic();
+  const { client, MODELE } = await coachClient();
   const langue = corps.langue === 'pl' ? 'pl' : 'fr';
   const contexte = contexteSeance(corps);
 
   const { reponse, strava } = await avecRepli(
     client,
     {
-      model: MODEL,
+      model: MODELE,
       max_tokens: 8000,
       system: systeme(langue, corps.coach),
       thinking: { type: 'adaptive' },
@@ -292,7 +300,7 @@ l'ajustement de la séance suivante s'il en faut un.`,
   return {
     ...reponse.parsed_output,
     strava,
-    modele: MODEL,
+    modele: MODELE,
     cout_eur: cout(reponse.usage),
     usage: reponse.usage,
   };
@@ -309,7 +317,7 @@ export async function repondre({ question, contexte, historique = [], jeton_stra
   if (typeof question !== 'string' || question.trim() === '') {
     throw new Error('question vide');
   }
-  const client = new Anthropic();
+  const { client, MODELE } = await coachClient();
 
   /* The history is the athlete's own turns and ours, so it is replayed as
      messages rather than folded into the prompt — that is what keeps a
@@ -325,7 +333,7 @@ export async function repondre({ question, contexte, historique = [], jeton_stra
   const { reponse, strava } = await avecRepli(
     client,
     {
-      model: MODEL,
+      model: MODELE,
       max_tokens: 4000,
       system: `${systeme(langue === 'pl' ? 'pl' : 'fr', coach)}
 
@@ -343,7 +351,7 @@ plutôt que de supposer.`,
   return {
     ...reponse.parsed_output,
     strava,
-    modele: MODEL,
+    modele: MODELE,
     cout_eur: cout(reponse.usage),
     usage: reponse.usage,
   };
@@ -452,13 +460,13 @@ function contexteSemaine({ athlete, semaine, bloc, ecart, seances, suite, regles
 }
 
 export async function recalculerPlan(corps) {
-  const client = new Anthropic();
+  const { client, MODELE } = await coachClient();
   const langue = corps.langue === 'pl' ? 'pl' : 'fr';
 
   const { reponse, strava } = await avecRepli(
     client,
     {
-      model: MODEL,
+      model: MODELE,
       max_tokens: 12000,
       system: `${systeme(langue, corps.coach)}\n\n${DOCTRINE}`,
       thinking: { type: 'adaptive' },
@@ -485,7 +493,7 @@ quantité, ou une semaine et ce qui s'y déplace.`,
   return {
     ...reponse.parsed_output,
     strava,
-    modele: MODEL,
+    modele: MODELE,
     cout_eur: cout(reponse.usage),
     usage: reponse.usage,
   };

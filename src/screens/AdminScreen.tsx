@@ -17,6 +17,7 @@ import { AccentButton, Card, Grid, Mono, SectionLabel } from '../components/prim
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
 import { AthletesScreen } from './AthletesScreen';
+import { ParamScreen } from './ParamScreen';
 
 /** mm:ss → seconds. */
 function versSecondes(texte: string): number {
@@ -114,21 +115,29 @@ const OBJECTIF_VIDE: Objectif = {
 };
 
 const SECTIONS = {
-  fr: { plan: 'Plan', courses: 'Courses', athletes: 'Athlètes' },
-  pl: { plan: 'Plan', courses: 'Zawody', athletes: 'Zawodnicy' },
+  fr: { plan: 'Plan', courses: 'Courses', athletes: 'Athlètes', param: 'Réglages' },
+  pl: { plan: 'Plan', courses: 'Zawody', athletes: 'Zawodnicy', param: 'Ustawienia' },
 } as const;
+
+type Section = keyof typeof SECTIONS.fr;
 
 /* L'écran Créer porte deux choses différentes : fabriquer un plan, et tenir le
    registre des courses. Une bascule plutôt qu'un sixième onglet — la barre en a
    déjà cinq, et un back office n'est pas un écran qu'on ouvre tous les jours. */
 export function AdminScreen({ app }: { app: App }) {
-  const [section, setSection] = useState<'plan' | 'courses' | 'athletes'>('plan');
+  const [section, setSection] = useState<Section>('plan');
   const libelles = SECTIONS[app.lang];
-  /* La liste des athlètes n'a de sens qu'à qui en voit plusieurs — un coach. */
-  const plusieurs = (app.identite?.athletes.length ?? 0) > 1 || app.identite?.compte.role === 'coach';
-  const sections: Array<'plan' | 'courses' | 'athletes'> = plusieurs
-    ? ['plan', 'courses', 'athletes']
-    : ['plan', 'courses'];
+  /* La liste des athlètes n'a de sens qu'à qui en voit plusieurs — un coach.
+     Les réglages, eux, valent pour tout le serveur : un rôle coach ou admin,
+     et le serveur le vérifie de son côté. */
+  const role = app.identite?.compte.role ?? 'athlete';
+  const plusieurs = (app.identite?.athletes.length ?? 0) > 1 || role === 'coach';
+  const admin = role === 'coach' || role === 'admin';
+  const sections: Section[] = [
+    'plan', 'courses',
+    ...(plusieurs ? (['athletes'] as Section[]) : []),
+    ...(admin ? (['param'] as Section[]) : []),
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -164,7 +173,13 @@ export function AdminScreen({ app }: { app: App }) {
         ))}
       </div>
 
-      {section === 'courses' ? <BackOffice app={app} /> : section === 'athletes' ? <AthletesScreen app={app} /> : <Generateur app={app} />}
+      {section === 'courses'
+        ? <BackOffice app={app} />
+        : section === 'athletes'
+          ? <AthletesScreen app={app} />
+          : section === 'param'
+            ? <ParamScreen app={app} />
+            : <Generateur app={app} />}
     </div>
   );
 }

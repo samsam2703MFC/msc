@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import mysql from 'mysql2/promise';
 import { config } from '../server/bd.mjs';
+import { CATALOGUE } from '../server/params.mjs';
 
 const reset = process.argv.includes('--reset');
 const oui = process.argv.includes('--oui');
@@ -84,6 +85,10 @@ try {
      jamais sur une base vivante, alors un motif de plus s'insère ici, s'il
      manque — le même texte que src/data/tables.ts, à garder identique. */
   const LIGNES = [
+    /* [table, colonne clé, valeur, INSERT, condition] — la condition dit si les
+       parents existent : sur une base vierge (les contrôles, un premier
+       déploiement), msc_type est vide jusqu'au seed, et le seed pose déjà ce
+       motif depuis tables.ts. Ici, c'est pour la base vivante d'avant. */
     ['msc_excuse', 'code', 'trop_mange',
       `INSERT INTO msc_excuse (code, icon, type_code, session_exemple, ordre,
          label_fr, label_pl, reponse_fr, reponse_pl, remplacement_fr, remplacement_pl)
@@ -93,14 +98,21 @@ try {
          'La digestion prend le sang que les jambes réclament. On laisse passer deux heures, puis vingt-cinq minutes très faciles : la qualité attend demain, la routine ne casse pas.',
          'Trawienie zabiera krew, o którą proszą nogi. Odczekujemy dwie godziny, potem 25 minut bardzo lekko: jakość czeka do jutra, rutyna się nie łamie.',
          'Récup 25 min · 6:30/km, deux heures après le repas',
-         'Regeneracja 25 min · 6:30/km, dwie godziny po posiłku')`],
+         'Regeneracja 25 min · 6:30/km, dwie godziny po posiłku')`,
+      "SELECT 1 FROM msc_type WHERE code = 'recup'"],
   ];
-  for (const [table, cle, valeur, sql] of LIGNES) {
+  for (const [table, cle, valeur, sql, condition] of LIGNES) {
     const [[{ n }]] = await cnx.query(`SELECT COUNT(*) AS n FROM \`${table}\` WHERE \`${cle}\` = ?`, [valeur]);
-    if (n === 0) {
-      await cnx.query(sql);
-      console.log(`+ ${table} ${cle}=${valeur}`);
+    if (n !== 0) continue;
+    if (condition) {
+      const [parents] = await cnx.query(condition);
+      if (parents.length === 0) {
+        console.log(`· ${table} ${cle}=${valeur} : attend le vocabulaire (seed)`);
+        continue;
+      }
     }
+    await cnx.query(sql);
+    console.log(`+ ${table} ${cle}=${valeur}`);
   }
 
   /* Les libellés d'écran vivent dans msc_ui — un JSON par langue, copié de
@@ -121,6 +133,27 @@ try {
     );
     if (r.changedRows) console.log(`~ msc_ui ${langue} : ${Object.keys(cles).join(', ')}`);
   }
+
+  /* Le catalogue des paramètres : chaque clé posée si elle manque, et ses
+     libellés, son défaut, son unité remis à jour à chaque passage. La valeur
+     choisie et le secret scellé ne sont jamais touchés — c'est ce qu'on règle
+     dans le back office, pas ce que le code décide. */
+  /* Compté avant/après plutôt que par affectedRows : avec le drapeau
+     FOUND_ROWS, une ligne identique compte pour 1 elle aussi. */
+  const [[{ avant }]] = await cnx.query('SELECT COUNT(*) AS avant FROM msc_param');
+  for (const p of CATALOGUE) {
+    await cnx.query(
+      `INSERT INTO msc_param (cle, groupe, type, defaut, unite, ordre, libelle_fr, libelle_pl, aide_fr, aide_pl)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE groupe = VALUES(groupe), type = VALUES(type), defaut = VALUES(defaut),
+         unite = VALUES(unite), ordre = VALUES(ordre), libelle_fr = VALUES(libelle_fr),
+         libelle_pl = VALUES(libelle_pl), aide_fr = VALUES(aide_fr), aide_pl = VALUES(aide_pl)`,
+      [p.cle, p.groupe, p.type, p.defaut == null ? null : String(p.defaut), p.unite ?? null, p.ordre ?? 0,
+       p.libelle.fr, p.libelle.pl, p.aide?.fr ?? null, p.aide?.pl ?? null],
+    );
+  }
+  const [[{ apres }]] = await cnx.query('SELECT COUNT(*) AS apres FROM msc_param');
+  if (apres > avant) console.log(`+ msc_param : ${apres - avant} paramètre(s) posé(s)`);
 
   const [tables] = await cnx.query(
     'SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ?',

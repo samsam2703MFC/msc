@@ -348,6 +348,7 @@ jobs:
       - name: vérifier
         env:
           URL: ${{ vars.DEPLOY_URL || secrets.DEPLOY_URL }}
+          MSC_BASE: ${{ vars.MSC_BASE || '/msc/' }}
         run: |
           if [ -z "$URL" ]; then
             echo "variable DEPLOY_URL non définie — pas de vérification en ligne"
@@ -357,6 +358,15 @@ jobs:
           # barre finale, « $URL/api/sante » devenait « /msc//api/sante » et le
           # serveur répondait 404 à une application qui tournait très bien.
           URL="${URL%/}"
+          # L'application est montée sous MSC_BASE (« /msc/ » par défaut). Une
+          # DEPLOY_URL qui s'arrête à l'hôte trouve la page d'accueil du relais
+          # (200) et pas l'API (404) : on lui ajoute le montage s'il manque.
+          BASE="${MSC_BASE%/}"
+          case "$URL" in
+            *"$BASE") ;;
+            *) URL="$URL$BASE" ;;
+          esac
+          echo "vérification de $URL/api/sante"
           # Cinq essais, pas vingt : l'étape précédente a déjà obtenu une
           # réponse sur la boucle locale, donc l'application est debout et
           # n'a pas besoin qu'on l'attende. Vingt essais de dix secondes,

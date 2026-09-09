@@ -14,8 +14,8 @@
 import type {
   Lang, MscActivity, MscAdaptation, MscAjustement, MscAnalyse, MscAthlete, MscBloc,
   MscCompetition, MscDaily, MscEcart, MscExcuse, MscJournal, MscMetric, MscObjectif,
-  MesureAttente, MscMesure, MscPlanSession, MscPlanWeek, MscRegle, MscRpe, MscSource,
-  MscStatut, MscType, MscUiStrings, MscZoneDef,
+  MesureAttente, MscMesure, MscParamPublic, MscPlanSession, MscPlanWeek, MscRegle, MscRpe,
+  MscSource, MscStatut, MscType, MscUiStrings, MscZoneDef,
 } from './types';
 
 /* L'ordre est celui dans lequel la feuille de réglages liste les tables. */
@@ -43,6 +43,8 @@ export const tables = {
   msc_excuse: [] as MscExcuse[],
   msc_statut: [] as MscStatut[],
   msc_source: [] as MscSource[],
+  /* les réglages du back office que le moteur lit — jamais un secret */
+  msc_param: [] as MscParamPublic[],
 };
 
 export const ui: Record<Lang, MscUiStrings> = {} as Record<Lang, MscUiStrings>;

@@ -33,10 +33,11 @@ const ENDPOINT_ANALYSE = `${RACINE_API}/analyse`;
 const ENDPOINT_COACH = `${RACINE_API}/coach`;
 const ENDPOINT_RECALCUL = `${RACINE_API}/recalcul`;
 
-/* Beyond these, the figure is worth a second look rather than a nod. */
-const DERIVE_S = 5;
-const ECART_ALLURE_S = 10;
-const SURCHARGE = 1.15;
+/* Beyond these, the figure is worth a second look rather than a nod. Réglables
+   dans le back office (msc_param) ; ces valeurs sont le défaut du code. */
+const DERIVE_S = () => db.param('moteur.derive_s', 5);
+const ECART_ALLURE_S = () => db.param('moteur.ecart_allure_s', 10);
+const SURCHARGE = () => db.param('moteur.surcharge', 1.15);
 
 const OK = '#0A1C33';
 const ATTENTION = '#BA7517';
@@ -123,7 +124,7 @@ export function statsDeSeance(
     stats.push({
       valeur: `${signe(derive)} s/km`,
       icon: derive > 0 ? 'trending-down' : 'trending-up',
-      couleur: derive > DERIVE_S ? ATTENTION : BON,
+      couleur: derive > DERIVE_S() ? ATTENTION : BON,
       label: {
         fr: `dérive B1 → B${blocs.length}`,
         pl: `spadek B1 → B${blocs.length}`,
@@ -144,7 +145,7 @@ export function statsDeSeance(
       stats.push({
         valeur: db.formatAllure(realise),
         icon: 'gauge',
-        couleur: Math.abs(ecart) > ECART_ALLURE_S ? ATTENTION : OK,
+        couleur: Math.abs(ecart) > ECART_ALLURE_S() ? ATTENTION : OK,
         label: {
           fr: `${blocs.length ? 'blocs' : 'moyenne'} · cible ${db.formatAllure(cible)}`,
           pl: `${blocs.length ? 'bloki' : 'średnia'} · cel ${db.formatAllure(cible)}`,
@@ -171,7 +172,7 @@ export function statsDeSeance(
       stats.push({
         valeur: String(charge),
         icon: 'flame',
-        couleur: charge > session.charge * SURCHARGE ? ATTENTION : OK,
+        couleur: charge > session.charge * SURCHARGE() ? ATTENTION : OK,
         label: {
           fr: `charge · prévue ${session.charge}`,
           pl: `obciążenie · plan ${session.charge}`,

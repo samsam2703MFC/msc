@@ -237,6 +237,26 @@ CREATE TABLE IF NOT EXISTS msc_ui (
   PRIMARY KEY (langue)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Les paramètres de l'application. Le catalogue (clés, types, défauts,
+-- libellés) vit dans server/params.mjs et db-migrate le pose ici ; la base ne
+-- porte que la valeur choisie. Un secret est scellé avec MSC_SECRET_KEY, jamais
+-- en clair. Valeur NULL = non renseigné : l'environnement, puis le défaut.
+CREATE TABLE IF NOT EXISTS msc_param (
+  cle        VARCHAR(48) NOT NULL,
+  groupe     VARCHAR(24) NOT NULL COMMENT 'moteur, forme, coach, strava, securite',
+  type       ENUM('nombre','texte','booleen','secret') NOT NULL,
+  valeur     TEXT NULL COMMENT 'la valeur en clair, pour tout sauf un secret',
+  scelle     VARBINARY(2048) NULL COMMENT 'un secret, scellé — jamais la valeur en clair',
+  defaut     VARCHAR(190) NULL,
+  unite      VARCHAR(16) NULL,
+  ordre      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  libelle_fr VARCHAR(120) NOT NULL, libelle_pl VARCHAR(120) NOT NULL,
+  aide_fr    VARCHAR(255) NULL, aide_pl VARCHAR(255) NULL,
+  maj_le     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (cle),
+  KEY ix_param_groupe (groupe, ordre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- ===========================================================================
 -- 2. Le plan

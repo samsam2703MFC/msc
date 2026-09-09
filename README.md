@@ -30,6 +30,7 @@ npm run check:app      # the app itself, in a real browser
 npm run db:migrate     # create the database, apply db/schema.sql, add later columns
 npm run db:seed        # load the workbook into it
 npm run compte -- lister          # the accounts, and who sees which athlete
+npm run compte -- role <email> coach   # opens the back office: Athlètes, Réglages
 npm run strava:webhook -- etat      # the push subscription, see « Strava »
 ```
 
@@ -890,6 +891,33 @@ The palette validator checks colour, not geometry. Rendered and looked at, the
 point markers were **ovals**: `preserveAspectRatio="none"` stretches the viewBox
 horizontally, which flattens a line correctly and deforms every circle on it.
 The chart now measures its container and draws in real pixels.
+
+### Réglages — `msc_param`
+
+Every knob the application has lives in one table, `msc_param`, and the
+**Réglages** section (a `coach` or `admin` account) sets them without a
+redeploy. The catalogue — keys, types, defaults, labels — is
+`server/params.mjs`; `db:migrate` lays it into the table and the table only
+carries the value chosen.
+
+Three sources, in this order: the value in the table if set, the environment
+variable when the parameter has one, then the code's default. **The table wins
+over `.env`, on purpose** — what the screen shows is what applies. Each row
+says where its value comes from, because a setting that looks active without
+being so is worse than no setting.
+
+What is there today: the engine's tolerances (drift, pace gap, overload), the
+form thresholds (resting HR delta, HRV drop), the coach model, the Anthropic
+key, the Strava application, the password floor. The browser gets the
+non-secret subset in the snapshot (`msc_param`) and reads it through
+`db.param(cle, defaut)`; the server reads through `param(cle)` with a
+fifteen-second cache that a write invalidates.
+
+A secret (`anthropic.cle`, `strava.client_secret`, `strava.verify_token`) is
+sealed with `MSC_SECRET_KEY` like the Strava tokens — never in clear in the
+table, never sent back to the screen: the screen knows it is set and sees its
+last four characters. Without `MSC_SECRET_KEY` the server refuses to store one
+rather than storing it in clear.
 
 ## Reference data
 

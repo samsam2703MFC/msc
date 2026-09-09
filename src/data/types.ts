@@ -99,6 +99,31 @@ export interface MscJournal {
   note?: string;
 }
 
+/** Un réglage tel que le navigateur le reçoit : la valeur qui s'applique, et
+    rien d'autre. Les secrets ne passent jamais par ici. */
+export interface MscParamPublic {
+  cle: string;
+  valeur: number | string | boolean | null;
+}
+
+/** Un réglage tel que le back office le voit : d'où vient la valeur, et pour
+    un secret seulement s'il est renseigné et ses derniers caractères. */
+export interface MscParam {
+  cle: string;
+  groupe: string;
+  type: 'nombre' | 'texte' | 'booleen' | 'secret';
+  unite: string | null;
+  ordre: number;
+  libelle: Localized;
+  aide: Localized | null;
+  defaut: number | string | boolean | null;
+  env: string | null;
+  source: 'base' | 'env' | 'defaut';
+  valeur: number | string | boolean | null;
+  renseigne: boolean;
+  apercu?: string | null;
+}
+
 /** Le vocabulaire fermé de « ce qui a bloqué » — le même que le serveur. */
 export const LIMITES = ['rien', 'jambes', 'souffle', 'technique', 'mental', 'sommeil', 'nutrition', 'douleur', 'chaleur'] as const;
 export type Limite = (typeof LIMITES)[number];

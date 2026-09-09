@@ -9,6 +9,7 @@
        npm run compte -- motdepasse sam@exemple.tld
        npm run compte -- athlete "Léa Martin" 4:15 3:50 [lea@exemple.tld]
        npm run compte -- acces sam@exemple.tld 1 ecriture
+       npm run compte -- role sam@exemple.tld coach
 
    Le mot de passe se saisit, il ne se passe pas en argument : la ligne de
    commande est lue par `ps` et gardée par l'historique du shell. */
@@ -17,6 +18,7 @@ import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { hacher } from '../server/auth.mjs';
 import { bd, fermer, ligne, lignes } from '../server/bd.mjs';
+import { param } from '../server/params.mjs';
 
 const [commande, ...args] = process.argv.slice(2);
 
@@ -25,7 +27,8 @@ const USAGE = `usage :
   npm run compte -- creer <email> <nom> [--coach]
   npm run compte -- motdepasse <email>
   npm run compte -- athlete <nom> <allure_actuelle> <allure_cible> [email]
-  npm run compte -- acces <email> <athlete_id> [lecture|ecriture]`;
+  npm run compte -- acces <email> <athlete_id> [lecture|ecriture]
+  npm run compte -- role <email> athlete|coach|admin`;
 
 /* Une allure, en secondes par km. Le moteur ne connaît que ça — c'est le seul
    nombre dont il part. On accepte l'écriture humaine « 4:00 » et les secondes
@@ -50,12 +53,13 @@ async function demanderMotDePasse() {
      sur une entrée qui est déjà arrivée. */
   const [a, b] = stdin.isTTY ? await demanderDeuxFois() : await deuxLignes();
   if (a !== b) throw new Error('Les deux saisies diffèrent.');
-  /* Douze par défaut. Réglable par MSC_MDP_MIN pour un serveur d'essai qui
-     assume un code court — mais le défaut sûr est ce qui part en production, on
-     ne l'abaisse pas dans le code. Un code à 7 chiffres, c'est dix millions de
-     possibilités : sur du HTTP en clair, cassable. À ne faire que sur un bac à
-     sable, et à relever avant d'y mettre de vraies données. */
-  const min = Math.max(1, Number(process.env.MSC_MDP_MIN ?? 12) || 12);
+  /* Douze par défaut. Réglable dans le back office (msc_param, securite.mdp_min)
+     ou par MSC_MDP_MIN pour un serveur d'essai qui assume un code court — mais
+     le défaut sûr est ce qui part en production, on ne l'abaisse pas dans le
+     code. Un code à 7 chiffres, c'est dix millions de possibilités : sur du
+     HTTP en clair, cassable. À ne faire que sur un bac à sable, et à relever
+     avant d'y mettre de vraies données. */
+  const min = Math.max(1, Number(await param('securite.mdp_min')) || 12);
   if (a.length < min) throw new Error(`${min} caractères au moins.`);
   return a;
 }
@@ -170,6 +174,15 @@ try {
       [c.id, a.id, droit === 'lecture' ? 'lecture' : 'ecriture'],
     );
     console.log(`${email} → ${a.nom} (${droit})`);
+  } else if (commande === 'role') {
+    /* Le rôle ouvre le back office (Réglages, Athlètes) : coach ou admin. */
+    const [email, role] = args;
+    if (!email || !['athlete', 'coach', 'admin'].includes(role)) throw new Error(USAGE);
+    const [r] = await bd().execute('UPDATE compte SET role = ? WHERE email = ?', [
+      role, email.trim().toLowerCase(),
+    ]);
+    if (r.affectedRows === 0) throw new Error(`Aucun compte pour ${email}.`);
+    console.log(`${email} → ${role}`);
   } else {
     console.error(USAGE);
     process.exitCode = 1;

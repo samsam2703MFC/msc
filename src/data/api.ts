@@ -13,7 +13,7 @@
 
 import * as cache from './cache';
 import type { Instantane } from './vives';
-import type { MscActivity, MscCompetition } from './types';
+import type { MscActivity, MscCompetition, MscParam } from './types';
 import { RACINE_API } from './base';
 
 export class ApiError extends Error {
@@ -362,6 +362,19 @@ export function apercu(): Promise<{ athletes: ApercuAthlete[] }> {
 }
 
 /** Le profil : prénom, nom, surnom, année de naissance. */
+/* Les réglages du back office. Lecture et écriture réservées aux comptes coach
+   ou admin — le serveur tranche, l'écran ne fait que le montrer. */
+export function params(): Promise<{ params: MscParam[] }> {
+  return appeler<{ params: MscParam[] }>('/param');
+}
+
+export function majParam(cle: string, valeur: string | number | boolean | null): Promise<{ param: MscParam }> {
+  return appeler<{ param: MscParam }>('/param', {
+    method: 'PUT',
+    body: JSON.stringify({ cle, valeur }),
+  });
+}
+
 export function majProfil(
   corps: { prenom?: string | null; nom: string; surnom?: string | null; annee_naissance?: number | null; coach?: string },
   athleteId?: number | null,

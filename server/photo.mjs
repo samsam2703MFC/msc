@@ -17,6 +17,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { bd, empreinte, ligne, transaction } from './bd.mjs';
+import { cleAnthropic } from './params.mjs';
 
 const MODEL = 'claude-opus-5';
 
@@ -93,7 +94,7 @@ function cout(usage) {
 /** Ce que Claude lit sur l'image. Jamais appelé sans que la photo soit rangée :
     on veut pouvoir revenir sur une extraction ratée et regarder l'original. */
 export async function lire(octets, mime) {
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey: await cleAnthropic() });
   const reponse = await client.messages.parse({
     model: MODEL,
     max_tokens: 2000,

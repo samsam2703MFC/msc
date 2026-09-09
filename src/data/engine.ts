@@ -77,6 +77,13 @@ export function blocs(): MscBloc[] {
   return [...tables.msc_bloc].sort((a, b) => a.de - b.de);
 }
 
+/** Un réglage du back office (msc_param), ou le défaut du code s'il manque
+    ou n'est pas du bon type — le moteur ne s'arrête pas sur un réglage. */
+export function param<T extends number | string | boolean>(cle: string, defaut: T): T {
+  const p = tables.msc_param.find((x) => x.cle === cle);
+  return p && p.valeur != null && typeof p.valeur === typeof defaut ? (p.valeur as T) : defaut;
+}
+
 /** The block's 10 km reference pace, in seconds per km. */
 export function reference(blocCode: string, who: MscAthlete = athleteCourant): number {
   const b = bloc(blocCode);
