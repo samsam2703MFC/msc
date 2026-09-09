@@ -124,6 +124,22 @@ export interface MscParam {
   apercu?: string | null;
 }
 
+/** Une ligne du calendrier commun : une compétition, et à qui elle est. */
+export interface CalendrierEntree {
+  id: number;
+  date: string;
+  nom: string;
+  lieu: string | null;
+  pays: string | null;
+  discipline: string;
+  distance_km: number;
+  officielle: boolean;
+  athlete: { id: number; nom: string; prenom: string | null; surnom: string | null };
+  cible: Localized | null;
+  principal: boolean;
+  resultat: { temps_s: number | null; classement: number | null; abandon: boolean } | null;
+}
+
 /** Le vocabulaire fermé de « ce qui a bloqué » — le même que le serveur. */
 export const LIMITES = ['rien', 'jambes', 'souffle', 'technique', 'mental', 'sommeil', 'nutrition', 'douleur', 'chaleur'] as const;
 export type Limite = (typeof LIMITES)[number];

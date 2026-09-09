@@ -321,6 +321,14 @@ async function router(req, res, url) {
     return json(res, 200, { athletes: await depots.apercu(athletes) });
   }
 
+  /* Le calendrier commun des compétitions : tout compte connecté le voit en
+     entier — c'est un calendrier de club. */
+  if (chemin === '/api/calendrier' && req.method === 'GET') {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    return json(res, 200, { competitions: await depots.calendrier() });
+  }
+
   /* Les réglages (msc_param) : lecture et écriture pour un coach ou un admin.
      La porte de service (MSC_ATHLETE_ID) passe aussi — c'est le poste de
      développement, sans compte. */

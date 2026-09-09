@@ -10,6 +10,7 @@ import {
   Bandage,
   BatteryLow,
   Brain,
+  Flag,
   ThermometerSun,
   Utensils,
   Bed,
@@ -152,6 +153,7 @@ export const ICONS: Record<string, LucideIcon> = {
   /* le journal : ce qui a bloqué, et le motif « trop mangé » */
   'bandage': Bandage,
   'brain': Brain,
+  'flag': Flag,
   'thermometer-sun': ThermometerSun,
   'utensils': Utensils,
   'zap': Zap,

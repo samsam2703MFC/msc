@@ -1338,6 +1338,43 @@ async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessi
   }
 }
 
+/**
+ * Le calendrier commun : qui court quoi, et quand. Toutes les compétitions de
+ * tous les athlètes — c'est un calendrier de club, pas une vue privée : le
+ * nom, la date, la distance, l'objectif du plan actif s'il y en a un, et le
+ * résultat s'il est couru. Rien du reste (mesures, journal, forme) ne passe
+ * par ici.
+ */
+export async function calendrier() {
+  return (await lignes(
+    `SELECT c.id, c.date, c.nom, c.lieu, c.pays, c.discipline, c.distance_km, c.officielle,
+            a.id AS athlete_id, a.nom AS athlete_nom, a.prenom AS athlete_prenom, a.surnom AS athlete_surnom,
+            r.temps_s, r.classement, r.abandon,
+            o.cible_fr, o.cible_pl, o.principal
+     FROM msc_competition c
+     JOIN msc_athlete a ON a.id = c.athlete_id
+     LEFT JOIN msc_resultat r ON r.competition_id = c.id
+     LEFT JOIN msc_objectif o ON o.competition_id = c.id
+       AND o.plan_id = (SELECT p.id FROM msc_plan p WHERE p.athlete_id = a.id AND p.actif = 1 ORDER BY p.debut DESC LIMIT 1)
+     ORDER BY c.date, a.nom`,
+  )).map((l) => ({
+    id: l.id,
+    date: l.date,
+    nom: l.nom,
+    lieu: l.lieu ?? null,
+    pays: l.pays ?? null,
+    discipline: l.discipline,
+    distance_km: Number(l.distance_km),
+    officielle: Boolean(l.officielle),
+    athlete: { id: l.athlete_id, nom: l.athlete_nom, prenom: l.athlete_prenom ?? null, surnom: l.athlete_surnom ?? null },
+    cible: l.cible_fr ? { fr: l.cible_fr, pl: l.cible_pl ?? l.cible_fr } : null,
+    principal: Boolean(l.principal),
+    resultat: l.temps_s == null && !l.abandon
+      ? null
+      : { temps_s: l.temps_s == null ? null : Number(l.temps_s), classement: l.classement ?? null, abandon: Boolean(l.abandon) },
+  }));
+}
+
 export async function ecrireCompetition(athleteId, c) {
   return transaction(async (cnx) => {
     let id = c.id;

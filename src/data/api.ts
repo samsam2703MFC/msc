@@ -13,7 +13,7 @@
 
 import * as cache from './cache';
 import type { Instantane } from './vives';
-import type { MscActivity, MscCompetition, MscParam } from './types';
+import type { CalendrierEntree, MscActivity, MscCompetition, MscParam } from './types';
 import { RACINE_API } from './base';
 
 export class ApiError extends Error {
@@ -363,6 +363,11 @@ export function apercu(): Promise<{ athletes: ApercuAthlete[] }> {
 }
 
 /** Le profil : prénom, nom, surnom, année de naissance. */
+/** Le calendrier commun : toutes les compétitions, de tous les athlètes. */
+export function calendrier(): Promise<{ competitions: CalendrierEntree[] }> {
+  return appeler<{ competitions: CalendrierEntree[] }>('/calendrier');
+}
+
 /* Les réglages du back office. Lecture et écriture réservées aux comptes coach
    ou admin — le serveur tranche, l'écran ne fait que le montrer. */
 export function params(): Promise<{ params: MscParam[] }> {

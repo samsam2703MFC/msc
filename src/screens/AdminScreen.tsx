@@ -17,6 +17,7 @@ import { AccentButton, Card, Grid, Mono, SectionLabel } from '../components/prim
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
 import { AthletesScreen } from './AthletesScreen';
+import { CalendrierScreen } from './CalendrierScreen';
 import { ParamScreen } from './ParamScreen';
 
 /** mm:ss → seconds. */
@@ -115,8 +116,8 @@ const OBJECTIF_VIDE: Objectif = {
 };
 
 const SECTIONS = {
-  fr: { plan: 'Plan', courses: 'Courses', athletes: 'Athlètes', param: 'Réglages' },
-  pl: { plan: 'Plan', courses: 'Zawody', athletes: 'Zawodnicy', param: 'Ustawienia' },
+  fr: { plan: 'Plan', courses: 'Courses', calendrier: 'Calendrier', athletes: 'Athlètes', param: 'Réglages' },
+  pl: { plan: 'Plan', courses: 'Zawody', calendrier: 'Kalendarz', athletes: 'Zawodnicy', param: 'Ustawienia' },
 } as const;
 
 type Section = keyof typeof SECTIONS.fr;
@@ -133,11 +134,13 @@ export function AdminScreen({ app }: { app: App }) {
   const role = app.identite?.compte.role ?? 'athlete';
   const plusieurs = (app.identite?.athletes.length ?? 0) > 1 || role === 'coach';
   const admin = role === 'coach' || role === 'admin';
+  /* Le calendrier est commun — un calendrier de club, tout le monde le voit. */
   const sections: Section[] = [
-    'plan', 'courses',
+    'plan', 'courses', 'calendrier',
     ...(plusieurs ? (['athletes'] as Section[]) : []),
     ...(admin ? (['param'] as Section[]) : []),
   ];
+  const serre = sections.length > 3;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -159,9 +162,13 @@ export function AdminScreen({ app }: { app: App }) {
             aria-pressed={section === cle}
             style={{
               flex: 1,
-              padding: '7px 12px',
+              minWidth: 0,
+              padding: serre ? '7px 4px' : '7px 12px',
               borderRadius: R.full,
-              fontSize: 12,
+              fontSize: serre ? 11 : 12,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
               fontWeight: 600,
               background: section === cle ? C.surface : 'transparent',
               color: section === cle ? C.ink : C.inkSecondary,
@@ -179,7 +186,9 @@ export function AdminScreen({ app }: { app: App }) {
           ? <AthletesScreen app={app} />
           : section === 'param'
             ? <ParamScreen app={app} />
-            : <Generateur app={app} />}
+            : section === 'calendrier'
+              ? <CalendrierScreen app={app} />
+              : <Generateur app={app} />}
     </div>
   );
 }
