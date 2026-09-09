@@ -124,6 +124,22 @@ export interface MscParam {
   apercu?: string | null;
 }
 
+/** Un fil de conversation avec le coach, tel que le back office le relit. */
+export interface Conversation {
+  fil: string;
+  titre: Localized;
+  dernier: string | null;
+  tours: Array<{
+    role: 'user' | 'assistant';
+    texte: string;
+    modele: string | null;
+    cout_eur: number | null;
+    /** Le coach qui parlait — tortionnaire, gentil, gros_porc. */
+    ton: string | null;
+    date: string;
+  }>;
+}
+
 /** Les cinq axes du classement, notés sur 100. */
 export type Axe = 'endurance' | 'vitesse' | 'velo' | 'cap' | 'natation';
 

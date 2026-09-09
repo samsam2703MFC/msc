@@ -13,7 +13,7 @@
 
 import * as cache from './cache';
 import type { Instantane } from './vives';
-import type { CalendrierEntree, Classement, MscActivity, MscCompetition, MscParam } from './types';
+import type { CalendrierEntree, Classement, Conversation, MscActivity, MscCompetition, MscParam } from './types';
 import { RACINE_API } from './base';
 
 export class ApiError extends Error {
@@ -363,6 +363,12 @@ export function apercu(): Promise<{ athletes: ApercuAthlete[] }> {
 }
 
 /** Le profil : prénom, nom, surnom, année de naissance. */
+/** Les conversations d'un athlète avec le coach — le back office les relit. */
+export function conversations(athleteId?: number | null): Promise<{ fils: Conversation[] }> {
+  const q = athleteId ? `?athlete=${athleteId}` : '';
+  return appeler<{ fils: Conversation[] }>(`/athlete/conversations${q}`);
+}
+
 /** Le classement du club : cinq axes, une moyenne, un palier. */
 export function classement(): Promise<Classement> {
   return appeler<Classement>('/classement');

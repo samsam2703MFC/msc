@@ -68,6 +68,10 @@ try {
     ['msc_athlete', 'surnom', "ADD COLUMN surnom VARCHAR(40) NULL AFTER annee_naissance"],
     ['msc_athlete', 'coach', "ADD COLUMN coach VARCHAR(16) NOT NULL DEFAULT 'gentil' AFTER surnom"],
     ['msc_mesure', 'hrv_ms', "ADD COLUMN hrv_ms SMALLINT UNSIGNED NULL AFTER fc_repos"],
+    /* Le coach qui parlait, sur chaque réponse et chaque analyse : le back
+       office montre le ton avec le texte. */
+    ['msc_chat', 'ton', "ADD COLUMN ton VARCHAR(16) NULL AFTER cout_eur"],
+    ['msc_analyse', 'ton', "ADD COLUMN ton VARCHAR(16) NULL AFTER strava_lu"],
   ];
   for (const [table, colonne, ddl] of AJOUTS) {
     const [[{ n }]] = await cnx.query(

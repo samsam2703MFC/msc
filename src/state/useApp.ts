@@ -164,7 +164,7 @@ export function useApp() {
       setChats((prev) => ({ ...prev, [cle]: [...(prev[cle] ?? []), { role: 'user', texte: q }] }));
       setChatEnCours(cle);
       try {
-        const r = await coach.demanderCoach(q, { contexte, historique, lang });
+        const r = await coach.demanderCoach(q, { contexte, historique, lang, fil: cle });
         if (!monte.current) return;
         setChats((prev) => ({
           ...prev,

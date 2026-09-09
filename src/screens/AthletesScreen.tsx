@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import * as api from '../data/api';
 import * as db from '../data/db';
-import type { ApercuAthlete, Axe, Classement as ClassementDonnees, Lang } from '../data/types';
+import type { ApercuAthlete, Axe, Classement as ClassementDonnees, Conversation as ConversationType, Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { coachDe } from '../data/coachs';
 import { Avatar } from '../components/Avatar';
@@ -37,6 +37,75 @@ const T: Record<Lang, Record<string, string>> = {
 function h(min: number): string {
   const hh = Math.floor(min / 60); const mm = min % 60;
   return hh ? `${hh}h${String(mm).padStart(2, '0')}` : `${mm} min`;
+}
+
+/* ----------------------------------------------- les conversations */
+
+/* Ce que l'athlète a demandé au coach, et ce que le coach a répondu — avec
+   le ton qui parlait, le modèle, le coût. Replié par défaut : c'est le
+   coach humain qui l'ouvre, quand il veut relire. */
+function Conversations({ athleteId, lang }: { athleteId: number; lang: Lang }) {
+  const fr = lang === 'fr';
+  const [ouvert, setOuvert] = useState(false);
+  const [fils, setFils] = useState<ConversationType[] | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ouvert || fils !== null) return;
+    let vivant = true;
+    api.conversations(athleteId)
+      .then((r) => { if (vivant) setFils(r.fils); })
+      .catch((e) => { if (vivant) setErreur(e instanceof Error ? e.message : String(e)); });
+    return () => { vivant = false; };
+  }, [ouvert, fils, athleteId]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button
+        type="button"
+        className="msc-hover-accent"
+        aria-expanded={ouvert}
+        onClick={() => setOuvert((v) => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: C.inkSecondary, alignSelf: 'flex-start' }}
+      >
+        <Icon name="message-square-quote" size={14} />
+        {fr ? 'Ce qu’il a demandé au coach' : 'O co pytał trenera'}
+        <Icon name="chevron-right" size={13} />
+      </button>
+      {ouvert && erreur && <div style={{ fontSize: 12, color: C.negative }}>{erreur}</div>}
+      {ouvert && fils === null && !erreur && <div style={{ fontSize: 12, color: C.inkQuiet }}>{fr ? 'Lecture…' : 'Wczytywanie…'}</div>}
+      {ouvert && fils !== null && fils.length === 0 && (
+        <div style={{ fontSize: 12, color: C.inkQuiet }}>{fr ? 'Aucune question posée pour l’instant.' : 'Na razie żadnych pytań.'}</div>
+      )}
+      {ouvert && fils?.map((f) => (
+        <div key={f.fil} style={{ borderRadius: R.md, border: `1px solid ${C.border}`, background: C.page, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: C.inkSecondary }}>
+            {f.titre[lang]}
+          </div>
+          {f.tours.map((t, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexDirection: t.role === 'user' ? 'row' : 'row-reverse' }}>
+              {t.role === 'assistant' ? <CoachAvatar code={t.ton} taille={26} /> : <Icon name="user" size={16} color={C.inkQuiet} />}
+              <div
+                style={{
+                  maxWidth: '85%', padding: '7px 10px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.45,
+                  background: t.role === 'user' ? C.surface : C.accentSoft, color: C.inkBody,
+                  border: `1px solid ${t.role === 'user' ? C.border : 'transparent'}`,
+                }}
+              >
+                {t.texte}
+                {t.role === 'assistant' && (
+                  <div style={{ marginTop: 4, fontSize: 10, color: C.inkQuiet, fontFamily: F.mono }}>
+                    {[t.ton ? coachDe(t.ton).nom[lang] : null, t.modele, t.cout_eur != null ? `${t.cout_eur.toFixed(4)} €` : null, t.date.slice(0, 10)]
+                      .filter(Boolean).join(' · ')}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /* ------------------------------------------------------- le classement */
@@ -236,6 +305,8 @@ function Carte({ a, app }: { a: ApercuAthlete; app: App }) {
       </div>
 
       <FormeJauge a={a} lang={app.lang} compact />
+
+      <Conversations athleteId={a.id} lang={app.lang} />
     </div>
   );
 }

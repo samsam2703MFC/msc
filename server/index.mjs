@@ -470,8 +470,9 @@ async function router(req, res, url) {
     for (const champ of ['athlete', 'session']) {
       if (!corps[champ]) return json(res, 400, { erreur: `champ manquant : ${champ}` });
     }
+    const coach = await depots.coachDe(athlete_id);
     const reponse = await analyserSeance({
-      ...corps, coach: await depots.coachDe(athlete_id),
+      ...corps, coach,
       jeton_strava: await strava.jetonCourant(athlete_id),
     });
     /* Ce que la séance change au plan se range avec les observations, comme un
@@ -485,7 +486,7 @@ async function router(req, res, url) {
       modele: reponse.modele, cout_eur: reponse.cout_eur, strava: reponse.strava,
       verdict: reponse.verdict, observations, stats: corps.stats,
       adaptation: reponse.adaptation, suivante_id: corps.session.suivante?.id,
-      langue: corps.langue,
+      langue: corps.langue, ton: coach,
     });
     return json(res, 200, { ...reponse, ...range });
   }
@@ -515,20 +516,33 @@ async function router(req, res, url) {
   }
 
   if (chemin === '/api/coach' && req.method === 'POST') {
-    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const identite = await athleteDe(req, url, 'ecriture');
+    const { athlete_id } = identite;
     const { jeton_strava: _c, ...corps } = await lireCorps(req);
     if (!corps.question) return json(res, 400, { erreur: 'champ manquant : question' });
+    const coach = await depots.coachDe(athlete_id);
+    /* Quand le compte voit plusieurs athlètes, le coach connaît la forme des
+       autres — de quoi répondre à « et Léa, elle en est où ? ». Leur forme et
+       leur charge, rien de plus : pas leur journal, pas leurs notes. */
+    const contexte = [corps.contexte, await depots.formeDesAutres(identite, athlete_id)]
+      .filter(Boolean).join('\n\n');
     const reponse = await repondre({
-      ...corps, coach: await depots.coachDe(athlete_id),
+      ...corps, contexte, coach,
       jeton_strava: await strava.jetonCourant(athlete_id),
     });
     if (corps.fil) {
       await depots.ajouterAuChat(athlete_id, String(corps.fil).slice(0, 48), [
         { role: 'user', texte: corps.question },
-        { role: 'assistant', texte: reponse.texte, modele: reponse.modele, cout_eur: reponse.cout_eur },
+        { role: 'assistant', texte: reponse.texte, modele: reponse.modele, cout_eur: reponse.cout_eur, ton: coach },
       ]);
     }
     return json(res, 200, reponse);
+  }
+
+  /* Les conversations d'un athlète avec le coach, pour le back office. */
+  if (chemin === '/api/athlete/conversations' && req.method === 'GET') {
+    const { athlete_id } = await athleteDe(req, url, 'lecture');
+    return json(res, 200, { fils: await depots.conversations(athlete_id) });
   }
 
   if (chemin === '/api/methode' && req.method === 'POST') {

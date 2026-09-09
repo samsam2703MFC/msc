@@ -588,6 +588,35 @@ async function apercuDe({ id, droit }) {
   };
 }
 
+/**
+ * Ce que le coach sait des autres athlètes du compte, en quelques lignes de
+ * prompt : leur forme, leur charge, où ils en sont — de quoi répondre à
+ * « et Léa, elle en est où ? ». Rien d'autre : pas leur journal, pas leurs
+ * notes. Vide quand le compte ne voit qu'un athlète, ou passe par la porte
+ * de service.
+ */
+export async function formeDesAutres(identite, athleteId) {
+  const autres = (identite?.visibles ?? []).filter((a) => a.id !== athleteId);
+  if (autres.length === 0) return '';
+  const lignesTexte = ['Les autres athlètes que ce compte suit — tu peux répondre sur leur forme, avec ces chiffres et pas d’autres :'];
+  for (const a of await apercu(autres)) {
+    const nom = [a.prenom, a.nom].filter(Boolean).join(' ') + (a.surnom ? ` (« ${a.surnom} »)` : '');
+    const morceaux = [];
+    if (a.forme) morceaux.push(`forme ${a.forme.score}/10 (${a.forme.niveau}${a.forme.alertes.length ? ` — ${a.forme.alertes.join(', ')}` : ''})`);
+    else morceaux.push('forme non lisible (pas de mesure du matin à comparer)');
+    if (a.mesure?.fc_repos != null) morceaux.push(`FC de repos ${a.mesure.fc_repos}${a.base.fc_repos != null ? ` (base ${a.base.fc_repos})` : ''}`);
+    if (a.mesure?.hrv_ms != null) morceaux.push(`HRV ${a.mesure.hrv_ms} ms${a.base.hrv_ms != null ? ` (base ${a.base.hrv_ms})` : ''}`);
+    morceaux.push(`charge 7 j passés ${a.charge.passee_7j} / 7 j à venir ${a.charge.a_venir_7j}`);
+    if (a.plan) morceaux.push(`semaine ${a.semaine}/${a.total}${a.bloc ? `, bloc ${a.bloc.code} (${a.bloc.nom.fr})` : ''}, ${a.cette_semaine.faites}/${a.cette_semaine.prevues} séances faites`);
+    else morceaux.push('sans plan actif');
+    if (a.dernier_rpe) {
+      morceaux.push(`dernier RPE ${a.dernier_rpe.valeur} le ${a.dernier_rpe.date}${a.dernier_rpe.limites?.length ? `, ce qui a bloqué : ${a.dernier_rpe.limites.join(', ')}` : ''}`);
+    }
+    lignesTexte.push(`  - ${nom} : ${morceaux.join(' · ')}`);
+  }
+  return lignesTexte.join('\n');
+}
+
 /* La forme, d'après la FC de repos et la HRV du matin, relatives à la ligne de
    base de l'athlète — pas des seuils absolus : un cœur à 41 et un cœur à 55
    n'ont pas le même « +3 ». Score sur dix, quatre niveaux, et les deux alertes
@@ -1054,14 +1083,14 @@ async function faireAppliquer(cnx, athleteId, table, id, applique) {
    range ce qu'on lui a remis, il ne recalcule rien. */
 
 export async function enregistrerAnalyse(athleteId, { session_id, date, modele, cout_eur, strava,
-  verdict, observations, stats, adaptation, suivante_id, langue = 'fr' }) {
+  verdict, observations, stats, adaptation, suivante_id, langue = 'fr', ton = null }) {
   return transaction(async (cnx) => {
     await cnx.execute('DELETE FROM msc_analyse WHERE session_id = ?', [session_id]);
     const [r] = await cnx.execute(
-      `INSERT INTO msc_analyse (athlete_id, type, session_id, date, modele, cout_eur, strava_lu,
+      `INSERT INTO msc_analyse (athlete_id, type, session_id, date, modele, cout_eur, strava_lu, ton,
          verdict_fr, verdict_pl, stats, blocs)
-       VALUES (?, 'seance', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [athleteId, session_id, date, modele, cout_eur ?? 0, strava ? 1 : 0,
+       VALUES (?, 'seance', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [athleteId, session_id, date, modele, cout_eur ?? 0, strava ? 1 : 0, ton,
        ...deuxLangues(verdict, langue),
        stats ? JSON.stringify(stats) : null,
        observations ? JSON.stringify(observations) : null],
@@ -1140,13 +1169,51 @@ export async function ajouterAuChat(athleteId, fil, tours) {
     let ordre = Number(dernier.n) + 1;
     for (const t of tours) {
       await cnx.execute(
-        `INSERT INTO msc_chat (athlete_id, fil, ordre, role, texte, modele, cout_eur)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [athleteId, fil, ordre++, t.role, t.texte, t.modele ?? null, t.cout_eur ?? null],
+        `INSERT INTO msc_chat (athlete_id, fil, ordre, role, texte, modele, cout_eur, ton)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [athleteId, fil, ordre++, t.role, t.texte, t.modele ?? null, t.cout_eur ?? null, t.ton ?? null],
       );
     }
     return { fil, tours: tours.length };
   });
+}
+
+/**
+ * Les conversations d'un athlète avec le coach, pour le back office : chaque
+ * fil (le coach de la semaine, ou une séance) avec ses tours, le ton qui
+ * parlait, le modèle, le coût. Le fil le plus récent d'abord.
+ */
+export async function conversations(athleteId) {
+  const tours = await lignes(
+    `SELECT c.fil, c.ordre, c.role, c.texte, c.modele, c.cout_eur, c.ton, c.cree_le,
+            s.titre_court_fr, s.titre_court_pl, s.date AS session_date
+     FROM msc_chat c
+     LEFT JOIN msc_session s ON c.fil = CONCAT('session:', s.id)
+     WHERE c.athlete_id = :a
+     ORDER BY c.fil, c.ordre`,
+    { a: athleteId },
+  );
+  const fils = new Map();
+  for (const t of tours) {
+    if (!fils.has(t.fil)) {
+      fils.set(t.fil, {
+        fil: t.fil,
+        titre: t.titre_court_fr
+          ? { fr: `${t.titre_court_fr} · ${t.session_date}`, pl: `${t.titre_court_pl ?? t.titre_court_fr} · ${t.session_date}` }
+          : { fr: 'Le coach · questions générales', pl: 'Trener · pytania ogólne' },
+        tours: [],
+        dernier: null,
+      });
+    }
+    const f = fils.get(t.fil);
+    f.tours.push({
+      role: t.role, texte: t.texte, modele: t.modele ?? null,
+      cout_eur: t.cout_eur == null ? null : Number(t.cout_eur), ton: t.ton ?? null,
+      date: t.cree_le instanceof Date ? t.cree_le.toISOString() : String(t.cree_le),
+    });
+    f.dernier = f.tours[f.tours.length - 1].date;
+  }
+  return [...fils.values()].sort((x, y) => String(y.dernier).localeCompare(String(x.dernier)));
 }
 
 /* --------------------------------------------- le back office : compétitions */

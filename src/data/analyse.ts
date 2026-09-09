@@ -357,13 +357,16 @@ export function demanderAnalyse(
 
 export function demanderCoach(
   question: string,
-  options: { contexte?: string; historique?: TourDeChat[]; lang?: Lang } = {},
+  options: { contexte?: string; historique?: TourDeChat[]; lang?: Lang; fil?: string } = {},
 ): Promise<ReponseCoach> {
   return appeler<ReponseCoach>(ENDPOINT_COACH, {
     question,
     contexte: options.contexte,
     historique: options.historique,
     langue: options.lang ?? 'fr',
+    /* Le fil : c'est ce qui range la conversation en base, et ce que le back
+       office relit. Sans lui, la réponse s'affiche et disparaît. */
+    fil: options.fil,
   });
 }
 

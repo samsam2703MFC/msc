@@ -919,6 +919,37 @@ table, never sent back to the screen: the screen knows it is set and sees its
 last four characters. Without `MSC_SECRET_KEY` the server refuses to store one
 rather than storing it in clear.
 
+### Athlètes, Calendrier, and what the coach was asked
+
+**Athlètes** opens with the club ranking — five axes scored out of 100
+(endurance, speed, bike, running, swimming), their mean, and the *niveau de
+combat* that goes with it (the mean × 100). Everything is read from what the
+database already holds: the last eight weeks of activities for the volumes,
+the fastest measured work block over 90 days for speed, the 10 km reference
+for running — and each row shows the raw figure its score comes from. Six
+transformation tiers sit on the mean (Terrien → Guerrier → Super Guerrier →
+2 → 3 → Ultra); the avatar wears them, initials kept as a badge, in the
+header, on the cards and in the ranking. What scores 100 on each axis and
+where the tiers fall are settings (`msc_param`, group `niveau`).
+`GET /api/classement` returns names and scores to any signed-in account.
+
+Below the ranking, one card per athlete the account can see: phase and week,
+references, this week's sessions, last RPE and what blocked, the chosen coach,
+the form gauge — and, folded, **what they asked the coach**: every thread
+(`msc_chat`, keyed by `fil`), the answer, the coach persona that was speaking
+(`ton`), the model and its cost. Analyses carry `ton` too.
+
+When an account sees several athletes, the coach's chat context also carries
+the **others' form** — score, resting HR and HRV against baseline, load, week
+and block, last RPE and what blocked — so "et Léa, elle en est où ?" gets an
+answer with those figures and no others. Nothing else of theirs crosses over:
+not the journal, not the notes.
+
+**Calendrier** is the club's shared race calendar: every competition of every
+athlete, month by month, with the runner's avatar, the distance, the plan's
+target and a countdown; past races show the time. `GET /api/calendrier`, any
+signed-in account.
+
 ### Importing a hand-written plan
 
 Not every plan comes out of the generator. Sam's 44-week plan is a spreadsheet
