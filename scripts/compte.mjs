@@ -32,7 +32,13 @@ async function demanderMotDePasse() {
      sur une entrée qui est déjà arrivée. */
   const [a, b] = stdin.isTTY ? await demanderDeuxFois() : await deuxLignes();
   if (a !== b) throw new Error('Les deux saisies diffèrent.');
-  if (a.length < 12) throw new Error('Douze caractères au moins.');
+  /* Douze par défaut. Réglable par MSC_MDP_MIN pour un serveur d'essai qui
+     assume un code court — mais le défaut sûr est ce qui part en production, on
+     ne l'abaisse pas dans le code. Un code à 7 chiffres, c'est dix millions de
+     possibilités : sur du HTTP en clair, cassable. À ne faire que sur un bac à
+     sable, et à relever avant d'y mettre de vraies données. */
+  const min = Math.max(1, Number(process.env.MSC_MDP_MIN ?? 12) || 12);
+  if (a.length < min) throw new Error(`${min} caractères au moins.`);
   return a;
 }
 
