@@ -326,7 +326,16 @@ EOF
 fi
 
 dire "7 · l'essai"
-if REPONSE=$(curl -fsS --max-time 10 "$RACINE_URL/api/sante" 2>&1); then
+# `systemctl restart` rend la main dès que le processus démarre, pas quand il
+# écoute — et l'étape 6 vient justement de redémarrer msc. Interroger tout de
+# suite, c'est cueillir un 503 du mandataire (« backend pas encore là ») sur une
+# application parfaitement saine. On patiente qu'elle réponde, brièvement.
+REPONSE=""
+for tentative in $(seq 1 15); do
+  REPONSE=$(curl -fsS --max-time 5 "$RACINE_URL/api/sante" 2>&1) && break
+  sleep 1
+done
+if grep -q '"ok"' <<< "$REPONSE"; then
   echo "   $RACINE_URL/api/sante → $REPONSE"
   grep -q '"scellement":true' <<< "$REPONSE" \
     || echo "   ⚠ MSC_SECRET_KEY absente de $RACINE/.env : ni sessions ni jetons Strava"
