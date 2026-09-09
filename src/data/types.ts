@@ -124,6 +124,35 @@ export interface MscParam {
   apercu?: string | null;
 }
 
+/** Les cinq axes du classement, notés sur 100. */
+export type Axe = 'endurance' | 'vitesse' | 'velo' | 'cap' | 'natation';
+
+/** Une ligne du classement du club : les scores, la moyenne, le palier. */
+export interface ClassementLigne {
+  id: number;
+  nom: string;
+  prenom: string | null;
+  surnom: string | null;
+  rang: number;
+  scores: Record<Axe, number>;
+  total: number;
+  puissance: number;
+  palier: { n: number; nom: Localized };
+  brut: {
+    heures_semaine: number;
+    velo_h_semaine: number;
+    nage_km_semaine: number;
+    ref_10k_s: number;
+    vitesse_s: number;
+    vitesse_mesuree: boolean;
+  };
+}
+
+export interface Classement {
+  athletes: ClassementLigne[];
+  paliers: Array<{ n: number; nom: Localized; seuil: number }>;
+}
+
 /** Une ligne du calendrier commun : une compétition, et à qui elle est. */
 export interface CalendrierEntree {
   id: number;
@@ -439,6 +468,8 @@ export interface MscAthlete {
   annee_naissance?: number | null;
   /** Le coach choisi — tortionnaire, gentil, gros_porc. Son ton, pas son fond. */
   coach?: string;
+  /** Le palier de transformation (1–6), calculé par le serveur — l'avatar le porte. */
+  niveau?: number;
   /** Current 10 km pace, in seconds per km. The week-5 time trial rewrites it. */
   ref_actuelle_s: number;
   /** Target 10 km pace, in seconds per km. */
@@ -601,6 +632,7 @@ export interface ApercuAthlete {
     volume_realise_min: number;
   };
   coach: string;
+  niveau: number;
   dernier_rpe: { valeur: number; date: string; limites: string[] } | null;
   mesure: {
     date: string;

@@ -185,6 +185,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
           nom={[db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ')}
           onClick={app.openProfil}
           sousTitre={db.athlete.surnom ?? null}
+          palier={db.athlete.niveau ?? null}
         />
         <button
           type="button"

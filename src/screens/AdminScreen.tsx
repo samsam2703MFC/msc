@@ -128,16 +128,15 @@ type Section = keyof typeof SECTIONS.fr;
 export function AdminScreen({ app }: { app: App }) {
   const [section, setSection] = useState<Section>('plan');
   const libelles = SECTIONS[app.lang];
-  /* La liste des athlètes n'a de sens qu'à qui en voit plusieurs — un coach.
-     Les réglages, eux, valent pour tout le serveur : un rôle coach ou admin,
-     et le serveur le vérifie de son côté. */
+  /* Les réglages valent pour tout le serveur : un rôle coach ou admin, et le
+     serveur le vérifie de son côté. */
   const role = app.identite?.compte.role ?? 'athlete';
-  const plusieurs = (app.identite?.athletes.length ?? 0) > 1 || role === 'coach';
   const admin = role === 'coach' || role === 'admin';
-  /* Le calendrier est commun — un calendrier de club, tout le monde le voit. */
+  /* Le calendrier et le classement sont communs — un club, tout le monde les
+     voit. Les cartes de suivi, elles, ne montrent que les athlètes visibles
+     du compte : un seul pour un athlète, tous pour un coach. */
   const sections: Section[] = [
-    'plan', 'courses', 'calendrier',
-    ...(plusieurs ? (['athletes'] as Section[]) : []),
+    'plan', 'courses', 'calendrier', 'athletes',
     ...(admin ? (['param'] as Section[]) : []),
   ];
   const serre = sections.length > 3;

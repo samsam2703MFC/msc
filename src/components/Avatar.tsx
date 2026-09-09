@@ -8,6 +8,7 @@
    présentes dans les jetons — profondes, lisibles en blanc — assignées de
    façon stable plutôt qu'inventées. */
 import { C, F, R } from '../design/theme';
+import { AvatarNiveau } from './AvatarNiveau';
 
 const TEINTES = [C.teal, C.accentDeep, C.warning, C.negative, C.ink] as const;
 
@@ -20,16 +21,20 @@ function initiales(nom: string): string {
 
 /* Un hachage stable du nom → un index. djb2, sans dépendance : le but n'est pas
    la cryptographie, c'est que « Sam » tombe toujours sur la même teinte. */
-function teinteDe(nom: string): string {
+export function teinteDe(nom: string): string {
   let h = 5381;
   for (let i = 0; i < nom.length; i += 1) h = ((h << 5) + h + nom.charCodeAt(i)) >>> 0;
   return TEINTES[h % TEINTES.length];
 }
 
-export function Avatar({ nom, taille = 38, onClick, sousTitre }: {
-  nom: string; taille?: number; onClick?: () => void; sousTitre?: string | null;
+/* Avec un palier, l'avatar devient la tête transformée (AvatarNiveau), les
+   initiales en badge ; sans, la pastille d'initiales. */
+export function Avatar({ nom, taille = 38, onClick, sousTitre, palier }: {
+  nom: string; taille?: number; onClick?: () => void; sousTitre?: string | null; palier?: number | null;
 }) {
-  const pastille = (
+  const pastille = palier ? (
+    <AvatarNiveau nom={nom} palier={palier} taille={taille} teinte={teinteDe(nom)} />
+  ) : (
     <div
       role={onClick ? undefined : 'img'}
       aria-label={onClick ? undefined : nom}

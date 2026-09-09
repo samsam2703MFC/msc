@@ -17,6 +17,7 @@ const GROUPES: Array<{ code: string; icon: string; nom: Record<Lang, string> }> 
   { code: 'moteur', icon: 'gauge', nom: { fr: 'Moteur', pl: 'Silnik' } },
   { code: 'forme', icon: 'heart-pulse', nom: { fr: 'Forme', pl: 'Forma' } },
   { code: 'coach', icon: 'bot', nom: { fr: 'Coach', pl: 'Trener' } },
+  { code: 'niveau', icon: 'zap', nom: { fr: 'Niveaux', pl: 'Poziomy' } },
   { code: 'strava', icon: 'link', nom: { fr: 'Strava', pl: 'Strava' } },
   { code: 'securite', icon: 'user', nom: { fr: 'Sécurité', pl: 'Bezpieczeństwo' } },
 ];

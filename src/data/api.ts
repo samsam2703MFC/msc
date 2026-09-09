@@ -13,7 +13,7 @@
 
 import * as cache from './cache';
 import type { Instantane } from './vives';
-import type { CalendrierEntree, MscActivity, MscCompetition, MscParam } from './types';
+import type { CalendrierEntree, Classement, MscActivity, MscCompetition, MscParam } from './types';
 import { RACINE_API } from './base';
 
 export class ApiError extends Error {
@@ -363,6 +363,11 @@ export function apercu(): Promise<{ athletes: ApercuAthlete[] }> {
 }
 
 /** Le profil : prénom, nom, surnom, année de naissance. */
+/** Le classement du club : cinq axes, une moyenne, un palier. */
+export function classement(): Promise<Classement> {
+  return appeler<Classement>('/classement');
+}
+
 /** Le calendrier commun : toutes les compétitions, de tous les athlètes. */
 export function calendrier(): Promise<{ competitions: CalendrierEntree[] }> {
   return appeler<{ competitions: CalendrierEntree[] }>('/calendrier');

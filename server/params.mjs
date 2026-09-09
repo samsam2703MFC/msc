@@ -65,6 +65,38 @@ export const CATALOGUE = [
     libelle: { fr: 'Strava · jeton de vérification du webhook', pl: 'Strava · token weryfikacji webhooka' },
     aide: { fr: 'Le mot que Strava renvoie pour valider le callback.', pl: 'Słowo, które Strava odsyła, by potwierdzić callback.' } },
 
+  /* les niveaux — le classement façon shōnen : cinq axes notés sur 100, et
+     les paliers de transformation sur la moyenne. Ce qui vaut 100 sur chaque
+     axe se règle ici ; le niveau de combat, c'est la moyenne × 100. */
+  { cle: 'niveau.endurance_h', groupe: 'niveau', type: 'nombre', defaut: 12, unite: 'h/sem', ordre: 10,
+    libelle: { fr: 'Endurance : heures par semaine qui valent 100', pl: 'Wytrzymałość: godziny tygodniowo za 100' },
+    aide: { fr: 'Toutes disciplines, moyenne des 8 dernières semaines.', pl: 'Wszystkie dyscypliny, średnia z 8 ostatnich tygodni.' } },
+  { cle: 'niveau.velo_h', groupe: 'niveau', type: 'nombre', defaut: 6, unite: 'h/sem', ordre: 20,
+    libelle: { fr: 'Vélo : heures par semaine qui valent 100', pl: 'Rower: godziny tygodniowo za 100' }, aide: null },
+  { cle: 'niveau.natation_km', groupe: 'niveau', type: 'nombre', defaut: 8, unite: 'km/sem', ordre: 30,
+    libelle: { fr: 'Natation : kilomètres par semaine qui valent 100', pl: 'Pływanie: kilometry tygodniowo za 100' }, aide: null },
+  { cle: 'niveau.cap_lent_s', groupe: 'niveau', type: 'nombre', defaut: 360, unite: 's/km', ordre: 40,
+    libelle: { fr: 'CAP : allure 10 km qui vaut 0', pl: 'Bieg: tempo 10 km za 0' },
+    aide: { fr: '360 s/km = 6:00/km, un 10 km en 60 min. Lue sur la référence actuelle de l’athlète.', pl: '360 s/km = 6:00/km, 10 km w 60 min. Z aktualnej referencji zawodnika.' } },
+  { cle: 'niveau.cap_rapide_s', groupe: 'niveau', type: 'nombre', defaut: 180, unite: 's/km', ordre: 50,
+    libelle: { fr: 'CAP : allure 10 km qui vaut 100', pl: 'Bieg: tempo 10 km za 100' },
+    aide: { fr: '180 s/km = 3:00/km, un 10 km en 30 min.', pl: '180 s/km = 3:00/km, 10 km w 30 min.' } },
+  { cle: 'niveau.vitesse_lent_s', groupe: 'niveau', type: 'nombre', defaut: 300, unite: 's/km', ordre: 60,
+    libelle: { fr: 'Vitesse : allure de bloc qui vaut 0', pl: 'Szybkość: tempo bloku za 0' },
+    aide: { fr: 'Le bloc de travail le plus rapide mesuré sur 90 jours ; sans mesure, la zone VMA de la référence.', pl: 'Najszybszy zmierzony blok z 90 dni; bez pomiaru — strefa VO2max z referencji.' } },
+  { cle: 'niveau.vitesse_rapide_s', groupe: 'niveau', type: 'nombre', defaut: 165, unite: 's/km', ordre: 70,
+    libelle: { fr: 'Vitesse : allure de bloc qui vaut 100', pl: 'Szybkość: tempo bloku za 100' }, aide: null },
+  { cle: 'niveau.palier_2', groupe: 'niveau', type: 'nombre', defaut: 20, unite: '/100', ordre: 80,
+    libelle: { fr: 'Palier 2 — Guerrier', pl: 'Próg 2 — Wojownik' }, aide: { fr: 'La moyenne des cinq axes à partir de laquelle l’avatar se transforme.', pl: 'Średnia pięciu osi, od której awatar się przemienia.' } },
+  { cle: 'niveau.palier_3', groupe: 'niveau', type: 'nombre', defaut: 40, unite: '/100', ordre: 90,
+    libelle: { fr: 'Palier 3 — Super Guerrier', pl: 'Próg 3 — Super Wojownik' }, aide: null },
+  { cle: 'niveau.palier_4', groupe: 'niveau', type: 'nombre', defaut: 60, unite: '/100', ordre: 100,
+    libelle: { fr: 'Palier 4 — Super Guerrier 2', pl: 'Próg 4 — Super Wojownik 2' }, aide: null },
+  { cle: 'niveau.palier_5', groupe: 'niveau', type: 'nombre', defaut: 80, unite: '/100', ordre: 110,
+    libelle: { fr: 'Palier 5 — Super Guerrier 3', pl: 'Próg 5 — Super Wojownik 3' }, aide: null },
+  { cle: 'niveau.palier_6', groupe: 'niveau', type: 'nombre', defaut: 95, unite: '/100', ordre: 120,
+    libelle: { fr: 'Palier 6 — Ultra', pl: 'Próg 6 — Ultra' }, aide: null },
+
   /* la sécurité */
   { cle: 'securite.mdp_min', groupe: 'securite', type: 'nombre', defaut: 12, unite: 'caractères', ordre: 10, env: 'MSC_MDP_MIN',
     libelle: { fr: 'Longueur minimale d’un mot de passe', pl: 'Minimalna długość hasła' },

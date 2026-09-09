@@ -33,6 +33,7 @@ import * as depots from './depots.mjs';
 import { construireMethode } from './methode.mjs';
 import * as photo from './photo.mjs';
 import { analyserSeance, recalculerPlan, repondre } from './coach.mjs';
+import { classement } from './niveau.mjs';
 import * as params from './params.mjs';
 import * as strava from './strava.mjs';
 
@@ -319,6 +320,14 @@ async function router(req, res, url) {
       ? [{ id: identite.athlete_id, nom: identite.compte.nom, droit: 'ecriture' }]
       : await athletesVisibles(identite.compte.id);
     return json(res, 200, { athletes: await depots.apercu(athletes) });
+  }
+
+  /* Le classement du club : cinq axes, une moyenne, un palier — pour tout
+     compte connecté. Noms et scores, rien d'autre. */
+  if (chemin === '/api/classement' && req.method === 'GET') {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    return json(res, 200, await classement());
   }
 
   /* Le calendrier commun des compétitions : tout compte connecté le voit en

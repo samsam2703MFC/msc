@@ -22,6 +22,7 @@
    même RPE. */
 
 import { lignes, ligne, transaction } from './bd.mjs';
+import { palierDeAthlete } from './niveau.mjs';
 import { param, publics as paramsPublics } from './params.mjs';
 
 /**
@@ -404,6 +405,8 @@ export async function instantane(athleteId) {
       prenom: athlete.prenom ?? null, surnom: athlete.surnom ?? null,
       annee_naissance: athlete.annee_naissance ?? null,
       coach: athlete.coach ?? 'gentil',
+      /* le palier de transformation, pour l'avatar de l'en-tête */
+      niveau: await palierDeAthlete(athleteId),
       ref_actuelle_s: athlete.ref_actuelle_s, ref_cible_s: athlete.ref_cible_s,
       fc_repos: athlete.fc_repos, fc_repos_moy7: athlete.fc_repos_moy7,
       fc_moy_reference: athlete.fc_moy_reference,
@@ -569,6 +572,7 @@ async function apercuDe({ id, droit }) {
     bloc,
     cette_semaine: cette,
     coach: a.coach ?? 'gentil',
+    niveau: await palierDeAthlete(id),
     dernier_rpe: rpe ? { valeur: rpe.rpe_ressenti, date: rpe.date, limites: limitesRpe } : null,
     mesure: mesure
       ? {
