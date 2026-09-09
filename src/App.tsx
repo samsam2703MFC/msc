@@ -6,6 +6,7 @@ import * as db from './data/db';
 import type { ScreenKey } from './data/types';
 import { C, F, R } from './design/theme';
 import { Icon } from './components/Icon';
+import { Avatar } from './components/Avatar';
 import { IOSDevice } from './components/IOSDevice';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
@@ -168,6 +169,8 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
           </h1>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <Avatar nom={db.athlete.nom} />
         <button
           type="button"
           className="msc-hover-accent"
@@ -201,6 +204,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
             }}
           />
         </button>
+        </div>
       </header>
 
       <main className="msc-scroll" style={{ flex: 1, padding: '16px 20px 24px' }}>
