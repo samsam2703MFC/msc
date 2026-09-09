@@ -16,6 +16,7 @@ import { Icon } from '../components/Icon';
 import { AccentButton, Card, Grid, Mono, SectionLabel } from '../components/primitives';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
+import { AthletesScreen } from './AthletesScreen';
 
 /** mm:ss → seconds. */
 function versSecondes(texte: string): number {
@@ -113,16 +114,21 @@ const OBJECTIF_VIDE: Objectif = {
 };
 
 const SECTIONS = {
-  fr: { plan: 'Plan', courses: 'Courses' },
-  pl: { plan: 'Plan', courses: 'Zawody' },
+  fr: { plan: 'Plan', courses: 'Courses', athletes: 'Athlètes' },
+  pl: { plan: 'Plan', courses: 'Zawody', athletes: 'Zawodnicy' },
 } as const;
 
 /* L'écran Créer porte deux choses différentes : fabriquer un plan, et tenir le
    registre des courses. Une bascule plutôt qu'un sixième onglet — la barre en a
    déjà cinq, et un back office n'est pas un écran qu'on ouvre tous les jours. */
 export function AdminScreen({ app }: { app: App }) {
-  const [section, setSection] = useState<'plan' | 'courses'>('plan');
+  const [section, setSection] = useState<'plan' | 'courses' | 'athletes'>('plan');
   const libelles = SECTIONS[app.lang];
+  /* La liste des athlètes n'a de sens qu'à qui en voit plusieurs — un coach. */
+  const plusieurs = (app.identite?.athletes.length ?? 0) > 1 || app.identite?.compte.role === 'coach';
+  const sections: Array<'plan' | 'courses' | 'athletes'> = plusieurs
+    ? ['plan', 'courses', 'athletes']
+    : ['plan', 'courses'];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -136,7 +142,7 @@ export function AdminScreen({ app }: { app: App }) {
           border: `1px solid ${C.border}`,
         }}
       >
-        {(['plan', 'courses'] as const).map((cle) => (
+        {sections.map((cle) => (
           <button
             key={cle}
             type="button"
@@ -158,7 +164,7 @@ export function AdminScreen({ app }: { app: App }) {
         ))}
       </div>
 
-      {section === 'courses' ? <BackOffice app={app} /> : <Generateur app={app} />}
+      {section === 'courses' ? <BackOffice app={app} /> : section === 'athletes' ? <AthletesScreen app={app} /> : <Generateur app={app} />}
     </div>
   );
 }

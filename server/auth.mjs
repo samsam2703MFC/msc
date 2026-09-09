@@ -173,13 +173,15 @@ export async function identifier(req) {
   return { compte: { id: c.id, email: c.email, nom: c.nom, role: c.role }, athlete_id: null };
 }
 
-/** Les athlètes qu'un compte peut voir, dans l'ordre. */
+/** Les athlètes qu'un compte peut voir, dans l'ordre : le sien d'abord (c'est
+    lui qu'on ouvre sans rien demander), puis les autres par nom. */
 export async function athletesVisibles(compteId) {
   const { lignes } = await import('./bd.mjs');
   return lignes(
     `SELECT a.id, a.nom, x.droit
      FROM msc_acces x JOIN msc_athlete a ON a.id = x.athlete_id
-     WHERE x.compte_id = :compte ORDER BY a.nom`,
+     WHERE x.compte_id = :compte
+     ORDER BY (a.compte_id = :compte) DESC, a.nom`,
     { compte: compteId },
   );
 }

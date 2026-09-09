@@ -13,7 +13,7 @@ import * as strava from '../data/strava';
 import * as coach from '../data/analyse';
 import * as api from '../data/api';
 import * as cache from '../data/cache';
-import type { Lang, ScreenKey, TypeCode } from '../data/types';
+import type { ApercuAthlete, Lang, ScreenKey, TypeCode } from '../data/types';
 
 const LANG_KEY = 'msc.lang';
 
@@ -69,7 +69,6 @@ export function useApp() {
   /* Where the plan is. Defaults to the real date, clamped into the plan's
      span; the settings sheet lets you move it to walk the thirty weeks. */
   const [date, setDate] = useState('');
-  const semaine = useMemo(() => (db.chargee ? db.positionDuPlan(date).semaine : 0), [date]);
 
   const [lang, setLangState] = useState<Lang>(storedLang);
 
@@ -88,6 +87,8 @@ export function useApp() {
 
   /* Overlays */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profilOpen, setProfilOpen] = useState(false);
+  const [apercu, setApercu] = useState<ApercuAthlete[] | null>(null);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [typeCode, setTypeCode] = useState<TypeCode | null>(null);
 
@@ -96,6 +97,15 @@ export function useApp() {
   /* Both halves below write into the database behind the accessors, which React
      has no way to notice. Bumping this is what tells it something changed. */
   const [version, setVersion] = useState(0);
+
+  /* La semaine se relit à chaque instantané, pas seulement quand la date bouge :
+     passer sur un athlète sans plan garde la même date, et « S2 » resterait
+     affiché pour quelqu'un qui n'a pas de semaine 2. */
+  const semaine = useMemo(
+    () => (db.chargee ? db.positionDuPlan(date).semaine : 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [date, version],
+  );
 
   /* Nothing async may touch state after the hook is gone. */
   const monte = useRef(true);
@@ -829,6 +839,24 @@ export function useApp() {
     settingsOpen,
     openSettings: useCallback(() => setSettingsOpen(true), []),
     closeSettings: useCallback(() => setSettingsOpen(false), []),
+
+    /* le profil, la vue coach, la bascule d'athlète */
+    profilOpen,
+    openProfil: useCallback(() => setProfilOpen(true), []),
+    closeProfil: useCallback(() => setProfilOpen(false), []),
+    apercu,
+    chargerApercu: useCallback(async () => {
+      try { setApercu((await api.apercu()).athletes); } catch { setApercu([]); }
+    }, []),
+    basculerAthlete: useCallback(async (id: number) => {
+      await recharger(id);
+      setScreen('today');
+    }, [recharger]),
+    majProfil: useCallback(async (corps: Parameters<typeof api.majProfil>[0]) => {
+      await api.majProfil(corps, db.athleteId);
+      await recharger(db.athleteId);
+      setApercu(null);
+    }, [recharger]),
     sessionId,
     openSession: useCallback((id: number) => setSessionId(id), []),
     closeSession: useCallback(() => setSessionId(null), []),

@@ -60,6 +60,12 @@ try {
   const AJOUTS = [
     ['msc_adaptation', 'avant', "ADD COLUMN avant JSON NULL AFTER applique_le"],
     ['msc_ajustement', 'avant', "ADD COLUMN avant JSON NULL AFTER applique_le"],
+    /* Le profil et la forme. Le poids vit déjà dans les mesures ; la HRV les
+       rejoint, à côté de la FC de repos dont elle est l'autre moitié. */
+    ['msc_athlete', 'prenom', "ADD COLUMN prenom VARCHAR(80) NULL AFTER nom"],
+    ['msc_athlete', 'annee_naissance', "ADD COLUMN annee_naissance SMALLINT UNSIGNED NULL AFTER prenom"],
+    ['msc_athlete', 'surnom', "ADD COLUMN surnom VARCHAR(40) NULL AFTER annee_naissance"],
+    ['msc_mesure', 'hrv_ms', "ADD COLUMN hrv_ms SMALLINT UNSIGNED NULL AFTER fc_repos"],
   ];
   for (const [table, colonne, ddl] of AJOUTS) {
     const [[{ n }]] = await cnx.query(

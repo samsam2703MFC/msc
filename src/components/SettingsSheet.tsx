@@ -13,7 +13,6 @@ const PHASE_LABEL: Record<Lang, string> = { fr: 'Période d’entraînement', pl
 
 const SETTINGS_TITLE: Record<Lang, string> = { fr: 'Paramètres', pl: 'Ustawienia' };
 const LANG_LABEL: Record<Lang, string> = { fr: 'Langue', pl: 'Język' };
-const DB_LABEL: Record<Lang, string> = { fr: 'Base MSC · tables', pl: 'Baza MSC · tabele' };
 const DATE_LABEL: Record<Lang, string> = { fr: 'Jour du plan', pl: 'Dzień planu' };
 const LANGS: Lang[] = ['fr', 'pl'];
 
@@ -138,7 +137,9 @@ export function SettingsSheet({ app }: { app: App }) {
             {DATE_LABEL[lang]}
           </label>
           <div style={{ fontSize: 11, color: C.inkSecondary }}>
-            {`${lang === 'fr' ? 'Semaine' : 'Tydzień'} ${app.semaine} / ${db.derniereSemaine} · ${lang === 'fr' ? 'bloc' : 'blok'} ${db.blocDeSemaine(app.semaine).code}`}
+            {db.derniereSemaine > 0
+              ? `${lang === 'fr' ? 'Semaine' : 'Tydzień'} ${app.semaine} / ${db.derniereSemaine} · ${lang === 'fr' ? 'bloc' : 'blok'} ${db.blocDeSemaine(app.semaine).code}`
+              : lang === 'fr' ? 'Sans plan' : 'Bez planu'}
           </div>
         </div>
         <input
@@ -186,40 +187,6 @@ export function SettingsSheet({ app }: { app: App }) {
           {lang === 'fr'
             ? "Toutes les allures du plan sont calculées depuis ces deux nombres. Le test de 30' recale le premier."
             : 'Wszystkie tempa planu liczone są z tych dwóch liczb. Test 30 min przelicza pierwszą.'}
-        </div>
-      </div>
-
-      {/* what the database holds */}
-      <div
-        style={{
-          borderRadius: 12,
-          background: C.page,
-          border: `1px solid ${C.border}`,
-          padding: 14,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        <SectionLabel icon="database" color={C.teal}>
-          {DB_LABEL[lang]}
-        </SectionLabel>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          {db.tableNames.map((name) => (
-            <Mono
-              key={name}
-              size={10}
-              color={C.inkMuted}
-              style={{
-                padding: '3px 7px',
-                borderRadius: R.sm,
-                border: `1px solid ${C.border}`,
-                background: C.surface,
-              }}
-            >
-              {name}
-            </Mono>
-          ))}
         </div>
       </div>
 

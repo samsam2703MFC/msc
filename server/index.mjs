@@ -307,6 +307,24 @@ async function router(req, res, url) {
     });
   }
 
+  /* La vue coach : chaque athlète visible en un coup d'œil. Même règle que
+     /api/moi pour la liste — msc_acces tranche, ou la porte de service. */
+  if (chemin === '/api/apercu' && req.method === 'GET') {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    const athletes = identite.bypass
+      ? [{ id: identite.athlete_id, nom: identite.compte.nom, droit: 'ecriture' }]
+      : await athletesVisibles(identite.compte.id);
+    return json(res, 200, { athletes: await depots.apercu(athletes) });
+  }
+
+  if (chemin === '/api/athlete/profil' && req.method === 'PUT') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const corps = await lireCorps(req, 16_000);
+    return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'profil', (cnx) =>
+      depots.ecrireProfil(athlete_id, corps, cnx)));
+  }
+
   if (chemin.startsWith('/api/strava')) {
     return routesStrava(req, res, url, chemin.replace(/^\/api\/strava/, '') || '/');
   }
@@ -491,7 +509,7 @@ const server = createServer(async (req, res) => {
   res.setHeader('access-control-allow-origin', process.env.CORS_ORIGIN ?? 'http://localhost:5173');
   res.setHeader('access-control-allow-credentials', 'true');
   res.setHeader('access-control-allow-headers', 'content-type');
-  res.setHeader('access-control-allow-methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('access-control-allow-methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('vary', 'origin');
   if (req.method === 'OPTIONS') return res.writeHead(204).end();
 

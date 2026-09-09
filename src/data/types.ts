@@ -375,6 +375,10 @@ export interface MscUiStrings {
 export interface MscAthlete {
   id: number;
   nom: string;
+  /** Le profil, sous l'avatar. `nom` reste ce que l'application affiche. */
+  prenom?: string | null;
+  surnom?: string | null;
+  annee_naissance?: number | null;
   /** Current 10 km pace, in seconds per km. The week-5 time trial rewrites it. */
   ref_actuelle_s: number;
   /** Target 10 km pace, in seconds per km. */
@@ -510,4 +514,41 @@ export interface MscPlanWeek {
   km: number;
   metres_nage: number;
   charge: number;
+}
+
+/* ---------------------------------------------------------- la vue coach */
+
+export type NiveauForme = 'excellent' | 'bon' | 'attention' | 'fatigue';
+
+/** Un athlète en un coup d'œil — ce que /api/apercu rend, par athlète visible. */
+export interface ApercuAthlete {
+  id: number;
+  droit: 'lecture' | 'ecriture';
+  nom: string;
+  prenom: string | null;
+  surnom: string | null;
+  annee_naissance: number | null;
+  ref_actuelle_s: number;
+  ref_cible_s: number;
+  plan: { nom: string; debut: string; fin: string } | null;
+  semaine: number;
+  total: number;
+  bloc: { code: string; part: number; de: number; a: number; nom: Localized } | null;
+  cette_semaine: {
+    prevues: number;
+    faites: number;
+    volume_prevu_min: number;
+    volume_realise_min: number;
+  };
+  dernier_rpe: { valeur: number; date: string } | null;
+  mesure: {
+    date: string;
+    poids_kg: number | null;
+    fc_repos: number | null;
+    hrv_ms: number | null;
+  } | null;
+  base: { fc_repos: number | null; hrv_ms: number | null };
+  /** Absent quand rien ne permet de la lire — jamais un 10 par défaut. */
+  forme: { score: number; niveau: NiveauForme; alertes: string[] } | null;
+  charge: { passee_7j: number; a_venir_7j: number };
 }

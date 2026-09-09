@@ -349,3 +349,24 @@ export function ecrireCompetition(c: Partial<MscCompetition>): Promise<{ id: num
 export function supprimerCompetition(id: number): Promise<{ id: number }> {
   return appeler(`/competitions?id=${id}`, { method: 'DELETE' });
 }
+
+/* ------------------------------------------------------------ la vue coach */
+
+import type { ApercuAthlete } from './types';
+
+/** Chaque athlète visible, en un coup d'œil. */
+export function apercu(): Promise<{ athletes: ApercuAthlete[] }> {
+  return appeler<{ athletes: ApercuAthlete[] }>('/apercu');
+}
+
+/** Le profil : prénom, nom, surnom, année de naissance. */
+export function majProfil(
+  corps: { prenom?: string | null; nom: string; surnom?: string | null; annee_naissance?: number | null },
+  athleteId?: number | null,
+): Promise<{ id: number }> {
+  const q = athleteId ? `?athlete=${athleteId}` : '';
+  return appeler<{ id: number }>(`/athlete/profil${q}`, {
+    method: 'PUT',
+    body: JSON.stringify({ ...corps, mutation_id: crypto.randomUUID() }),
+  });
+}

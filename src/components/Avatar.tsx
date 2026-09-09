@@ -26,11 +26,13 @@ function teinteDe(nom: string): string {
   return TEINTES[h % TEINTES.length];
 }
 
-export function Avatar({ nom, taille = 38 }: { nom: string; taille?: number }) {
-  return (
+export function Avatar({ nom, taille = 38, onClick, sousTitre }: {
+  nom: string; taille?: number; onClick?: () => void; sousTitre?: string | null;
+}) {
+  const pastille = (
     <div
-      role="img"
-      aria-label={nom}
+      role={onClick ? undefined : 'img'}
+      aria-label={onClick ? undefined : nom}
       title={nom}
       style={{
         width: taille,
@@ -52,5 +54,23 @@ export function Avatar({ nom, taille = 38 }: { nom: string; taille?: number }) {
     >
       {initiales(nom)}
     </div>
+  );
+  if (!onClick && !sousTitre) return pastille;
+  /* Sous l'avatar : le surnom, et rien d'autre. */
+  const bloc = (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+      {pastille}
+      {sousTitre && (
+        <span style={{ fontSize: 10, fontWeight: 600, color: C.inkSecondary, lineHeight: 1, maxWidth: taille + 24, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {sousTitre}
+        </span>
+      )}
+    </div>
+  );
+  if (!onClick) return bloc;
+  return (
+    <button type="button" onClick={onClick} aria-label={nom} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+      {bloc}
+    </button>
   );
 }

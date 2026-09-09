@@ -7,6 +7,8 @@ import type { ScreenKey } from './data/types';
 import { C, F, R } from './design/theme';
 import { Icon } from './components/Icon';
 import { Avatar } from './components/Avatar';
+import { ProfilSheet } from './components/ProfilSheet';
+import { SansPlan } from './components/SansPlan';
 import { IOSDevice } from './components/IOSDevice';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
@@ -37,15 +39,19 @@ function eyebrow(app: ReturnType<typeof useApp>): string {
   const [, mois, jour] = app.date.split('-');
   const nomMois = (fr ? MOIS_FR : MOIS_PL)[Number(mois) - 1];
   const s = fr ? 'S' : 'T';
+  /* Sans plan, pas de semaine : la date seule, plutôt qu'un « S0 ». */
+  const sem = app.semaine > 0 ? ` · ${s}${app.semaine}` : '';
   switch (app.screen) {
     case 'today':
-      return `${Number(jour)} ${nomMois} · ${s}${app.semaine}`;
+      return `${Number(jour)} ${nomMois}${sem}`;
     case 'week':
-      return `${s}${app.semaine} / ${db.derniereSemaine} · ${fr ? 'bloc' : 'blok'} ${db.blocDeSemaine(app.semaine).code}`;
+      return app.semaine > 0
+        ? `${s}${app.semaine} / ${db.derniereSemaine} · ${fr ? 'bloc' : 'blok'} ${db.blocDeSemaine(app.semaine).code}`
+        : fr ? 'Sans plan' : 'Bez planu';
     case 'form':
       return fr ? '28 jours' : '28 dni';
     case 'coach':
-      return `${fr ? 'Hebdo' : 'Tygodniowa'} · ${s}${app.semaine}`;
+      return `${fr ? 'Hebdo' : 'Tygodniowa'}${sem}`;
     case 'admin':
       return fr ? 'Athlète · objectifs' : 'Zawodnik · cele';
   }
@@ -68,6 +74,9 @@ function useFramed() {
 }
 
 function Screen({ app }: { app: ReturnType<typeof useApp> }) {
+  /* Sans plan, les écrans qui le lisent n'ont rien à montrer — et l'écran
+     Semaine tomberait sur un bloc qui n'existe pas. Seul « Créer » reste. */
+  if (db.derniereSemaine === 0 && app.screen !== 'admin') return <SansPlan app={app} />;
   switch (app.screen) {
     case 'today':
       return <TodayScreen app={app} />;
@@ -170,7 +179,12 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        <Avatar nom={db.athlete.nom} />
+        {/* Prénom + nom pour les initiales ; sous la pastille, le surnom seul. */}
+        <Avatar
+          nom={[db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ')}
+          onClick={app.openProfil}
+          sousTitre={db.athlete.surnom ?? null}
+        />
         <button
           type="button"
           className="msc-hover-accent"
@@ -253,6 +267,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
       </nav>
 
       {app.settingsOpen && <SettingsSheet app={app} />}
+      {app.profilOpen && <ProfilSheet app={app} />}
       {app.sessionId !== null && <SessionSheet app={app} sessionId={app.sessionId} />}
       {app.typeCode !== null && <TypeSheet app={app} code={app.typeCode} />}
     </div>

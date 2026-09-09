@@ -56,9 +56,20 @@ export function bloc(code: string): MscBloc {
   return found;
 }
 
+/* Ce que les écrans lisent tant qu'aucun plan n'existe : un bloc vide plutôt
+   qu'un `undefined` qui ferait tomber l'en-tête sur `.code`. */
+const SANS_BLOC: MscBloc = {
+  code: '—',
+  de: 0,
+  a: 0,
+  part: 0,
+  nom: { fr: 'Sans plan', pl: 'Bez planu' },
+  quoi: { fr: '', pl: '' },
+};
+
 export function blocDeSemaine(semaine: number): MscBloc {
   const week = Math.max(semaine, 1);
-  return tables.msc_bloc.find((b) => week >= b.de && week <= b.a) ?? tables.msc_bloc[0];
+  return tables.msc_bloc.find((b) => week >= b.de && week <= b.a) ?? tables.msc_bloc[0] ?? SANS_BLOC;
 }
 
 /** Tous les blocs du plan, dans l'ordre des semaines. */
@@ -121,6 +132,9 @@ export function sessionDuJour(date: string): MscPlanSession | undefined {
 export function positionDuPlan(date: string): { date: string; semaine: number } {
   const first = tables.msc_session[0];
   const last = tables.msc_session[tables.msc_session.length - 1];
+  /* Sans plan (athlète tout juste créé), la date reste la date : rien à quoi
+     l'accrocher, et un écran vide vaut mieux qu'une exception. */
+  if (!first || !last) return { date, semaine: 0 };
   if (date < first.date) return { date: first.date, semaine: first.semaine };
   if (date > last.date) return { date: last.date, semaine: last.semaine };
   const exact = tables.msc_session.find((s) => s.date === date);

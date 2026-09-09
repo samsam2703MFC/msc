@@ -389,6 +389,8 @@ export async function instantane(athleteId) {
     ...vocab, ...contenu, ...vecu, ...coach,
     msc_athlete: [{
       id: athlete.id, nom: athlete.nom,
+      prenom: athlete.prenom ?? null, surnom: athlete.surnom ?? null,
+      annee_naissance: athlete.annee_naissance ?? null,
       ref_actuelle_s: athlete.ref_actuelle_s, ref_cible_s: athlete.ref_cible_s,
       fc_repos: athlete.fc_repos, fc_repos_moy7: athlete.fc_repos_moy7,
       fc_moy_reference: athlete.fc_moy_reference,
@@ -402,6 +404,202 @@ export async function instantane(athleteId) {
   };
 
   return { ...base, msc_metric: metriques(base), servi_le: new Date().toISOString() };
+}
+
+/* ============================================================ la vue coach */
+
+/**
+ * Un athlète en un coup d'œil, pour le back office : la phase et la semaine,
+ * les allures, ce qui est fait cette semaine, la dernière mesure et ce qu'elle
+ * dit de la forme, la charge derrière et devant. Tout est déduit de ce que la
+ * base a déjà — rien n'est stocké pour l'afficher.
+ */
+export async function apercu(athletes) {
+  return Promise.all(athletes.map((x) => apercuDe(x)));
+}
+
+async function apercuDe({ id, droit }) {
+  const [a, plan, mesure, rpe] = await Promise.all([
+    ligne('SELECT * FROM msc_athlete WHERE id = :a', { a: id }),
+    planActif(id),
+    ligne(
+      /* Au plus tard aujourd'hui : une mesure datée dans le futur — un seed, une
+         saisie mal datée — ne dit rien de la forme de ce matin. */
+      `SELECT date, poids_kg, fc_repos, hrv_ms FROM msc_mesure
+       WHERE athlete_id = :a AND etat = 'confirme' AND date <= CURDATE()
+       ORDER BY date DESC LIMIT 1`,
+      { a: id },
+    ),
+    ligne(
+      `SELECT rpe_ressenti, date FROM msc_journal
+       WHERE athlete_id = :a AND rpe_ressenti IS NOT NULL AND date <= CURDATE()
+       ORDER BY date DESC LIMIT 1`,
+      { a: id },
+    ),
+  ]);
+  if (!a) throw new Error(`athlète ${id} inconnu`);
+
+  /* La HRV n'a pas de ligne de base sur l'athlète comme la FC de repos : elle
+     se lit sur les trente jours qui précèdent la dernière mesure, celle-ci
+     exclue — sinon la mesure se comparerait à elle-même. */
+  const hrvBase = mesure
+    ? (await ligne(
+        `SELECT AVG(hrv_ms) AS h FROM msc_mesure
+         WHERE athlete_id = :a AND etat = 'confirme' AND hrv_ms IS NOT NULL
+           AND date < :d1 AND date >= DATE_SUB(:d2, INTERVAL 30 DAY)`,
+        { a: id, d1: mesure.date, d2: mesure.date },
+      ))?.h
+    : null;
+  const base = {
+    fc_repos: a.fc_repos_moy7 ?? a.fc_repos ?? null,
+    hrv_ms: hrvBase == null ? null : Math.round(Number(hrvBase)),
+  };
+
+  let semaine = 1;
+  let total = 0;
+  let bloc = null;
+  let cette = { prevues: 0, faites: 0, volume_prevu_min: 0, volume_realise_min: 0 };
+  if (plan) {
+    /* La semaine courante : celle de la dernière séance datée d'aujourd'hui ou
+       avant — la même lecture que l'application, qui part de la date. */
+    const [derniere, tot] = await Promise.all([
+      ligne(
+        `SELECT semaine FROM msc_session WHERE plan_id = :p AND date <= CURDATE()
+         ORDER BY date DESC, ordre DESC LIMIT 1`,
+        { p: plan.id },
+      ),
+      ligne('SELECT MAX(semaine) AS n FROM msc_session WHERE plan_id = :p', { p: plan.id }),
+    ]);
+    total = Number(tot?.n ?? 0);
+    semaine = Math.min(Math.max(Number(derniere?.semaine ?? 1), 1), Math.max(total, 1));
+
+    const [b, prevu, faites, bornes] = await Promise.all([
+      ligne(
+        `SELECT code, part, semaine_de, semaine_a, nom_fr, nom_pl FROM msc_bloc
+         WHERE plan_id = :p AND :s BETWEEN semaine_de AND semaine_a`,
+        { p: plan.id, s: semaine },
+      ),
+      ligne(
+        `SELECT COUNT(*) AS n, COALESCE(SUM(duree_min), 0) AS v FROM msc_session
+         WHERE plan_id = :p AND semaine = :s`,
+        { p: plan.id, s: semaine },
+      ),
+      ligne(
+        `SELECT COUNT(DISTINCT j.session_id) AS n FROM msc_journal j
+         JOIN msc_session s ON s.id = j.session_id
+         WHERE s.plan_id = :p AND s.semaine = :s`,
+        { p: plan.id, s: semaine },
+      ),
+      ligne(
+        `SELECT MIN(date) AS d1, MAX(date) AS d2 FROM msc_session
+         WHERE plan_id = :p AND semaine = :s`,
+        { p: plan.id, s: semaine },
+      ),
+    ]);
+    const realise = bornes?.d1
+      ? await ligne(
+          `SELECT COALESCE(SUM(duree_min), 0) AS v FROM msc_activity
+           WHERE athlete_id = :a AND date BETWEEN :d1 AND :d2`,
+          { a: id, d1: bornes.d1, d2: bornes.d2 },
+        )
+      : null;
+    bloc = b
+      ? { code: b.code, part: Number(b.part), de: b.semaine_de, a: b.semaine_a, nom: L(b, 'nom') }
+      : null;
+    cette = {
+      prevues: Number(prevu?.n ?? 0),
+      faites: Number(faites?.n ?? 0),
+      volume_prevu_min: Number(prevu?.v ?? 0),
+      volume_realise_min: Number(realise?.v ?? 0),
+    };
+  }
+
+  /* La charge : celle des sept jours passés, faite ; celle des sept à venir,
+     prévue. La même unité — durée × RPE cible, celle du plan — pour que les
+     deux barres se comparent. */
+  const [passee, aVenir] = plan
+    ? await Promise.all([
+        ligne(
+          `SELECT COALESCE(SUM(s.charge), 0) AS c FROM msc_session s
+           JOIN msc_journal j ON j.session_id = s.id
+           WHERE s.plan_id = :p
+             AND s.date BETWEEN DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND CURDATE()`,
+          { p: plan.id },
+        ),
+        ligne(
+          `SELECT COALESCE(SUM(charge), 0) AS c FROM msc_session
+           WHERE plan_id = :p
+             AND date BETWEEN DATE_ADD(CURDATE(), INTERVAL 1 DAY) AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)`,
+          { p: plan.id },
+        ),
+      ])
+    : [null, null];
+
+  return {
+    id,
+    droit,
+    nom: a.nom,
+    prenom: a.prenom ?? null,
+    surnom: a.surnom ?? null,
+    annee_naissance: a.annee_naissance ?? null,
+    ref_actuelle_s: a.ref_actuelle_s,
+    ref_cible_s: a.ref_cible_s,
+    plan: plan ? { nom: plan.nom, debut: plan.debut, fin: plan.fin } : null,
+    semaine,
+    total,
+    bloc,
+    cette_semaine: cette,
+    dernier_rpe: rpe ? { valeur: rpe.rpe_ressenti, date: rpe.date } : null,
+    mesure: mesure
+      ? {
+          date: mesure.date,
+          poids_kg: mesure.poids_kg == null ? null : Number(mesure.poids_kg),
+          fc_repos: mesure.fc_repos ?? null,
+          hrv_ms: mesure.hrv_ms ?? null,
+        }
+      : null,
+    base,
+    forme: forme(mesure, base),
+    charge: { passee_7j: Number(passee?.c ?? 0), a_venir_7j: Number(aVenir?.c ?? 0) },
+  };
+}
+
+/* La forme, d'après la FC de repos et la HRV du matin, relatives à la ligne de
+   base de l'athlète — pas des seuils absolus : un cœur à 41 et un cœur à 55
+   n'ont pas le même « +3 ». Score sur dix, quatre niveaux, et les deux alertes
+   du protocole : FC de repos à +3 (stress sympathique), HRV en chute de 10 %
+   (fatigue accumulée). Sans mesure, pas de score — plutôt rien qu'un chiffre
+   inventé. */
+function forme(mesure, base) {
+  if (!mesure) return null;
+  const fc = mesure.fc_repos ?? null;
+  const hrv = mesure.hrv_ms ?? null;
+  if (fc == null && hrv == null) return null;
+  let score = 10;
+  let compare = 0;
+  const alertes = [];
+  if (fc != null && base.fc_repos != null) {
+    compare += 1;
+    const d = fc - base.fc_repos;
+    if (d >= 5) score -= 6;
+    else if (d >= 3) score -= 3;
+    else if (d >= 1) score -= 1;
+    if (d >= 3) alertes.push('fc_repos_haute');
+  }
+  if (hrv != null && base.hrv_ms) {
+    compare += 1;
+    const p = (hrv - base.hrv_ms) / base.hrv_ms;
+    if (p <= -0.2) score -= 6;
+    else if (p <= -0.08) score -= 3;
+    else if (p < 0.08) score -= 1;
+    if (p <= -0.1) alertes.push('hrv_chute');
+  }
+  /* Une mesure sans rien à quoi la comparer ne dit pas « en forme » : elle ne
+     dit rien. Un 10 par défaut serait un mensonge rassurant. */
+  if (compare === 0) return null;
+  score = Math.max(0, Math.min(10, score));
+  const niveau = score >= 8 ? 'excellent' : score >= 6 ? 'bon' : score >= 4 ? 'attention' : 'fatigue';
+  return { score, niveau, alertes };
 }
 
 /* ============================================================ l'écriture */
@@ -473,18 +671,38 @@ export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil,
 }
 
 /** Le poids et la FC de repos du jour. */
-export async function ecrireMesure(athleteId, { date, poids_kg, fc_repos, source, etat, note }, cnx) {
+export async function ecrireMesure(athleteId, { date, poids_kg, fc_repos, hrv_ms, source, etat, note }, cnx) {
   const q = cnx ?? (await import('./bd.mjs')).bd();
   await q.execute(
-    `INSERT INTO msc_mesure (athlete_id, date, poids_kg, fc_repos, source, etat, note, confirme_le)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO msc_mesure (athlete_id, date, poids_kg, fc_repos, hrv_ms, source, etat, note, confirme_le)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE poids_kg = VALUES(poids_kg), fc_repos = VALUES(fc_repos),
+       hrv_ms = VALUES(hrv_ms),
        source = VALUES(source), etat = VALUES(etat), note = VALUES(note),
        confirme_le = VALUES(confirme_le)`,
-    [athleteId, date, poids_kg ?? null, fc_repos ?? null, source ?? 'saisie',
+    [athleteId, date, poids_kg ?? null, fc_repos ?? null, hrv_ms ?? null, source ?? 'saisie',
      etat ?? 'confirme', note ?? null, (etat ?? 'confirme') === 'confirme' ? new Date() : null],
   );
   return { date };
+}
+
+/** Le profil : ce qu'on voit en touchant l'avatar. `nom` reste l'affichage. */
+export async function ecrireProfil(athleteId, { prenom, nom, surnom, annee_naissance }, cnx) {
+  const q = cnx ?? (await import('./bd.mjs')).bd();
+  const nomNet = texte(nom, 120).trim();
+  if (!nomNet) throw new DepotError('Le nom ne peut pas être vide.');
+  const annee = annee_naissance == null || annee_naissance === '' ? null : Number(annee_naissance);
+  const cetteAnnee = new Date().getFullYear();
+  if (annee != null && (!Number.isInteger(annee) || annee < cetteAnnee - 100 || annee > cetteAnnee - 5)) {
+    throw new DepotError('Année de naissance invraisemblable.');
+  }
+  const prenomNet = prenom ? texte(prenom, 80).trim() || null : null;
+  const surnomNet = surnom ? texte(surnom, 40).trim() || null : null;
+  await q.execute(
+    'UPDATE msc_athlete SET prenom = ?, nom = ?, surnom = ?, annee_naissance = ? WHERE id = ?',
+    [prenomNet, nomNet, surnomNet, annee, athleteId],
+  );
+  return { id: athleteId, prenom: prenomNet, nom: nomNet, surnom: surnomNet, annee_naissance: annee };
 }
 
 /**
