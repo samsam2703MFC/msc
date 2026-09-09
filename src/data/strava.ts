@@ -12,8 +12,9 @@
 
 import type { MscActivity, MscPlanSession } from './types';
 import { formatAllure } from './engine';
+import { RACINE_API } from './base';
 
-const BASE = '/api/strava';
+const BASE = `${RACINE_API}/strava`;
 
 export class StravaError extends Error {}
 

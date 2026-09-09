@@ -21,12 +21,13 @@ Le serveur sert lui-même `dist/` : un processus au lieu de deux, et surtout la
 **même origine** — plus de CORS, un cookie de session qui voyage normalement, et
 un service worker qui contrôle vraiment la page.
 
-Il écoute en revanche sur la boucle locale, et **nginx devant n'est pas une
-option** : en production le cookie de session porte `Secure`, donc sans TLS le
-navigateur ne le renvoie jamais. L'application répondrait `{"ok":true}` et
-personne ne pourrait se connecter — deux symptômes qui n'ont rien à voir. Cette
-page a longtemps dit « bonne idée, mais pas nécessaire au fonctionnement » ;
-c'est faux, et `deploy/publier.sh` s'en occupe.
+Il écoute en revanche sur la boucle locale : **un relais devant est
+obligatoire** — nginx ou Apache, `deploy/publier.sh` prend celui qui tient déjà
+les ports. Et en production le cookie de session porte `Secure`, donc sans TLS
+le navigateur ne le renvoie jamais : l'application répondrait `{"ok":true}` et
+personne ne pourrait se connecter, deux symptômes qui n'ont rien à voir. Sur
+une adresse IP nue, où aucun certificat n'est possible, `MSC_SANS_TLS=1` lève
+le drapeau — en clair, et en le disant.
 
 Prérequis sur le serveur : Node 22 ou plus (`--env-file-if-exists` en dépend),
 MySQL 8 (ou MariaDB 10.11), et de quoi faire du TLS.
@@ -44,6 +45,7 @@ complet est `.env.example` ; voici ce qui change en production.
 | `ANTHROPIC_API_KEY` | sans elle, les routes du coach répondent 401 et le reste marche. |
 | `STRAVA_*` | `STRAVA_REDIRECT_URI` doit être ton vrai domaine en HTTPS, et le domaine doit être enregistré comme *Authorization Callback Domain* sur l'application Strava. |
 | `MSC_ATHLETE_ID` | **ne pas définir.** C'est la porte de service du développement. |
+| `MSC_SANS_TLS=1` | **seulement sans HTTPS**, donc seulement sur une IP nue. Lève `Secure` sur le cookie de session, qui voyage alors en clair. `publier.sh` le pose lui-même en mode IP. |
 
 ```sh
 # la clé, une fois
@@ -122,19 +124,32 @@ défaut est un mot de passe public. `compte -- lister` le signale par
 
 ### La porte d'entrée
 
-Un second script, même posture — le relais, le certificat, la redirection :
+Un second script, même posture — le relais, et selon la cible le certificat :
 
 ```sh
-bash /tmp/msc/deploy/publier.sh <domaine>          # + un courriel, si tu veux
-                                                  # les avis d'expiration
+bash /tmp/msc/deploy/publier.sh 185.180.206.46     # IP : HTTP seul, sous /msc
+bash /tmp/msc/deploy/publier.sh msc.mondomaine.fr   # nom : HTTPS, certificat
 ```
 
-Il faut un **nom**, pas une IP : Let's Encrypt ne certifie pas les adresses.
-Sans domaine à toi, `185.180.206.46.sslip.io` en est un — sslip.io résout
-`<ip>.sslip.io` vers cette IP, sans compte ni DNS à configurer, et Let's
-Encrypt le certifie comme n'importe quel autre nom. C'est laid dans la barre
-d'adresse, ça marche, et le jour où tu as un vrai domaine il suffit de relancer
-le script avec : rien à défaire.
+**Sur une adresse IP**, l'application est servie en clair sous
+`http://<ip>/msc/`. Let's Encrypt ne certifie pas les adresses, et les noms
+« gratuits » du type `<ip>.sslip.io` sont réécrits par certains résolveurs —
+celui de la box, ici, renvoyait une autre adresse, et le navigateur voyait le
+certificat d'un inconnu. Une IP littérale ne passe par aucun DNS : c'est tout
+son intérêt. Le script pose `MSC_SANS_TLS=1` dans le `.env` et redémarre le
+service, sans quoi la connexion serait impossible (voir *Les variables*).
+
+**Sur un nom**, HTTPS avec certificat, à la racine ou sous un chemin — le
+script lit le chemin dans le `dist/` déployé plutôt que de le supposer.
+
+Le chemin `/msc` vient du build : `MSC_BASE`, `/msc/` par défaut, posé sur le
+runner (variable GitHub `MSC_BASE`). **Le montage du relais et le `base` du
+build doivent coïncider**, sinon la page arrive mais demande ses assets là où
+personne ne répond, et reste blanche sans une erreur. C'est pourquoi le script
+relit `dist/index.html`, et pourquoi le déploiement vérifie l'index construit
+avant de l'envoyer. Le serveur Node, lui, ignore tout du chemin : le relais
+retire le préfixe (`ProxyPass /msc/ http://127.0.0.1:8787/` — les barres
+finales des deux côtés font le travail) et il ne voit jamais que `/api/…`.
 
 **Il ne suppose pas la machine vierge.** Il regarde d'abord qui tient déjà 80
 et 443 : nginx, Apache, ou personne. Une machine qui sert déjà des sites a déjà
@@ -207,7 +222,8 @@ lisibles, pour un serveur qu'on ne veut pas nommer dans le dépôt.
 |---|---|
 | `DEPLOY_HOST` · `DEPLOY_USER` · `DEPLOY_PATH` | `<domaine>` · `msc` · `/srv/msc` |
 | `DEPLOY_PORT` | seulement si SSH n'est pas sur 22 |
-| `DEPLOY_URL` | `https://<domaine>` — le workflow vérifie `/api/sante` après la bascule |
+| `DEPLOY_URL` | `http://185.180.206.46/msc` ou `https://<domaine>` — le workflow y demande `/api/sante` après la bascule |
+| `MSC_BASE` | `/msc/` par défaut. `/` le jour où l'application a un domaine à elle. Doit coïncider avec le montage du relais. |
 
 ```sh
 # une clé qui ne sert qu'à ça, sans phrase de passe (un runner ne la tape pas)
@@ -247,7 +263,7 @@ approbation manuelle devant chaque déploiement.
 ## Vérifier
 
 ```sh
-curl -s https://<domaine>/api/sante
+curl -s http://185.180.206.46/msc/api/sante      # ou https://<domaine>/api/sante
 # {"ok":true,"cle":true,"strava":true,"scellement":true}
 ```
 

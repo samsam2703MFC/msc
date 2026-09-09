@@ -94,7 +94,21 @@ export function ouvrirSession(compteId) {
 }
 
 export function cookieSession(jeton) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  /* `Secure` interdit au navigateur de renvoyer le cookie ailleurs que sur
+     HTTPS. C'est la bonne valeur par défaut, et elle reste le défaut.
+     Mais sur une adresse IP nue il n'y a pas de HTTPS possible — Let's Encrypt
+     ne certifie pas les adresses — et le drapeau ne protège alors plus rien :
+     il rend la connexion impossible. Le symptôme est cruel, parce que tout a
+     l'air de marcher : le serveur répond, la connexion renvoie 200, et la
+     requête suivante est anonyme.
+     MSC_SANS_TLS le lève, explicitement, en sachant ce qu'il en coûte — le
+     cookie de session voyage alors en clair sur le réseau, et qui le lit prend
+     la session. À ne poser que sur un serveur d'essai. */
+  /* Plusieurs écritures acceptées : un drapeau qui ne prend que « 1 »
+     échoue en silence sur « true », et le symptôme est une connexion qui
+     ne s'ouvre pas, sans un mot pour dire pourquoi. */
+  const sansTls = /^(1|true|oui|yes)$/i.test((process.env.MSC_SANS_TLS ?? '').trim());
+  const secure = process.env.NODE_ENV === 'production' && !sansTls ? '; Secure' : '';
   const age = jeton ? SESSION_JOURS * 86400 : 0;
   return `${COOKIE}=${jeton ?? ''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure}`;
 }

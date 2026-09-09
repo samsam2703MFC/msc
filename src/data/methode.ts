@@ -5,6 +5,7 @@
    or a date — those are the generator's, and they stay checkable. */
 
 import type { MscPlanSession, TypeCode } from './types';
+import { RACINE_API } from './base';
 
 export interface MethodeSeance {
   type: string;
@@ -33,7 +34,7 @@ export interface Methode {
   reserves: string[];
 }
 
-const ENDPOINT = '/api/methode';
+const ENDPOINT = `${RACINE_API}/methode`;
 
 export class MethodeError extends Error {}
 

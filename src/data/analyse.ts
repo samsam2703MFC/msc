@@ -27,10 +27,11 @@ import type {
   Lang,
   ZoneCode,
 } from './types';
+import { RACINE_API } from './base';
 
-const ENDPOINT_ANALYSE = '/api/analyse';
-const ENDPOINT_COACH = '/api/coach';
-const ENDPOINT_RECALCUL = '/api/recalcul';
+const ENDPOINT_ANALYSE = `${RACINE_API}/analyse`;
+const ENDPOINT_COACH = `${RACINE_API}/coach`;
+const ENDPOINT_RECALCUL = `${RACINE_API}/recalcul`;
 
 /* Beyond these, the figure is worth a second look rather than a nod. */
 const DERIVE_S = 5;

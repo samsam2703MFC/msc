@@ -34,9 +34,24 @@ jobs:
           cache: npm
 
       - name: construire
+        env:
+          # Sous quel chemin l'application sera servie. « /msc/ » par défaut,
+          # parce qu'elle vit sous un chemin d'un serveur qui héberge déjà
+          # d'autres sites. Le jour où elle a un domaine à elle : poser la
+          # variable MSC_BASE à « / », sans toucher au code.
+          # Ce chemin DOIT correspondre au montage du relais — publier.sh le
+          # relit dans le dist/ déployé plutôt que de le supposer.
+          MSC_BASE: ${{ vars.MSC_BASE || '/msc/' }}
         run: |
+          echo "base : $MSC_BASE"
           npm ci
           npm run build
+          # Une page qui répond mais dont les assets pointent ailleurs reste
+          # blanche, sans une erreur qui le dise. Le vérifier ici coûte une
+          # ligne ; le découvrir dans un navigateur coûte un aller-retour.
+          grep -q "\"${MSC_BASE}assets/" dist/index.html \
+            || { echo "::error::dist/index.html ne demande pas ses assets sous $MSC_BASE"
+                 grep -o 'src="[^"]*assets[^"]*"' dist/index.html; exit 1; }
           # Le classeur, empaqueté ici. `db:seed` bundle scripts/db-seed.ts, qui
           # importe src/data/ — et src/ ne part pas au serveur, à dessein. Le
           # lancer là-bas installait esbuild sur la production pour échouer sur

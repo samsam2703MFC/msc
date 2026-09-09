@@ -457,7 +457,11 @@ try {
      le cookie de session doit porter Secure. Les deux se vérifient en lançant
      un second serveur, parce que ce sont des propriétés du démarrage. */
   const prod = spawn(process.execPath, ['server/index.mjs'], {
-    env: { ...process.env, PORT: String(PORT + 1), NODE_ENV: 'production', MSC_ATHLETE_ID: '1' },
+    /* MSC_SANS_TLS vidé explicitement : hérité d'un .env, il lèverait le
+       drapeau que la ligne suivante prétend vérifier, et le contrôle passerait
+       en ne contrôlant rien. */
+    env: { ...process.env, PORT: String(PORT + 1), NODE_ENV: 'production',
+           MSC_ATHLETE_ID: '1', MSC_SANS_TLS: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   try {

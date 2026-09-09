@@ -14,6 +14,7 @@
 import * as cache from './cache';
 import type { Instantane } from './vives';
 import type { MscActivity, MscCompetition } from './types';
+import { RACINE_API } from './base';
 
 export class ApiError extends Error {
   constructor(
@@ -28,7 +29,7 @@ export class ApiError extends Error {
   }
 }
 
-const BASE = '/api';
+const BASE = RACINE_API;
 
 async function appeler<T>(chemin: string, init: RequestInit = {}): Promise<T> {
   let reponse: Response;
