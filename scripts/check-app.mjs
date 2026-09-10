@@ -382,8 +382,11 @@ try {
   await page.getByRole('tab', { name: 'Athlètes' }).click();
   await page.waitForTimeout(900);
   const hubTexte = await page.locator('body').innerText();
+  /* Le nom de l'athlète semé change d'une base à l'autre : on regarde la
+     forme de la liste, pas qui elle nomme. */
   check('Athlètes liste les athlètes visibles, avec « Ouvrir »',
-    /Verheyden/.test(hubTexte) && /Ouvrir|en cours/i.test(hubTexte), hubTexte.split('\n').find((l) => /Verheyden/.test(l)) ?? '');
+    /ATHLÈTES · \d/i.test(hubTexte) && /Ouvrir|en cours/i.test(hubTexte),
+    hubTexte.split('\n').find((l) => /ATHLÈTES · /i.test(l)) ?? '');
   check('et porte l’onboarding pas à pas — un athlète et son compte, une fois',
     /Onboarding/i.test(hubTexte) && /Un athlète et son compte/.test(hubTexte));
   await page.getByRole('button', { name: 'Suivant' }).click();
@@ -443,8 +446,11 @@ try {
   await page.waitForTimeout(800);
   const menu = page.getByRole('navigation', { name: 'Back office' });
   const menuTexte = (await menu.count()) ? await menu.innerText() : '';
+  /* Le groupe du milieu porte le nom de l'athlète affiché — variable d'une
+     base à l'autre —, mais ses deux moitiés, elles, sont fixes. */
   check('sur un écran large, l’admin a le bureau : un menu en trois groupes — club, l’athlète affiché, paramètres',
-    (await menu.count()) === 1 && /club/i.test(menuTexte) && /Verheyden/i.test(menuTexte) && /paramètres/i.test(menuTexte)
+    (await menu.count()) === 1 && /club/i.test(menuTexte) && /paramètres/i.test(menuTexte)
+      && /Entraînement/i.test(menuTexte) && /Configuration/i.test(menuTexte)
       && /Suivi/.test(menuTexte) && /Starts/.test(menuTexte) && /Strava/.test(menuTexte) && /Profil/.test(menuTexte)
       && /Comptes/.test(menuTexte) && /Système/.test(menuTexte),
     menuTexte.replace(/\n+/g, ' · ').slice(0, 200));
