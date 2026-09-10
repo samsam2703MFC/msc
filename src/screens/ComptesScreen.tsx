@@ -31,12 +31,15 @@ const T = {
     nouveauMdp: 'Nouveau mot de passe', mdpAide: '12 caractères au moins par défaut (Réglages · Sécurité).',
     enregistrer: 'Enregistrer', modifier: 'Modifier', fermer: 'Fermer', enregistre: 'Enregistré',
     activer: 'Réactiver', desactiver: 'Désactiver',
-    nouveauCompte: 'Nouveau compte', email: 'Email', nom: 'Nom', role: 'Rôle', mdp: 'Mot de passe',
-    relier: 'Athlète à relier', personne: '— aucun —', creer: 'Créer le compte', cree: 'Compte créé',
-    nouvelAthlete: 'Nouvel athlète',
-    athleteAide: 'Un athlète existe par lui-même ; un login se rattache après. Les allures sont celles du 10 km, en min/km.',
+    email: 'Email', nom: 'Nom', role: 'Rôle', mdp: 'Mot de passe',
+    relier: 'Relié à l’athlète', personne: '— aucun —',
+    nouveau: 'Nouvel athlète, nouveau compte',
+    nouveauAide: 'Un athlète et son compte de connexion d’un seul geste. Décoche l’un des deux pour créer l’autre seul, relié à ce qui existe déjà. Les allures sont celles du 10 km, en min/km.',
+    creerQuoi: 'Créer', unAthlete: 'un athlète', unCompte: 'un compte de connexion',
+    blocAthlete: 'L’athlète', blocCompte: 'Le compte',
     prenom: 'Prénom', actuelle: 'Allure 10 km actuelle', cible: 'Allure 10 km visée', debut: 'Début du plan',
-    compteRelie: 'Compte à relier', creerAthlete: 'Créer l’athlète', athleteCree: 'Athlète créé',
+    compteRelie: 'Relié au compte', nomCompte: 'Nom du compte',
+    creer: 'Créer', cree: 'Créé', rienACreer: 'Coche au moins l’un des deux.',
     athletes: 'Athlètes', sansLogin: 'sans login',
     retirer: 'retirer',
   },
@@ -53,12 +56,15 @@ const T = {
     nouveauMdp: 'Nowe hasło', mdpAide: 'Domyślnie co najmniej 12 znaków (Ustawienia · Bezpieczeństwo).',
     enregistrer: 'Zapisz', modifier: 'Edytuj', fermer: 'Zamknij', enregistre: 'Zapisano',
     activer: 'Włącz', desactiver: 'Wyłącz',
-    nouveauCompte: 'Nowe konto', email: 'E-mail', nom: 'Imię i nazwisko', role: 'Rola', mdp: 'Hasło',
-    relier: 'Powiązany zawodnik', personne: '— brak —', creer: 'Utwórz konto', cree: 'Konto utworzone',
-    nouvelAthlete: 'Nowy zawodnik',
-    athleteAide: 'Zawodnik istnieje sam z siebie; login dołącza się później. Tempa dotyczą 10 km, w min/km.',
+    email: 'E-mail', nom: 'Nazwisko', role: 'Rola', mdp: 'Hasło',
+    relier: 'Powiązany z zawodnikiem', personne: '— brak —',
+    nouveau: 'Nowy zawodnik, nowe konto',
+    nouveauAide: 'Zawodnik i jego konto logowania jednym ruchem. Odznacz jedno z dwóch, by utworzyć tylko drugie, powiązane z tym, co już istnieje. Tempa dotyczą 10 km, w min/km.',
+    creerQuoi: 'Utwórz', unAthlete: 'zawodnika', unCompte: 'konto logowania',
+    blocAthlete: 'Zawodnik', blocCompte: 'Konto',
     prenom: 'Imię', actuelle: 'Obecne tempo 10 km', cible: 'Docelowe tempo 10 km', debut: 'Start planu',
-    compteRelie: 'Powiązane konto', creerAthlete: 'Utwórz zawodnika', athleteCree: 'Zawodnik utworzony',
+    compteRelie: 'Powiązane z kontem', nomCompte: 'Nazwa konta',
+    creer: 'Utwórz', cree: 'Utworzono', rienACreer: 'Zaznacz przynajmniej jedno z dwóch.',
     athletes: 'Zawodnicy', sansLogin: 'bez loginu',
     retirer: 'usuń',
   },
@@ -317,83 +323,79 @@ function LigneCompte({
   );
 }
 
-/* -------------------------------------------------------- les formulaires */
+/* ---------------------------------------------------------- le formulaire */
 
-function NouveauCompte({ athletes, lang, onCree }: { athletes: AthleteAdmin[]; lang: Lang; onCree: (c: CompteAdmin) => void }) {
-  const t = T[lang];
-  const [email, setEmail] = useState('');
-  const [nom, setNom] = useState('');
-  const [role, setRole] = useState<Role>('athlete');
-  const [mdp, setMdp] = useState('');
-  const [athleteId, setAthleteId] = useState('');
-  const [droit, setDroit] = useState<Droit>('ecriture');
-  const [job, setJob] = useState<'idle' | 'saving' | 'fait'>('idle');
-  const [erreur, setErreur] = useState<string | null>(null);
-
-  const pret = email.trim() !== '' && nom.trim() !== '' && mdp !== '';
-
-  const creer = async () => {
-    setJob('saving'); setErreur(null);
-    try {
-      const r = await api.creerCompte({
-        email: email.trim(), nom: nom.trim(), role, mot_de_passe: mdp,
-        athlete_id: athleteId ? Number(athleteId) : null, droit,
-      });
-      onCree(r.compte);
-      setEmail(''); setNom(''); setMdp(''); setAthleteId(''); setRole('athlete');
-      setJob('fait');
-      setTimeout(() => setJob('idle'), 1500);
-    } catch (e) {
-      setErreur(message(e)); setJob('idle');
-    }
-  };
-
+function Coche({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <Card padding="16px 18px" gap={10}>
-      <SectionLabel icon="plus" color={C.teal}>{t.nouveauCompte}</SectionLabel>
-      <Champ label={t.email} value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="off" mono />
-      <Champ label={t.nom} value={nom} onChange={setNom} autoComplete="off" />
-      <Choix<Role> label={t.role} options={ROLES.map((r) => ({ v: r, l: t.roles[r] }))} value={role} onChange={setRole} />
-      <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4, marginTop: -6 }}>{t.rolesAide}</div>
-      <Champ label={t.mdp} value={mdp} onChange={setMdp} type="password" autoComplete="new-password" aide={t.mdpAide} />
-      <Selection label={t.relier} value={athleteId} onChange={setAthleteId} vide={t.personne}
-        options={athletes.map((a) => ({ v: String(a.id), l: a.nom }))} />
-      {athleteId && (
-        <Choix<Droit> options={[{ v: 'lecture', l: t.droits.lecture }, { v: 'ecriture', l: t.droits.ecriture }]} value={droit} onChange={setDroit} />
-      )}
-      <div>
-        <button type="button" disabled={!pret || job === 'saving'} onClick={() => void creer()} style={{ ...BOUTON, opacity: pret ? 1 : 0.5 }}>
-          {job === 'fait' ? t.cree : t.creer}
-        </button>
-      </div>
-      <Erreur texte={erreur} />
-    </Card>
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      aria-pressed={on}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 11px', borderRadius: R.md,
+        border: `1px solid ${on ? C.accent : C.border}`, background: on ? C.accentSoft : C.surface,
+        color: on ? C.accentDeep : C.inkSecondary, fontSize: 12, fontWeight: 600,
+      }}
+    >
+      <Icon name={on ? 'check' : 'circle'} size={14} />
+      {label}
+    </button>
   );
 }
 
-function NouvelAthlete({ comptes, lang, onCree }: { comptes: CompteAdmin[]; lang: Lang; onCree: (a: AthleteAdmin, compteId: number | null, droit: Droit) => void }) {
+function Bloc({ titre, children }: { titre: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, borderRadius: 12, border: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary }}>{titre}</div>
+      {children}
+    </div>
+  );
+}
+
+/* Un athlète et son compte d'un seul geste. Décocher l'un crée l'autre seul,
+   relié à ce qui existe déjà : un coach sans athlète, un athlète sans login,
+   un login pour un athlète encodé avant. */
+function Nouveau({
+  comptes, athletes, lang, onCree,
+}: {
+  comptes: CompteAdmin[]; athletes: AthleteAdmin[]; lang: Lang;
+  onCree: () => void;
+}) {
   const t = T[lang];
+  const [avecAthlete, setAvecAthlete] = useState(true);
+  const [avecCompte, setAvecCompte] = useState(true);
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
   const [actuelle, setActuelle] = useState('');
   const [cible, setCible] = useState('');
   const [debut, setDebut] = useState(new Date().toISOString().slice(0, 10));
+  const [email, setEmail] = useState('');
+  const [nomCompte, setNomCompte] = useState('');
+  const [role, setRole] = useState<Role>('athlete');
+  const [mdp, setMdp] = useState('');
   const [compteId, setCompteId] = useState('');
+  const [athleteId, setAthleteId] = useState('');
   const [droit, setDroit] = useState<Droit>('ecriture');
   const [job, setJob] = useState<'idle' | 'saving' | 'fait'>('idle');
   const [erreur, setErreur] = useState<string | null>(null);
 
-  const pret = nom.trim() !== '' && actuelle.trim() !== '' && cible.trim() !== '';
+  const pretAthlete = !avecAthlete || (nom.trim() !== '' && actuelle.trim() !== '' && cible.trim() !== '');
+  const pretCompte = !avecCompte || (email.trim() !== '' && mdp !== '' && (avecAthlete || nomCompte.trim() !== ''));
+  const pret = (avecAthlete || avecCompte) && pretAthlete && pretCompte;
 
   const creer = async () => {
     setJob('saving'); setErreur(null);
     try {
-      const r = await api.creerAthlete({
-        nom: nom.trim(), prenom: prenom.trim() || null, actuelle: actuelle.trim(), cible: cible.trim(), debut,
-        compte_id: compteId ? Number(compteId) : null, droit,
+      const r = await api.inscrire({
+        athlete: avecAthlete ? { nom: nom.trim(), prenom: prenom.trim() || null, actuelle: actuelle.trim(), cible: cible.trim(), debut } : null,
+        compte: avecCompte ? { email: email.trim(), nom: (avecAthlete ? [prenom.trim(), nom.trim()].filter(Boolean).join(' ') : nomCompte.trim()), role, mot_de_passe: mdp } : null,
+        droit,
+        compte_id: !avecCompte && compteId ? Number(compteId) : null,
+        athlete_id: !avecAthlete && athleteId ? Number(athleteId) : null,
       });
-      onCree(r.athlete, compteId ? Number(compteId) : null, droit);
-      setNom(''); setPrenom(''); setActuelle(''); setCible(''); setCompteId('');
+      if (r.compte || r.athlete) onCree();
+      setNom(''); setPrenom(''); setActuelle(''); setCible(''); setEmail(''); setNomCompte(''); setMdp('');
+      setCompteId(''); setAthleteId(''); setRole('athlete');
       setJob('fait');
       setTimeout(() => setJob('idle'), 1500);
     } catch (e) {
@@ -403,25 +405,56 @@ function NouvelAthlete({ comptes, lang, onCree }: { comptes: CompteAdmin[]; lang
 
   return (
     <Card padding="16px 18px" gap={10}>
-      <SectionLabel icon="footprints" color={C.teal}>{t.nouvelAthlete}</SectionLabel>
-      <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.athleteAide}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <Champ label={t.nom} value={nom} onChange={setNom} autoComplete="off" />
-        <Champ label={t.prenom} value={prenom} onChange={setPrenom} autoComplete="off" />
+      <SectionLabel icon="plus" color={C.teal}>{t.nouveau}</SectionLabel>
+      <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.nouveauAide}</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: C.inkSecondary }}>{t.creerQuoi}</span>
+        <Coche label={t.unAthlete} on={avecAthlete} onChange={setAvecAthlete} />
+        <Coche label={t.unCompte} on={avecCompte} onChange={setAvecCompte} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <Champ label={t.actuelle} value={actuelle} onChange={setActuelle} mono inputMode="decimal" aide="4:15" />
-        <Champ label={t.cible} value={cible} onChange={setCible} mono inputMode="decimal" aide="3:50" />
-      </div>
-      <Champ label={t.debut} value={debut} onChange={setDebut} type="date" mono />
-      <Selection label={t.compteRelie} value={compteId} onChange={setCompteId} vide={t.personne}
-        options={comptes.map((c) => ({ v: String(c.id), l: `${c.nom} · ${c.email}` }))} />
-      {compteId && (
-        <Choix<Droit> options={[{ v: 'lecture', l: t.droits.lecture }, { v: 'ecriture', l: t.droits.ecriture }]} value={droit} onChange={setDroit} />
+      {!avecAthlete && !avecCompte && <div style={{ fontSize: 12, color: C.warning }}>{t.rienACreer}</div>}
+
+      {avecAthlete && (
+        <Bloc titre={t.blocAthlete}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <Champ label={t.nom} value={nom} onChange={setNom} autoComplete="off" />
+            <Champ label={t.prenom} value={prenom} onChange={setPrenom} autoComplete="off" />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <Champ label={t.actuelle} value={actuelle} onChange={setActuelle} mono inputMode="decimal" aide="4:15" />
+            <Champ label={t.cible} value={cible} onChange={setCible} mono inputMode="decimal" aide="3:50" />
+            <Champ label={t.debut} value={debut} onChange={setDebut} type="date" mono />
+          </div>
+          {!avecCompte && (
+            <Selection label={t.compteRelie} value={compteId} onChange={setCompteId} vide={t.personne}
+              options={comptes.map((c) => ({ v: String(c.id), l: `${c.nom} · ${c.email}` }))} />
+          )}
+        </Bloc>
       )}
+
+      {avecCompte && (
+        <Bloc titre={t.blocCompte}>
+          {!avecAthlete && <Champ label={t.nomCompte} value={nomCompte} onChange={setNomCompte} autoComplete="off" />}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <Champ label={t.email} value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="off" mono />
+            <Champ label={t.mdp} value={mdp} onChange={setMdp} type="password" autoComplete="new-password" aide={t.mdpAide} />
+          </div>
+          <Choix<Role> label={t.role} options={ROLES.map((r) => ({ v: r, l: t.roles[r] }))} value={role} onChange={setRole} />
+          <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4, marginTop: -4 }}>{t.rolesAide}</div>
+          {!avecAthlete && (
+            <Selection label={t.relier} value={athleteId} onChange={setAthleteId} vide={t.personne}
+              options={athletes.map((a) => ({ v: String(a.id), l: a.nom }))} />
+          )}
+        </Bloc>
+      )}
+
+      {((avecAthlete && avecCompte) || (avecAthlete && compteId) || (avecCompte && athleteId)) && (
+        <Choix<Droit> label={t.acces} options={[{ v: 'lecture', l: t.droits.lecture }, { v: 'ecriture', l: t.droits.ecriture }]} value={droit} onChange={setDroit} />
+      )}
+
       <div>
         <button type="button" disabled={!pret || job === 'saving'} onClick={() => void creer()} style={{ ...BOUTON, opacity: pret ? 1 : 0.5 }}>
-          {job === 'fait' ? t.athleteCree : t.creerAthlete}
+          {job === 'fait' ? t.cree : t.creer}
         </button>
       </div>
       <Erreur texte={erreur} />
@@ -501,17 +534,15 @@ export function ComptesScreen({ app }: { app: App }) {
         })}
       </Card>
 
-      <NouveauCompte athletes={athletes} lang={app.lang} onCree={(c) => setComptes((cs) => [...(cs ?? []), c].sort((x, y) => x.email.localeCompare(y.email)))} />
-      <NouvelAthlete
+      <Nouveau
         comptes={comptes}
+        athletes={athletes}
         lang={app.lang}
-        onCree={(a, compteId, droit) => {
-          setAthletes((as) => [...as, a].sort((x, y) => x.nom.localeCompare(y.nom)));
-          if (compteId) {
-            setComptes((cs) => (cs ?? []).map((c) => (c.id === compteId
-              ? { ...c, athletes: [...c.athletes, { id: a.id, nom: a.nom, droit }] }
-              : c)));
-          }
+        /* Relire les deux listes : un compte créé avec son athlète, un athlète
+           relié à un compte existant, un compte relié à un athlète — chaque cas
+           touche les deux, et le serveur sait mieux que nous ce qu'il a écrit. */
+        onCree={() => {
+          void api.adminComptes().then((r) => { setComptes(r.comptes); setAthletes(r.athletes); });
         }}
       />
     </div>

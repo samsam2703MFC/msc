@@ -13,7 +13,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hacher } from './auth.mjs';
-import { bd, ligne, lignes, scellementPret } from './bd.mjs';
+import { bd, ligne, lignes, scellementPret, transaction } from './bd.mjs';
 import { etatDemoTous, retirerDemo } from './demo.mjs';
 import * as params from './params.mjs';
 import * as strava from './strava.mjs';
@@ -238,6 +238,108 @@ export async function creerAthlete(corps) {
     { id },
   );
   return { ...a, compte_id: a.compte_id ?? null };
+}
+
+/* --------------------------------------------- un athlète et son compte */
+
+async function unAthlete(id) {
+  const a = await ligne(
+    'SELECT id, nom, prenom, compte_id, ref_actuelle_s, ref_cible_s, debut FROM msc_athlete WHERE id = :id',
+    { id },
+  );
+  return a ? { ...a, compte_id: a.compte_id ?? null } : null;
+}
+
+/**
+ * Un athlète et son compte d'un seul geste — ou l'un des deux, relié à l'autre
+ * s'il existe déjà. Tout se valide avant d'écrire, et tout s'écrit dans une
+ * transaction : pas de compte orphelin parce que l'allure était fausse.
+ *
+ *   { athlete: { nom, prenom, actuelle, cible, debut } | null,
+ *     compte:  { email, nom, role, mot_de_passe } | null,
+ *     droit, compte_id (un compte existant pour l'athlète),
+ *     athlete_id (un athlète existant pour le compte) }
+ */
+export async function inscrire(corps = {}) {
+  const avecAthlete = Boolean(corps.athlete && typeof corps.athlete === 'object');
+  const avecCompte = Boolean(corps.compte && typeof corps.compte === 'object');
+  if (!avecAthlete && !avecCompte) throw new AdminError('Rien à créer : ni athlète, ni compte.');
+  const droit = DROITS.includes(corps.droit) ? corps.droit : 'ecriture';
+
+  let a = null;
+  if (avecAthlete) {
+    const actuelle = secondesParKm(corps.athlete.actuelle, 'actuelle');
+    const cible = secondesParKm(corps.athlete.cible, 'cible');
+    if (cible > actuelle) throw new AdminError('L’allure cible doit être au moins aussi rapide que l’actuelle.');
+    a = {
+      nom: nomPropre(corps.athlete.nom),
+      prenom: corps.athlete.prenom ? String(corps.athlete.prenom).trim().slice(0, 80) : null,
+      actuelle, cible,
+      debut: /^\d{4}-\d{2}-\d{2}$/.test(String(corps.athlete.debut ?? ''))
+        ? corps.athlete.debut
+        : new Date().toISOString().slice(0, 10),
+    };
+  }
+  let c = null;
+  if (avecCompte) {
+    c = {
+      email: emailPropre(corps.compte.email),
+      nom: nomPropre(corps.compte.nom || [a?.prenom, a?.nom].filter(Boolean).join(' ')),
+      role: rolePropre(corps.compte.role ?? 'athlete'),
+      hache: await motDePasseHache(corps.compte.mot_de_passe),
+    };
+  }
+  /* Relier à l'existant : on vérifie avant, pour répondre 404 plutôt qu'une
+     erreur de clé étrangère. */
+  let compteId = null;
+  let athleteId = null;
+  if (!avecCompte && corps.compte_id) {
+    const x = await ligne('SELECT id FROM compte WHERE id = :id', { id: Number(corps.compte_id) });
+    if (!x) throw new AdminError(`Aucun compte ${corps.compte_id}.`, 404);
+    compteId = x.id;
+  }
+  if (!avecAthlete && corps.athlete_id) {
+    const x = await ligne('SELECT id FROM msc_athlete WHERE id = :id', { id: Number(corps.athlete_id) });
+    if (!x) throw new AdminError(`Aucun athlète ${corps.athlete_id}.`, 404);
+    athleteId = x.id;
+  }
+
+  try {
+    await transaction(async (cnx) => {
+      if (c) {
+        const [r] = await cnx.execute(
+          'INSERT INTO compte (email, mot_de_passe, nom, role) VALUES (?, ?, ?, ?)',
+          [c.email, c.hache, c.nom, c.role],
+        );
+        compteId = r.insertId;
+      }
+      if (a) {
+        const [r] = await cnx.execute(
+          `INSERT INTO msc_athlete (compte_id, nom, prenom, ref_actuelle_s, ref_cible_s, debut)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [compteId && droit === 'ecriture' ? compteId : null, a.nom, a.prenom, a.actuelle, a.cible, a.debut],
+        );
+        athleteId = r.insertId;
+      }
+      if (compteId && athleteId) {
+        await cnx.execute(
+          `INSERT INTO msc_acces (compte_id, athlete_id, droit) VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE droit = VALUES(droit)`,
+          [compteId, athleteId, droit],
+        );
+        if (droit === 'ecriture') {
+          await cnx.execute('UPDATE msc_athlete SET compte_id = ? WHERE id = ? AND compte_id IS NULL', [compteId, athleteId]);
+        }
+      }
+    });
+  } catch (e) {
+    if (doublon(e)) throw new AdminError(`Un compte existe déjà pour ${c?.email}.`, 409);
+    throw e;
+  }
+  return {
+    compte: compteId ? await compte(compteId) : null,
+    athlete: athleteId ? await unAthlete(athleteId) : null,
+  };
 }
 
 /* -------------------------------------------------------------- les accès */

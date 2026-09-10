@@ -318,8 +318,8 @@ try {
   check('Comptes liste le compte connecté, avec son athlète et son droit',
     comptesTexte.includes(EMAIL) && /\(écriture\)/.test(comptesTexte),
     comptesTexte.split('\n').find((l) => l.includes(EMAIL)) ?? '');
-  check('et propose d’en créer un, et un athlète',
-    /Nouveau compte/i.test(comptesTexte) && /Nouvel athlète/i.test(comptesTexte));
+  check('et propose de créer un athlète et son compte d’un seul geste',
+    /Nouvel athlète, nouveau compte/i.test(comptesTexte) && /un compte de connexion/i.test(comptesTexte));
   await page.getByRole('tab', { name: 'Connexions' }).click();
   await page.waitForTimeout(900);
   const connexionsTexte = await page.locator('body').innerText();
@@ -347,6 +347,31 @@ try {
   await page.waitForTimeout(400);
   check('la clé Anthropic se saisit depuis Système',
     (await page.locator('input[type=password][autocomplete=new-password]').count()) >= 1);
+  /* Le bureau : sur un écran large, un coach ou un admin a le menu à gauche
+     et la page large ; sur un téléphone, le même compte garde les onglets. */
+  console.log('\n=== le bureau ===');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('nav', { timeout: 20000 });
+  await page.waitForTimeout(800);
+  const menu = page.getByRole('navigation', { name: 'Back office' });
+  const menuTexte = (await menu.count()) ? await menu.innerText() : '';
+  check('sur un écran large, l’admin a le bureau : un menu qui liste tout le back office',
+    (await menu.count()) === 1 && /Connexions/.test(menuTexte) && /Comptes/.test(menuTexte) && /Système/.test(menuTexte),
+    menuTexte.replace(/\n+/g, ' · ').slice(0, 140));
+  check('et plus de barre d’onglets', (await page.locator('nav button').count()) > 5);
+  await menu.getByRole('button', { name: 'Système' }).click();
+  await page.waitForTimeout(900);
+  check('une section s’ouvre depuis le menu', /cette page/i.test(await page.locator('body').innerText()));
+  await menu.getByRole('button', { name: "Aujourd'hui" }).click();
+  await page.waitForTimeout(900);
+  check('et les écrans de l’athlète restent à portée, à leur largeur',
+    /Hier|S\d+/.test(await page.locator('body').innerText()));
+  await page.setViewportSize({ width: 420, height: 900 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('nav', { timeout: 20000 });
+  await page.waitForTimeout(800);
+  check('sur un téléphone, le même compte retrouve ses cinq onglets', (await page.locator('nav button').count()) === 5);
   await bd().execute("UPDATE compte SET role = 'athlete' WHERE email = ?", [EMAIL]);
 
   console.log('\n=== sans réseau ===');

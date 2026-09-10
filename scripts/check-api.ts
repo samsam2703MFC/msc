@@ -54,8 +54,8 @@ function client() {
 /* Deux comptes et deux athlètes : sans un second, « ce qui ne m'appartient pas
    m'est refusé » n'est pas testable, et c'est la seule assertion qui compte
    vraiment dans un contrôle d'accès. */
-await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?)', [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`]);
-await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?)', ['Athlète du contrôle', 'Athlète créé du contrôle']);
+await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?, ?)', [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`, `inscrit-${EMAIL}`]);
+await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?, ?)', ['Athlète du contrôle', 'Athlète créé du contrôle', 'Inscrit du contrôle']);
 
 const [c1] = (await bd().execute(
   'INSERT INTO compte (email, mot_de_passe, nom, role) VALUES (?, ?, ?, ?)',
@@ -598,6 +598,33 @@ try {
     athlete.statut === 200 && athlete.corps.athlete?.ref_actuelle_s === 255 && athlete.corps.athlete.ref_cible_s === 230
       && athlete.corps.athlete.compte_id === creeId,
     JSON.stringify(athlete.corps).slice(0, 120));
+  /* Un athlète et son compte d'un seul geste — tout ou rien. */
+  const inscritRien = await c.appel('/api/admin/inscription', { method: 'POST', body: JSON.stringify({}) });
+  check('une inscription sans athlète ni compte est refusée', inscritRien.statut === 400, inscritRien.corps.erreur);
+  const inscritRate = await c.appel('/api/admin/inscription', {
+    method: 'POST',
+    body: JSON.stringify({
+      athlete: { nom: 'Inscrit du contrôle', actuelle: '9:99', cible: '3:50' },
+      compte: { email: `inscrit-${EMAIL}`, role: 'athlete', mot_de_passe: MOT_DE_PASSE },
+    }),
+  });
+  const [[fantome]] = (await bd().execute('SELECT COUNT(*) AS n FROM compte WHERE email = ?', [`inscrit-${EMAIL}`])) as any;
+  check('une allure fausse refuse le tout : pas de compte orphelin', inscritRate.statut === 400 && Number(fantome.n) === 0,
+    `${inscritRate.corps.erreur} · comptes : ${fantome.n}`);
+  const inscrit = await c.appel('/api/admin/inscription', {
+    method: 'POST',
+    body: JSON.stringify({
+      athlete: { nom: 'Inscrit du contrôle', prenom: 'Léa', actuelle: '4:30', cible: '4:00' },
+      compte: { email: `inscrit-${EMAIL}`, role: 'athlete', mot_de_passe: MOT_DE_PASSE },
+      droit: 'ecriture',
+    }),
+  });
+  check('un athlète et son compte se créent ensemble, reliés, le compte nommé d’après l’athlète',
+    inscrit.statut === 200 && inscrit.corps.compte?.nom === 'Léa Inscrit du contrôle'
+      && inscrit.corps.athlete?.compte_id === inscrit.corps.compte?.id
+      && inscrit.corps.compte.athletes?.[0]?.id === inscrit.corps.athlete?.id
+      && inscrit.corps.compte.athletes[0].droit === 'ecriture',
+    JSON.stringify(inscrit.corps).slice(0, 160));
   const retireAcces = await c.appel('/api/admin/acces', {
     method: 'PUT', body: JSON.stringify({ compte_id: creeId, athlete_id: athlete.corps.athlete?.id, droit: null }),
   });
@@ -710,8 +737,8 @@ try {
   await bd().execute('DELETE FROM msc_mutation WHERE id IN (?, ?)', [
     '00000000-0000-4000-8000-00000000cafe', '00000000-0000-4000-8000-0000000dbeef',
   ]);
-  await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?)', [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`]);
-  await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?)', ['Athlète du contrôle', 'Athlète créé du contrôle']);
+  await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?, ?)', [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`, `inscrit-${EMAIL}`]);
+  await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?, ?)', ['Athlète du contrôle', 'Athlète créé du contrôle', 'Inscrit du contrôle']);
   await fermer();
 }
 

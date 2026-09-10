@@ -444,6 +444,18 @@ export function creerAthlete(corps: {
   return appeler<{ athlete: AthleteAdmin }>('/admin/athletes', { method: 'POST', body: JSON.stringify(corps) });
 }
 
+/** Un athlète et son compte d'un seul geste — ou l'un des deux, relié à
+    l'autre s'il existe déjà. Tout ou rien : le serveur écrit en transaction. */
+export function inscrire(corps: {
+  athlete?: { nom: string; prenom?: string | null; actuelle: string; cible: string; debut?: string } | null;
+  compte?: { email: string; nom?: string; role: CompteAdmin['role']; mot_de_passe: string } | null;
+  droit?: AthleteVisible['droit'];
+  compte_id?: number | null;
+  athlete_id?: number | null;
+}): Promise<{ compte: CompteAdmin | null; athlete: AthleteAdmin | null }> {
+  return appeler('/admin/inscription', { method: 'POST', body: JSON.stringify(corps) });
+}
+
 /** droit null : retirer l'accès. */
 export function majAcces(corps: {
   compte_id: number; athlete_id: number; droit: AthleteVisible['droit'] | null;

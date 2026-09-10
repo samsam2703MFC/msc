@@ -411,6 +411,9 @@ async function router(req, res, url) {
       const corps = await lireCorps(req, 8_000);
       return json(res, 200, { compte: await admin.modifierCompte(Number(unCompte[1]), corps, appelant) });
     }
+    if (chemin === '/api/admin/inscription' && req.method === 'POST') {
+      return json(res, 200, await admin.inscrire(await lireCorps(req, 8_000)));
+    }
     if (chemin === '/api/admin/athletes' && req.method === 'POST') {
       return json(res, 200, { athlete: await admin.creerAthlete(await lireCorps(req, 8_000)) });
     }
