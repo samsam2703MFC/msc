@@ -54,8 +54,8 @@ function client() {
 /* Deux comptes et deux athlètes : sans un second, « ce qui ne m'appartient pas
    m'est refusé » n'est pas testable, et c'est la seule assertion qui compte
    vraiment dans un contrôle d'accès. */
-await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `autre-${EMAIL}`]);
-await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Athlète du contrôle']);
+await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?)', [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`]);
+await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?)', ['Athlète du contrôle', 'Athlète créé du contrôle']);
 
 const [c1] = (await bd().execute(
   'INSERT INTO compte (email, mot_de_passe, nom, role) VALUES (?, ?, ?, ?)',
@@ -496,6 +496,95 @@ try {
       && rendue.corps.msc_session.find((x: any) => x.id === cible.id).duree_min === cible.duree_min,
     String(rendue.corps.msc_session.find((x: any) => x.id === cible.id).duree_min));
 
+  /* Le back office de l'admin — ce que `npm run compte` fait en ligne de
+     commande, par l'API. Le rôle se lit en base à chaque requête : on promeut
+     le compte de contrôle par SQL, sans se reconnecter. */
+  console.log('\n=== le back office ===');
+  const refuseAdmin = await c.appel('/api/admin/comptes');
+  check('les comptes sont refusés à un athlète', refuseAdmin.statut === 403, String(refuseAdmin.statut));
+  await bd().execute("UPDATE compte SET role = 'admin' WHERE email = ?", [EMAIL]);
+  const comptes = await c.appel('/api/admin/comptes');
+  const moiAdmin = comptes.corps.comptes?.find((x: any) => x.email === EMAIL);
+  check('… et listés à un admin, chacun avec ses athlètes',
+    comptes.statut === 200 && moiAdmin?.role === 'admin'
+      && moiAdmin.athletes.some((a: any) => a.id === 1 && a.droit === 'ecriture')
+      && Array.isArray(comptes.corps.athletes),
+    JSON.stringify(moiAdmin?.athletes));
+  const court = await c.appel('/api/admin/comptes', {
+    method: 'POST',
+    body: JSON.stringify({ email: `cree-${EMAIL}`, nom: 'Créé', role: 'coach', mot_de_passe: 'court' }),
+  });
+  check('un mot de passe trop court est refusé', court.statut === 400, court.corps.erreur);
+  const cree = await c.appel('/api/admin/comptes', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: `Cree-${EMAIL}`, nom: 'Créé', role: 'coach', mot_de_passe: MOT_DE_PASSE, athlete_id: 1, droit: 'lecture',
+    }),
+  });
+  check('un compte se crée, relié à un athlète, l’email mis en minuscules',
+    cree.statut === 200 && cree.corps.compte?.email === `cree-${EMAIL}` && cree.corps.compte.role === 'coach'
+      && cree.corps.compte.athletes[0]?.id === 1 && cree.corps.compte.athletes[0]?.droit === 'lecture',
+    JSON.stringify(cree.corps).slice(0, 120));
+  const doublon = await c.appel('/api/admin/comptes', {
+    method: 'POST',
+    body: JSON.stringify({ email: `cree-${EMAIL}`, nom: 'Créé', role: 'coach', mot_de_passe: MOT_DE_PASSE }),
+  });
+  check('le même email une seconde fois : 409', doublon.statut === 409, doublon.corps.erreur);
+  const creeId = cree.corps.compte?.id;
+  const modif = await c.appel(`/api/admin/comptes/${creeId}`, {
+    method: 'PUT', body: JSON.stringify({ role: 'athlete', actif: false, nom: 'Créé, puis renommé' }),
+  });
+  check('un compte se modifie : rôle, actif, nom',
+    modif.statut === 200 && modif.corps.compte?.role === 'athlete' && modif.corps.compte.actif === false
+      && modif.corps.compte.nom === 'Créé, puis renommé',
+    JSON.stringify(modif.corps).slice(0, 120));
+  const suicide = await c.appel(`/api/admin/comptes/${moiAdmin?.id}`, {
+    method: 'PUT', body: JSON.stringify({ actif: false }),
+  });
+  check('un admin ne peut pas se désactiver lui-même', suicide.statut === 409, suicide.corps.erreur);
+  const demission = await c.appel(`/api/admin/comptes/${moiAdmin?.id}`, {
+    method: 'PUT', body: JSON.stringify({ role: 'athlete' }),
+  });
+  check('ni se retirer le rôle', demission.statut === 409, demission.corps.erreur);
+  const mdp = await c.appel(`/api/admin/comptes/${creeId}`, {
+    method: 'PUT', body: JSON.stringify({ mot_de_passe: `autre-${MOT_DE_PASSE}`, actif: true }),
+  });
+  check('un mot de passe se remplace', mdp.statut === 200 && mdp.corps.compte?.actif === true);
+  const c3 = client();
+  const ouvre = await c3.appel('/api/connexion', {
+    method: 'POST', body: JSON.stringify({ email: `cree-${EMAIL}`, mot_de_passe: `autre-${MOT_DE_PASSE}` }),
+  });
+  check('… et il ouvre la porte', ouvre.statut === 200, ouvre.corps.erreur);
+  const lecture = await c3.appel('/api/journal', {
+    method: 'POST', body: JSON.stringify({ session_id: 1, date: '2026-10-20', note: 'x' }),
+  });
+  check('en lecture seule, comme demandé', lecture.statut === 403, String(lecture.statut));
+  const horsPlage = await c.appel('/api/admin/athletes', {
+    method: 'POST', body: JSON.stringify({ nom: 'Athlète créé du contrôle', actuelle: '1:30', cible: '1:20' }),
+  });
+  check('une allure hors plage est refusée', horsPlage.statut === 400, horsPlage.corps.erreur);
+  const athlete = await c.appel('/api/admin/athletes', {
+    method: 'POST',
+    body: JSON.stringify({ nom: 'Athlète créé du contrôle', prenom: 'Contrôle', actuelle: '4:15', cible: '3:50', compte_id: creeId, droit: 'ecriture' }),
+  });
+  check('un athlète se crée (4:15 → 255 s/km), relié à un compte qui devient le sien',
+    athlete.statut === 200 && athlete.corps.athlete?.ref_actuelle_s === 255 && athlete.corps.athlete.ref_cible_s === 230
+      && athlete.corps.athlete.compte_id === creeId,
+    JSON.stringify(athlete.corps).slice(0, 120));
+  const retireAcces = await c.appel('/api/admin/acces', {
+    method: 'PUT', body: JSON.stringify({ compte_id: creeId, athlete_id: athlete.corps.athlete?.id, droit: null }),
+  });
+  check('un accès se retire', retireAcces.statut === 200 && retireAcces.corps.acces?.droit === null);
+  const systeme = await c.appel('/api/admin/systeme');
+  check('le système se décrit : version servie, clé, Strava, scellement, base, démo',
+    systeme.statut === 200 && 'version' in systeme.corps && typeof systeme.corps.cle === 'boolean'
+      && typeof systeme.corps.cle_illisible === 'boolean' && systeme.corps.base?.ok === true
+      && Array.isArray(systeme.corps.demo?.lots),
+    JSON.stringify({ version: systeme.corps.version, base: systeme.corps.base?.version }));
+  await bd().execute("UPDATE compte SET role = 'athlete' WHERE email = ?", [EMAIL]);
+  const redevenu = await c.appel('/api/admin/systeme');
+  check('redevenu athlète, la porte se referme', redevenu.statut === 403);
+
   console.log('\n=== ce qui ne m’appartient pas ===');
   const autre = await c.appel(`/api/db/instantane?athlete=${a2.insertId}`);
   check('un athlète que je ne vois pas m’est refusé', autre.statut === 403, String(autre.statut));
@@ -584,8 +673,8 @@ try {
   await bd().execute('DELETE FROM msc_mutation WHERE id IN (?, ?)', [
     '00000000-0000-4000-8000-00000000cafe', '00000000-0000-4000-8000-0000000dbeef',
   ]);
-  await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `autre-${EMAIL}`]);
-  await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Athlète du contrôle']);
+  await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?)', [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`]);
+  await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?)', ['Athlète du contrôle', 'Athlète créé du contrôle']);
   await fermer();
 }
 

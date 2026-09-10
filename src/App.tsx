@@ -35,6 +35,13 @@ const TAB_ICONS: Record<ScreenKey, string> = {
 const MOIS_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const MOIS_PL = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 
+/* Pour un coach ou un admin, le cinquième onglet est le back office, et il le
+   dit : « Admin » plutôt que « Créer » — l'athlète, lui, y crée son plan. */
+function backOffice(app: ReturnType<typeof useApp>): boolean {
+  const role = app.identite?.compte.role;
+  return role === 'coach' || role === 'admin';
+}
+
 /** The eyebrow says where in the plan you are, so it is computed, not stored. */
 function eyebrow(app: ReturnType<typeof useApp>): string {
   const fr = app.lang === 'fr';
@@ -55,7 +62,9 @@ function eyebrow(app: ReturnType<typeof useApp>): string {
     case 'coach':
       return `${fr ? 'Hebdo' : 'Tygodniowa'}${sem}`;
     case 'admin':
-      return fr ? 'Athlète · objectifs' : 'Zawodnik · cele';
+      return backOffice(app)
+        ? fr ? 'Coach · back office' : 'Trener · zaplecze'
+        : fr ? 'Athlète · objectifs' : 'Zawodnik · cele';
   }
 }
 
@@ -178,7 +187,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
               lineHeight: 1.15,
             }}
           >
-            {ui.screens[app.screen]}
+            {app.screen === 'admin' && backOffice(app) ? (app.lang === 'fr' ? 'Back office' : 'Zaplecze') : ui.screens[app.screen]}
           </h1>
         </div>
 
@@ -262,9 +271,9 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
                 color: active ? C.accentDeep : C.inkQuiet,
               }}
             >
-              <Icon name={TAB_ICONS[key]} size={21} />
+              <Icon name={key === 'admin' && backOffice(app) ? 'settings' : TAB_ICONS[key]} size={21} />
               <div style={{ fontSize: 10, fontWeight: 600, textAlign: 'center' }}>
-                {ui.tabs[key]}
+                {key === 'admin' && backOffice(app) ? 'Admin' : ui.tabs[key]}
               </div>
             </button>
           );

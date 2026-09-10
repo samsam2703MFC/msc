@@ -394,6 +394,110 @@ export function majParam(cle: string, valeur: string | number | boolean | null):
   });
 }
 
+/* ------------------------------------------------------------ le back office */
+
+/* Les comptes, les athlètes, ce qui les relie, l'état du serveur. Réservé au
+   rôle admin — le serveur tranche (403 sinon), l'écran ne fait que le montrer. */
+export interface CompteAdmin {
+  id: number;
+  email: string;
+  nom: string;
+  role: 'athlete' | 'coach' | 'admin';
+  actif: boolean;
+  sans_mot_de_passe: boolean;
+  cree_le: string;
+  athletes: AthleteVisible[];
+}
+
+export interface AthleteAdmin {
+  id: number;
+  nom: string;
+  prenom: string | null;
+  compte_id: number | null;
+  ref_actuelle_s: number;
+  ref_cible_s: number;
+  debut: string;
+}
+
+export function adminComptes(): Promise<{ comptes: CompteAdmin[]; athletes: AthleteAdmin[] }> {
+  return appeler<{ comptes: CompteAdmin[]; athletes: AthleteAdmin[] }>('/admin/comptes');
+}
+
+export function creerCompte(corps: {
+  email: string; nom: string; role: CompteAdmin['role']; mot_de_passe: string;
+  athlete_id?: number | null; droit?: AthleteVisible['droit'];
+}): Promise<{ compte: CompteAdmin }> {
+  return appeler<{ compte: CompteAdmin }>('/admin/comptes', { method: 'POST', body: JSON.stringify(corps) });
+}
+
+export function majCompte(
+  id: number,
+  corps: { nom?: string; email?: string; role?: CompteAdmin['role']; actif?: boolean; mot_de_passe?: string },
+): Promise<{ compte: CompteAdmin }> {
+  return appeler<{ compte: CompteAdmin }>(`/admin/comptes/${id}`, { method: 'PUT', body: JSON.stringify(corps) });
+}
+
+export function creerAthlete(corps: {
+  nom: string; prenom?: string | null; actuelle: string; cible: string; debut?: string;
+  compte_id?: number | null; droit?: AthleteVisible['droit'];
+}): Promise<{ athlete: AthleteAdmin }> {
+  return appeler<{ athlete: AthleteAdmin }>('/admin/athletes', { method: 'POST', body: JSON.stringify(corps) });
+}
+
+/** droit null : retirer l'accès. */
+export function majAcces(corps: {
+  compte_id: number; athlete_id: number; droit: AthleteVisible['droit'] | null;
+}): Promise<{ acces: { compte_id: number; athlete_id: number; droit: AthleteVisible['droit'] | null } }> {
+  return appeler('/admin/acces', { method: 'PUT', body: JSON.stringify(corps) });
+}
+
+export interface LotDemo {
+  code: string;
+  quoi: Record<'fr' | 'pl', string>;
+  n: number;
+}
+
+export interface PlanDemo {
+  id: number;
+  nom: string;
+  actif: boolean;
+  courses: Array<{ id: number; nom: string; date: string }>;
+  retire?: boolean;
+}
+
+export interface EtatDemo {
+  athlete_id: number;
+  lots: LotDemo[];
+  plans: PlanDemo[];
+  total: number;
+  erreur?: string;
+}
+
+export interface Systeme {
+  version: string | null;
+  node: string;
+  env: string;
+  sans_tls: boolean;
+  demarre_le: string;
+  cle: boolean;
+  cle_source: 'base' | 'env' | 'defaut' | null;
+  cle_illisible: boolean;
+  strava: boolean;
+  scellement: boolean;
+  base: { ok: boolean; version: string | null; erreur: string | null };
+  demo: EtatDemo | null;
+}
+
+export function systeme(): Promise<Systeme> {
+  return appeler<Systeme>('/admin/systeme');
+}
+
+export function retirerDemo(plan: boolean): Promise<{ retires: LotDemo[]; plans: PlanDemo[] }> {
+  return appeler<{ retires: LotDemo[]; plans: PlanDemo[] }>('/admin/demo', {
+    method: 'POST', body: JSON.stringify({ plan }),
+  });
+}
+
 export function majProfil(
   corps: { prenom?: string | null; nom: string; surnom?: string | null; annee_naissance?: number | null; coach?: string },
   athleteId?: number | null,

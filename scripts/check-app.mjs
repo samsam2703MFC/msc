@@ -298,6 +298,37 @@ try {
   check('les distances sont ramenées à l’équivalent 10 km',
     /−\d:\d\d/.test(bo), bo.match(/[−+]\d:\d\d/g)?.join(' ') ?? '');
 
+  /* Le back office de l'admin : le même onglet, renommé, avec Comptes et
+     Système en plus. Le serveur relit le rôle à chaque requête, mais l'écran
+     l'a appris à la connexion : on promeut par SQL, puis on recharge. */
+  console.log('\n=== le back office de l’admin ===');
+  await bd().execute("UPDATE compte SET role = 'admin' WHERE email = ?", [EMAIL]);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('nav', { timeout: 20000 });
+  await page.waitForTimeout(800);
+  check('l’onglet Créer s’appelle Admin', /Admin/.test(await page.locator('nav').innerText()),
+    (await page.locator('nav').innerText()).replace(/\n/g, ' · '));
+  await page.locator('nav button').last().click();
+  await page.waitForTimeout(700);
+  await page.getByRole('tab', { name: 'Comptes' }).click();
+  await page.waitForTimeout(900);
+  const comptesTexte = await page.locator('body').innerText();
+  check('Comptes liste le compte connecté, avec son athlète et son droit',
+    comptesTexte.includes(EMAIL) && /\(écriture\)/.test(comptesTexte),
+    comptesTexte.split('\n').find((l) => l.includes(EMAIL)) ?? '');
+  check('et propose d’en créer un, et un athlète',
+    /Nouveau compte/i.test(comptesTexte) && /Nouvel athlète/i.test(comptesTexte));
+  await page.getByRole('tab', { name: 'Système' }).click();
+  await page.waitForTimeout(900);
+  const systemeTexte = await page.locator('body').innerText();
+  check('Système montre la version de la page et celle du serveur',
+    /cette page/i.test(systemeTexte) && /le serveur/i.test(systemeTexte) && /à jour/i.test(systemeTexte),
+    systemeTexte.split('\n').find((l) => /à jour|plus récente/i.test(l)) ?? '');
+  check('et l’état des services', /Clé Anthropic/i.test(systemeTexte) && /Base de données/i.test(systemeTexte)
+    && /Strava/.test(systemeTexte) && /Scellement/i.test(systemeTexte));
+  check('et ce que la démonstration a laissé', /Données de démonstration/i.test(systemeTexte));
+  await bd().execute("UPDATE compte SET role = 'athlete' WHERE email = ?", [EMAIL]);
+
   console.log('\n=== sans réseau ===');
   coupe = true;
   await page.context().setOffline(true);

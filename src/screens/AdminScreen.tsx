@@ -19,6 +19,8 @@ import { BackOffice } from './BackOffice';
 import { AthletesScreen } from './AthletesScreen';
 import { CalendrierScreen } from './CalendrierScreen';
 import { ParamScreen } from './ParamScreen';
+import { ComptesScreen } from './ComptesScreen';
+import { SystemeScreen } from './SystemeScreen';
 
 /** mm:ss → seconds. */
 function versSecondes(texte: string): number {
@@ -116,15 +118,19 @@ const OBJECTIF_VIDE: Objectif = {
 };
 
 const SECTIONS = {
-  fr: { plan: 'Plan', courses: 'Courses', calendrier: 'Calendrier', athletes: 'Athlètes', param: 'Réglages' },
-  pl: { plan: 'Plan', courses: 'Zawody', calendrier: 'Kalendarz', athletes: 'Zawodnicy', param: 'Ustawienia' },
+  fr: { plan: 'Plan', courses: 'Courses', calendrier: 'Calendrier', athletes: 'Athlètes', param: 'Réglages', comptes: 'Comptes', systeme: 'Système' },
+  pl: { plan: 'Plan', courses: 'Zawody', calendrier: 'Kalendarz', athletes: 'Zawodnicy', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
 } as const;
 
 type Section = keyof typeof SECTIONS.fr;
 
 /* L'écran Créer porte deux choses différentes : fabriquer un plan, et tenir le
    registre des courses. Une bascule plutôt qu'un sixième onglet — la barre en a
-   déjà cinq, et un back office n'est pas un écran qu'on ouvre tous les jours. */
+   déjà cinq, et un back office n'est pas un écran qu'on ouvre tous les jours.
+
+   Pour un coach ou un admin, le même onglet devient le back office : Réglages
+   pour les deux, Comptes et Système pour l'admin seul — les mots de passe des
+   autres et l'état du serveur ne regardent pas un coach. */
 export function AdminScreen({ app }: { app: App }) {
   const [section, setSection] = useState<Section>('plan');
   const libelles = SECTIONS[app.lang];
@@ -138,12 +144,17 @@ export function AdminScreen({ app }: { app: App }) {
   const sections: Section[] = [
     'plan', 'courses', 'calendrier', 'athletes',
     ...(admin ? (['param'] as Section[]) : []),
+    ...(role === 'admin' ? (['comptes', 'systeme'] as Section[]) : []),
   ];
+  /* Jusqu'à cinq, les sections se partagent la largeur. Au-delà — l'admin —
+     la barre défile : sept intitulés serrés dans 360 px ne se lisent plus. */
   const serre = sections.length > 3;
+  const defile = sections.length > 5;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div
+        role="tablist"
         style={{
           display: 'flex',
           gap: 3,
@@ -151,20 +162,23 @@ export function AdminScreen({ app }: { app: App }) {
           borderRadius: R.full,
           background: C.surfaceAlt,
           border: `1px solid ${C.border}`,
+          ...(defile ? { overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } : {}),
         }}
       >
         {sections.map((cle) => (
           <button
             key={cle}
             type="button"
+            role="tab"
             onClick={() => setSection(cle)}
+            aria-selected={section === cle}
             aria-pressed={section === cle}
             style={{
-              flex: 1,
+              flex: defile ? '0 0 auto' : 1,
               minWidth: 0,
-              padding: serre ? '7px 4px' : '7px 12px',
+              padding: defile ? '7px 12px' : serre ? '7px 4px' : '7px 12px',
               borderRadius: R.full,
-              fontSize: serre ? 11 : 12,
+              fontSize: serre && !defile ? 11 : 12,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -185,9 +199,13 @@ export function AdminScreen({ app }: { app: App }) {
           ? <AthletesScreen app={app} />
           : section === 'param'
             ? <ParamScreen app={app} />
-            : section === 'calendrier'
-              ? <CalendrierScreen app={app} />
-              : <Generateur app={app} />}
+            : section === 'comptes'
+              ? <ComptesScreen app={app} />
+              : section === 'systeme'
+                ? <SystemeScreen app={app} />
+                : section === 'calendrier'
+                  ? <CalendrierScreen app={app} />
+                  : <Generateur app={app} />}
     </div>
   );
 }

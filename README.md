@@ -31,7 +31,7 @@ npm run check:app      # the app itself, in a real browser
 npm run db:migrate     # create the database, apply db/schema.sql, add later columns
 npm run db:seed        # load the workbook into it
 npm run compte -- lister          # the accounts, and who sees which athlete
-npm run compte -- role <email> coach   # opens the back office: Athlètes, Réglages
+npm run compte -- role <email> admin   # opens the back office: Réglages, Comptes, Système
 npm run param                          # every setting and where it comes from
 npm run param -- anthropic.cle         # set one from the server: a secret is asked
                                        # at the keyboard, unseen, and sealed
@@ -811,8 +811,9 @@ that is where the plan is, and what comes out is posted and read back.
 
 There is no sign-up and there will not be one. MySmartCoach is an athlete's plan
 and their coach's back office, not a service you join — accounts are made with
-`npm run compte` on the server. The screen only opens the door for someone who
-already has the key.
+`npm run compte` on the server, or by an admin in the **Comptes** section once
+one admin exists. The screen only opens the door for someone who already has
+the key.
 
 ### `check:app` drives a real browser
 
@@ -977,6 +978,12 @@ The **Créer** tab carries two things now, behind a segmented control: building 
 plan, and keeping the register of races. A switch rather than a sixth tab — the
 bar already has five, and a back office is not a screen you open every day.
 
+For a `coach` or `admin` account the same tab reads **Admin** and the bar
+grows: Réglages for both roles, **Comptes** and **Système** for the admin
+alone — the passwords of other people and the state of the server are not a
+coach's business. Beyond five sections the segmented control scrolls sideways
+instead of squeezing seven labels into 360 px.
+
 ### Competitions
 
 Encoded by hand: date, name, place, distance, time, placing, starters. A race
@@ -1063,6 +1070,44 @@ can be behind it, and the server now names which:
 `cle_illisible`. `journalctl -u msc` carries the same line at startup and on
 every refused call. A key with no credit left (`credit balance is too low`)
 and an unknown model (`coach.modele`) get their own messages too.
+
+### Comptes and Système — the admin's back office
+
+There is still no sign-up. What `npm run compte` does from the server, the
+**Comptes** section does from the phone, for an `admin` account only (the
+server checks: `403` otherwise). The list shows every account with its role,
+whether it is active, whether it still has no password, and which athletes it
+sees with which right. Opening one edits the name and the role, replaces the
+password — it is never read back — and sets the right on each athlete
+(lecture, écriture, or none). Below it, two forms: a new account (email, name,
+role, password, optionally an athlete to attach) and a new athlete (name,
+first name, the two 10 km paces in `mm:ss`, the plan's start, optionally an
+account to attach). The paces go through the same 2:00–15:00 /km gate as the
+command line, and a password through the same `securite.mdp_min`.
+
+Two things the screen refuses, because the back office must never close from
+the inside: an admin cannot deactivate their own account or take their own
+`admin` role away, and nobody can demote or deactivate the last active admin.
+An account is deactivated, never deleted — its journal and measures stay its
+own.
+
+**Système** answers the question every deploy raises — *am I looking at the
+new version?* — by printing the version built into the page next to the one
+the server serves (`dist/version.txt`), with a **Recharger** button when they
+differ. Then the services, each with the gesture that fixes it: the Anthropic
+key in its three states (absent, set and from where, set but unreadable
+because `MSC_SECRET_KEY` changed), Strava's client, the sealing key, the
+database and its version. And what the demo seed left in the live base — the
+invented October 2026 activities, journal, measures, analyses, and the
+thirty-week demo plan — with a **Retirer** button that does exactly what
+`npm run db:demo -- retirer` does, behind a confirmation. The logic is one
+module, `server/demo.mjs`, shared by the script and the route.
+
+Routes: `GET/POST /api/admin/comptes`, `PUT /api/admin/comptes/:id`,
+`POST /api/admin/athletes`, `PUT /api/admin/acces`, `GET /api/admin/systeme`,
+`POST /api/admin/demo`. `check:api` promotes its control account by SQL and
+walks through all of them, including the two refusals above and the
+`403` before promotion; `check:app` opens Comptes and Système in the browser.
 
 ### The form curves — base endurance and HRV recovery
 

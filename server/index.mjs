@@ -29,6 +29,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { AuthError, athleteDe, athletesVisibles, connecter, cookieSession, identifier, ouvrirSession }
   from './auth.mjs';
 import { BdError, scellementPret } from './bd.mjs';
+import * as admin from './admin.mjs';
 import * as depots from './depots.mjs';
 import { construireMethode } from './methode.mjs';
 import * as photo from './photo.mjs';
@@ -359,6 +360,44 @@ async function router(req, res, url) {
     return json(res, 200, { param: await params.ecrire(String(corps.cle), corps.valeur ?? null) });
   }
 
+  /* Le back office : les comptes, les athlètes, les accès, l'état du serveur.
+     Réservé au rôle admin — un coach a Réglages et Athlètes, pas les mots de
+     passe des autres. La porte de service (MSC_ATHLETE_ID) passe aussi, comme
+     pour /api/param : c'est le poste de développement. */
+  if (chemin.startsWith('/api/admin/')) {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    if (!identite.bypass && identite.compte.role !== 'admin') {
+      return json(res, 403, { erreur: 'Réservé à un compte admin.' });
+    }
+    const appelant = identite.compte.id;
+    if (chemin === '/api/admin/comptes' && req.method === 'GET') {
+      return json(res, 200, await admin.comptes());
+    }
+    if (chemin === '/api/admin/comptes' && req.method === 'POST') {
+      return json(res, 200, { compte: await admin.creerCompte(await lireCorps(req, 8_000)) });
+    }
+    const unCompte = chemin.match(/^\/api\/admin\/comptes\/(\d+)$/);
+    if (unCompte && req.method === 'PUT') {
+      const corps = await lireCorps(req, 8_000);
+      return json(res, 200, { compte: await admin.modifierCompte(Number(unCompte[1]), corps, appelant) });
+    }
+    if (chemin === '/api/admin/athletes' && req.method === 'POST') {
+      return json(res, 200, { athlete: await admin.creerAthlete(await lireCorps(req, 8_000)) });
+    }
+    if (chemin === '/api/admin/acces' && req.method === 'PUT') {
+      return json(res, 200, { acces: await admin.ecrireAcces(await lireCorps(req, 4_000)) });
+    }
+    if (chemin === '/api/admin/systeme' && req.method === 'GET') {
+      return json(res, 200, await admin.systeme(DIST));
+    }
+    if (chemin === '/api/admin/demo' && req.method === 'POST') {
+      const corps = await lireCorps(req, 2_000);
+      return json(res, 200, await admin.retirerDemo(1, { plan: Boolean(corps.plan) }));
+    }
+    return json(res, 404, { erreur: 'route inconnue' });
+  }
+
   if (chemin === '/api/athlete/profil' && req.method === 'PUT') {
     const { athlete_id } = await athleteDe(req, url, 'ecriture');
     const corps = await lireCorps(req, 16_000);
@@ -630,6 +669,7 @@ const server = createServer(async (req, res) => {
     if (e instanceof strava.StravaError) return json(res, e.code, { erreur: e.message });
     if (e instanceof photo.PhotoError) return json(res, e.code, { erreur: e.message });
     if (e instanceof depots.DepotError) return json(res, e.code, { erreur: e.message });
+    if (e instanceof admin.AdminError) return json(res, e.code, { erreur: e.message });
     if (e instanceof BdError) return json(res, 500, { erreur: e.message });
     if (e instanceof params.ParamError) return json(res, e.statut, { erreur: e.message });
 
