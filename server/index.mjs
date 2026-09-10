@@ -280,9 +280,15 @@ async function router(req, res, url) {
   /* Ce que le serveur sait de lui-même, sans authentification : de quoi
      diagnostiquer une installation avant même d'avoir un compte. */
   if (chemin === '/api/sante') {
+    /* La clé Anthropic en trois états, parce qu'un seul « absente » cachait
+       trois pannes : pas de clé, une clé que l'API refuse, ou une clé scellée
+       avec une autre MSC_SECRET_KEY que personne ne peut relire. */
+    const cle = await params.etatDe('anthropic.cle');
     return json(res, 200, {
       ok: true,
-      cle: Boolean(await params.param('anthropic.cle')),
+      cle: cle.renseigne,
+      cle_source: cle.source,
+      cle_illisible: cle.illisible,
       strava: strava.configure(),
       scellement: scellementPret(),
     });
@@ -590,16 +596,8 @@ const server = createServer(async (req, res) => {
     if (e instanceof BdError) return json(res, 500, { erreur: e.message });
     if (e instanceof params.ParamError) return json(res, e.statut, { erreur: e.message });
 
-    /* Le SDK lève avant la requête quand il ne résout aucun credential, donc
-       ce cas n'atteint jamais un 401 de l'API. */
-    const sansCle =
-      e?.status === 401 || /resolve authentication method/i.test(String(e?.message ?? ''));
-    if (sansCle) {
-      return json(res, 401, {
-        erreur:
-          "Clé Anthropic absente ou invalide. Renseigne-la dans le back office (Réglages) ou exporte ANTHROPIC_API_KEY (voir .env.example).",
-      });
-    }
+    const anthropic = await erreurAnthropic(e);
+    if (anthropic) return json(res, anthropic.code, { erreur: anthropic.erreur });
     if (/ECONNREFUSED|ER_ACCESS_DENIED|ER_BAD_DB_ERROR|ENOTFOUND/.test(String(e?.code ?? e?.message))) {
       return json(res, 503, {
         erreur: 'La base de données ne répond pas. Vérifie MSC_DB_* et lance npm run db:migrate.',
@@ -609,6 +607,53 @@ const server = createServer(async (req, res) => {
   }
 });
 
+/**
+ * Ce que l'API Anthropic a répondu, dit pour être lu sur l'écran.
+ *
+ * Un seul message couvrait « absente ou invalide », et il envoyait vérifier
+ * Réglages quelqu'un dont la clé y était bel et bien : c'est l'API qui la
+ * refusait. Trois pannes, trois phrases — et pour chacune, le geste qui
+ * répare.
+ *
+ * Le SDK lève avant toute requête quand il ne trouve aucun credential (« could
+ * not resolve authentication method ») ; ce cas n'atteint donc jamais un 401
+ * de l'API, qui, lui, veut dire : une clé a été envoyée, et elle est refusée.
+ */
+async function erreurAnthropic(e) {
+  const detail = String(e?.error?.error?.message ?? e?.message ?? '');
+  if (/resolve authentication method/i.test(detail)) {
+    const etat = await params.etatDe('anthropic.cle');
+    return {
+      code: 401,
+      erreur: etat.illisible
+        ? 'La clé Anthropic de Réglages a été scellée avec une autre MSC_SECRET_KEY et ne se relit plus : ressaisis-la dans Créer → Réglages.'
+        : 'Aucune clé Anthropic : renseigne-la dans Créer → Réglages (compte coach), ou exporte ANTHROPIC_API_KEY sur le serveur (voir .env.example).',
+    };
+  }
+  /* Une erreur du SDK porte un statut HTTP et le corps de la réponse ; une
+     erreur de chez nous n'a ni l'un ni l'autre. */
+  const statut = typeof e?.status === 'number' && (e?.error !== undefined || e?.headers !== undefined) ? e.status : null;
+  if (statut === null) return null;
+  if (statut === 401) {
+    const etat = await params.etatDe('anthropic.cle');
+    const laquelle = etat.source === 'base' ? 'celle de Réglages' : 'ANTHROPIC_API_KEY du serveur';
+    return {
+      code: 401,
+      erreur: `L'API Anthropic refuse la clé (${laquelle}) : invalide ou révoquée. Génère-en une nouvelle sur console.anthropic.com → API keys, et colle-la dans Créer → Réglages.`,
+    };
+  }
+  if (statut === 400 && /credit balance/i.test(detail)) {
+    return { code: 402, erreur: 'Le compte Anthropic de cette clé n’a plus de crédit : recharge-le sur console.anthropic.com → Billing.' };
+  }
+  if (statut === 403) return { code: 403, erreur: `L'API Anthropic refuse l'accès à cette clé : ${detail}` };
+  if (statut === 404) {
+    return { code: 404, erreur: `L'API Anthropic ne connaît pas ce modèle : vérifie « Modèle du coach » dans Réglages (${detail}).` };
+  }
+  if (statut === 429) return { code: 429, erreur: 'L’API Anthropic limite le débit : réessaie dans une minute.' };
+  if (statut === 529 || statut >= 500) return { code: 503, erreur: 'L’API Anthropic est indisponible pour le moment : réessaie.' };
+  return null;
+}
+
 server.listen(PORT, async () => {
   console.log(`plan server → http://localhost:${PORT}`);
   stat(join(DIST, 'index.html')).then(
@@ -617,7 +662,10 @@ server.listen(PORT, async () => {
   );
   /* Les réglages d'abord : la configuration Strava les lit sans attendre. */
   await params.precharger();
-  if (!(await params.param('anthropic.cle'))) {
+  const cle = await params.etatDe('anthropic.cle');
+  if (cle.illisible) {
+    console.warn('⚠  Clé Anthropic illisible : scellée avec une autre MSC_SECRET_KEY — à ressaisir dans Réglages. Les routes du coach renverront 401.');
+  } else if (!cle.renseigne) {
     console.warn('⚠  Clé Anthropic absente (back office → Réglages, ou ANTHROPIC_API_KEY) : les routes du coach renverront 401.');
   }
   if (!strava.configure()) {

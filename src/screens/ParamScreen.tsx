@@ -26,12 +26,14 @@ const T: Record<Lang, Record<string, string>> = {
   fr: {
     chargement: 'Lecture des réglages…', enregistrer: 'Enregistrer', effacer: 'Effacer',
     renseigne: 'renseignée', absente: 'absente', nouveau: 'Nouvelle valeur — jamais réaffichée',
+    illisible: 'renseignée mais illisible : scellée avec une autre clé de serveur (MSC_SECRET_KEY). Ressaisis-la.',
     base: 'réglé ici', env: 'variable d’environnement', defaut: 'défaut du code',
     intro: 'Ce qui s’applique, et d’où ça vient. Un réglage vide retombe sur la variable d’environnement, puis sur le défaut.',
   },
   pl: {
     chargement: 'Wczytywanie ustawień…', enregistrer: 'Zapisz', effacer: 'Wyczyść',
     renseigne: 'ustawiony', absente: 'brak', nouveau: 'Nowa wartość — nigdy nie pokazywana ponownie',
+    illisible: 'ustawiony, ale nieczytelny: zapieczętowany innym kluczem serwera (MSC_SECRET_KEY). Wpisz ponownie.',
     base: 'ustawione tutaj', env: 'zmienna środowiskowa', defaut: 'domyślne z kodu',
     intro: 'Co obowiązuje i skąd pochodzi. Puste ustawienie wraca do zmiennej środowiskowej, potem do domyślnej.',
   },
@@ -100,9 +102,14 @@ function Reglage({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {secret && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: p.renseigne ? C.accentDeep : C.warning }}>
-              <Icon name={p.renseigne ? 'circle-check' : 'triangle-alert'} size={13} />
-              <span>{p.renseigne ? `${t.renseigne} ${p.apercu ?? ''}` : t.absente}</span>
+            <div
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12, lineHeight: 1.4,
+                color: p.illisible ? C.negative : p.renseigne ? C.accentDeep : C.warning,
+              }}
+            >
+              <Icon name={p.renseigne && !p.illisible ? 'circle-check' : 'triangle-alert'} size={13} />
+              <span>{p.illisible ? t.illisible : p.renseigne ? `${t.renseigne} ${p.apercu ?? ''}` : t.absente}</span>
             </div>
           )}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

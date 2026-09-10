@@ -919,6 +919,21 @@ table, never sent back to the screen: the screen knows it is set and sees its
 last four characters. Without `MSC_SECRET_KEY` the server refuses to store one
 rather than storing it in clear.
 
+**When the coach says the key is missing or refused**, three different things
+can be behind it, and the server now names which:
+
+| the screen says | what it means | what to do |
+|---|---|---|
+| *Aucune clé Anthropic* | nothing in Réglages, no `ANTHROPIC_API_KEY` on the server | paste a key in Créer → Réglages (coach account) |
+| *scellée avec une autre MSC_SECRET_KEY* | the key is in the table, but `.env` has a different sealing key than when it was stored (a regenerated `.env`, a restored dump on another server) | paste it again; Réglages shows the row in red until then |
+| *L'API Anthropic refuse la clé* | the key reached Anthropic and came back 401: revoked, mistyped, or an old one | generate a new key on console.anthropic.com → API keys, paste it in Réglages |
+
+`GET /api/sante` says the same without a login: `cle` (something applies),
+`cle_source` (`base` for Réglages, `env` for the variable, `null`),
+`cle_illisible`. `journalctl -u msc` carries the same line at startup and on
+every refused call. A key with no credit left (`credit balance is too low`)
+and an unknown model (`coach.modele`) get their own messages too.
+
 ### Athlètes, Calendrier, and what the coach was asked
 
 **Athlètes** opens with the club ranking — five axes scored out of 100

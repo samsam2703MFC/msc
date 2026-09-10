@@ -108,6 +108,10 @@ try {
   check('la santé répond sans cookie', sante.statut === 200 && sante.corps.ok === true);
   check('elle dit si le scellement est prêt', typeof sante.corps.scellement === 'boolean',
     String(sante.corps.scellement));
+  check('et l’état de la clé Anthropic : présente, d’où, lisible',
+    typeof sante.corps.cle === 'boolean' && 'cle_source' in sante.corps
+      && typeof sante.corps.cle_illisible === 'boolean',
+    JSON.stringify({ cle: sante.corps.cle, source: sante.corps.cle_source, illisible: sante.corps.cle_illisible }));
 
   const refuse = await c.appel('/api/db/instantane');
   check('l’instantané est refusé sans cookie', refuse.statut === 401, String(refuse.statut));

@@ -131,19 +131,37 @@ function typer(def, brut) {
 
 /* Quinze secondes de cache : une analyse lit cinq paramètres, pas cinq
    requêtes. L'écriture l'invalide, donc le back office se voit tout de suite. */
-const cache = { a: 0, valeurs: null };
+const cache = { a: 0, valeurs: null, illisibles: null };
 let manqueSignale = false;
 
 async function charger() {
   if (cache.valeurs && Date.now() - cache.a < 15_000) return cache.valeurs;
   const valeurs = new Map();
+  const illisibles = new Set();
   try {
     for (const l of await lignes('SELECT cle, type, valeur, scelle FROM msc_param')) {
       const def = PAR_CLE.get(l.cle);
       if (!def) continue;
       if (def.type === 'secret') {
-        if (l.scelle && scellementPret()) {
-          try { valeurs.set(l.cle, desceller(l.scelle)); } catch { /* clé changée : comme absent */ }
+        /* Un secret scellé qui ne se relit pas n'est pas absent : il est là, et
+           personne ne peut l'ouvrir — MSC_SECRET_KEY a changé depuis qu'il a
+           été rangé, ou elle manque. Le faire passer pour absent envoie
+           l'utilisateur vérifier un écran qui lui dira « renseigné »… ou
+           « absent », selon l'endroit. On le garde à part, et on le dit une
+           fois dans le journal. */
+        if (!l.scelle) continue;
+        if (!scellementPret()) {
+          illisibles.add(l.cle);
+          if (!cache.illisibles?.has(l.cle)) console.warn(`[params] ${l.cle} : scellé, mais MSC_SECRET_KEY manque — illisible`);
+          continue;
+        }
+        try {
+          valeurs.set(l.cle, desceller(l.scelle));
+        } catch {
+          illisibles.add(l.cle);
+          if (!cache.illisibles?.has(l.cle)) {
+            console.warn(`[params] ${l.cle} : scellé avec une autre MSC_SECRET_KEY — illisible, à ressaisir dans Réglages`);
+          }
         }
       } else {
         valeurs.set(l.cle, typer(def, l.valeur));
@@ -159,6 +177,7 @@ async function charger() {
     }
   }
   cache.valeurs = valeurs;
+  cache.illisibles = illisibles;
   cache.a = Date.now();
   return valeurs;
 }
@@ -166,6 +185,18 @@ async function charger() {
 export function invalider() {
   cache.a = 0;
   cache.valeurs = null;
+}
+
+/** L'état d'un paramètre, pour /api/sante et les messages d'erreur : s'il
+    s'applique, d'où il vient, et — pour un secret — s'il est là sans pouvoir
+    être relu. */
+export async function etatDe(cle) {
+  const def = definition(cle);
+  const enBase = (await charger()).get(cle);
+  const source = enBase != null && enBase !== ''
+    ? 'base'
+    : def.env && process.env[def.env] ? 'env' : null;
+  return { renseigne: source !== null, source, illisible: Boolean(cache.illisibles?.has(cle)) };
 }
 
 /** Remplit le cache au démarrage, pour que `paramSync` ait quelque chose. */
@@ -226,7 +257,10 @@ export async function tous() {
     };
     if (def.type === 'secret') {
       const s = effective ? String(effective) : '';
-      sortie.push({ ...commun, valeur: null, renseigne: s.length > 0, apercu: s ? `…${s.slice(-4)}` : null });
+      sortie.push({
+        ...commun, valeur: null, renseigne: s.length > 0, apercu: s ? `…${s.slice(-4)}` : null,
+        illisible: Boolean(cache.illisibles?.has(def.cle)),
+      });
     } else {
       sortie.push({ ...commun, valeur: effective, renseigne: effective != null });
     }

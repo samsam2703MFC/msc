@@ -122,6 +122,8 @@ export interface MscParam {
   valeur: number | string | boolean | null;
   renseigne: boolean;
   apercu?: string | null;
+  /** Un secret scellé avec une autre MSC_SECRET_KEY : là, mais irrécupérable. */
+  illisible?: boolean;
 }
 
 /** Un fil de conversation avec le coach, tel que le back office le relit. */
