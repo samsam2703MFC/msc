@@ -1,19 +1,24 @@
-/* Système : ce que le serveur sait de lui-même, dit à l'admin.
+/* Système : ce que le serveur sait de lui-même, dit à l'admin — et, pour ce
+   qui se règle, le champ pour le régler là où le problème est nommé.
 
    La version servie contre celle de cette page — c'est la question « est-ce
    que je vois la dernière version ? », posée une fois pour toutes. Puis les
-   services : la clé Anthropic en trois états, Strava, le scellement, la base.
-   Et ce que le seed de démonstration a laissé, avec le bouton pour le retirer
-   — ce que `npm run db:demo -- retirer` fait sur le serveur. */
+   services : la clé Anthropic en trois états, Strava, le scellement, la base ;
+   la clé et les identifiants Strava se saisissent ici même (ce sont les mêmes
+   réglages que dans Réglages, msc_param). Et ce que le seed de démonstration a
+   laissé, athlète par athlète, avec le bouton pour le retirer — ce que
+   `npm run db:demo -- retirer` fait sur le serveur. */
 
 import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import * as api from '../data/api';
-import type { Systeme } from '../data/api';
-import type { Lang } from '../data/types';
+import type { EtatDemoAthlete, Systeme } from '../data/api';
+import type { Lang, MscParam } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { Card, SectionLabel } from '../components/primitives';
 import type { App } from '../state/useApp';
+import { Reglage } from './ParamScreen';
 
 const T = {
   fr: {
@@ -23,16 +28,17 @@ const T = {
     sansBuild: 'pas de build servi (dist/version.txt absent)', recharger: 'Recharger',
     node: 'Node', env: 'environnement', depuis: 'démarré le',
     sansTls: 'MSC_SANS_TLS est levé : le cookie de session voyage en clair. À ne garder que sur un serveur d’essai.',
-    services: 'Services',
-    cle: 'Clé Anthropic', cleOk: 'renseignée', cleAbsente: 'absente — Réglages · Coach, ou ANTHROPIC_API_KEY',
-    cleIllisible: 'renseignée mais illisible : scellée avec une autre MSC_SECRET_KEY. À ressaisir dans Réglages.',
-    sources: { base: 'réglée dans Réglages', env: 'variable d’environnement', defaut: 'défaut du code' } as Record<string, string>,
-    strava: 'Strava', stravaOk: 'client configuré', stravaNon: 'non configuré — MSC_STRAVA_CLIENT_ID / SECRET',
+    services: 'Services', renseigner: 'Renseigner', modifier: 'Modifier', fermer: 'Fermer',
+    cle: 'Clé Anthropic', cleOk: 'renseignée', cleAbsente: 'absente — à renseigner ici, ou ANTHROPIC_API_KEY dans le .env',
+    cleIllisible: 'renseignée mais illisible : scellée avec une autre MSC_SECRET_KEY, ou posée en clair par SQL. Ressaisis-la ici.',
+    sources: { base: 'réglée ici (msc_param)', env: 'variable d’environnement', defaut: 'défaut du code' } as Record<string, string>,
+    strava: 'Strava', stravaOk: 'client configuré',
+    stravaNon: 'non configuré — l’ID client et le secret de ton application Strava (strava.com/settings/api), à renseigner ici',
     scellement: 'Scellement', scellementOk: 'MSC_SECRET_KEY prête', scellementNon: 'MSC_SECRET_KEY absente ou invalide : aucun secret ne peut être lu ni écrit',
     base: 'Base de données', baseOk: 'répond', baseNon: 'ne répond pas',
     demo: 'Données de démonstration',
-    demoIntro: 'Ce que le seed a laissé dans la base vivante : des activités et des analyses inventées, en octobre 2026. Rien de ce que l’athlète a saisi lui-même n’y ressemble.',
-    rien: 'Rien de la démonstration ici.',
+    demoIntro: 'Ce que le seed a laissé dans la base vivante : des activités et des analyses inventées, en octobre 2026, et le plan de trente semaines. Rien de ce que l’athlète a saisi lui-même n’y ressemble.',
+    rien: 'Rien de la démonstration, chez aucun athlète.', athlete: 'athlète',
     planActif: 'actif — laissé tel quel', planInactif: 'inactif', courses: 'courses à lui seul',
     retirer: 'Retirer le vécu inventé', retirerPlan: '… et le plan de démonstration', confirmer: 'Confirmer ?', annuler: 'Annuler',
     retire: 'Retiré', enCours: 'Retrait…',
@@ -45,16 +51,17 @@ const T = {
     sansBuild: 'brak buildu (dist/version.txt nie istnieje)', recharger: 'Odśwież',
     node: 'Node', env: 'środowisko', depuis: 'uruchomiony',
     sansTls: 'MSC_SANS_TLS jest ustawione: ciasteczko sesji podróżuje jawnie. Tylko na serwerze testowym.',
-    services: 'Usługi',
-    cle: 'Klucz Anthropic', cleOk: 'ustawiony', cleAbsente: 'brak — Ustawienia · Trener lub ANTHROPIC_API_KEY',
-    cleIllisible: 'ustawiony, ale nieczytelny: zapieczętowany innym MSC_SECRET_KEY. Wpisz ponownie w Ustawieniach.',
-    sources: { base: 'z Ustawień', env: 'zmienna środowiskowa', defaut: 'domyślny z kodu' } as Record<string, string>,
-    strava: 'Strava', stravaOk: 'klient skonfigurowany', stravaNon: 'nieskonfigurowany — MSC_STRAVA_CLIENT_ID / SECRET',
+    services: 'Usługi', renseigner: 'Uzupełnij', modifier: 'Edytuj', fermer: 'Zamknij',
+    cle: 'Klucz Anthropic', cleOk: 'ustawiony', cleAbsente: 'brak — wpisz tutaj albo ANTHROPIC_API_KEY w .env',
+    cleIllisible: 'ustawiony, ale nieczytelny: zapieczętowany innym MSC_SECRET_KEY albo wpisany jawnie przez SQL. Wpisz ponownie tutaj.',
+    sources: { base: 'ustawione tutaj (msc_param)', env: 'zmienna środowiskowa', defaut: 'domyślny z kodu' } as Record<string, string>,
+    strava: 'Strava', stravaOk: 'klient skonfigurowany',
+    stravaNon: 'nieskonfigurowany — ID klienta i sekret twojej aplikacji Strava (strava.com/settings/api), do wpisania tutaj',
     scellement: 'Pieczęć', scellementOk: 'MSC_SECRET_KEY gotowy', scellementNon: 'MSC_SECRET_KEY brak lub nieprawidłowy: żaden sekret nie da się odczytać ani zapisać',
     base: 'Baza danych', baseOk: 'odpowiada', baseNon: 'nie odpowiada',
     demo: 'Dane demonstracyjne',
-    demoIntro: 'Co seed zostawił w żywej bazie: wymyślone aktywności i analizy z października 2026. Nic z tego, co zawodnik wpisał sam, tak nie wygląda.',
-    rien: 'Nic z demonstracji.',
+    demoIntro: 'Co seed zostawił w żywej bazie: wymyślone aktywności i analizy z października 2026 oraz plan trzydziestu tygodni. Nic z tego, co zawodnik wpisał sam, tak nie wygląda.',
+    rien: 'Nic z demonstracji, u żadnego zawodnika.', athlete: 'zawodnik',
     planActif: 'aktywny — pozostawiony', planInactif: 'nieaktywny', courses: 'zawodów tylko jego',
     retirer: 'Usuń wymyślone dane', retirerPlan: '… i plan demonstracyjny', confirmer: 'Potwierdzić?', annuler: 'Anuluj',
     retire: 'Usunięto', enCours: 'Usuwanie…',
@@ -62,15 +69,34 @@ const T = {
   },
 } satisfies Record<Lang, unknown>;
 
-function Ligne({ ok, titre, detail, alerte = false }: { ok: boolean; titre: string; detail: string; alerte?: boolean }) {
+/* Les réglages qui se saisissent depuis cette page, service par service. */
+const REGLAGES: Record<'anthropic' | 'strava', string[]> = {
+  anthropic: ['anthropic.cle'],
+  strava: ['strava.client_id', 'strava.client_secret', 'strava.verify_token'],
+};
+
+const BOUTON_SOBRE = {
+  padding: '5px 10px', borderRadius: R.full, border: `1px solid ${C.border}`,
+  color: C.inkMuted, fontSize: 11, fontWeight: 600, background: C.surface, whiteSpace: 'nowrap' as const,
+};
+
+function Ligne({
+  ok, titre, detail, alerte = false, action, children,
+}: {
+  ok: boolean; titre: string; detail: string; alerte?: boolean; action?: ReactNode; children?: ReactNode;
+}) {
   const couleur = ok ? C.accentDeep : alerte ? C.negative : C.warning;
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 0', borderTop: `1px solid ${C.borderSoft}` }}>
-      <Icon name={ok ? 'circle-check' : 'triangle-alert'} size={15} color={couleur} style={{ marginTop: 1, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{titre}</div>
-        <div style={{ fontSize: 11.5, lineHeight: 1.4, color: ok ? C.inkSecondary : couleur }}>{detail}</div>
+    <div style={{ padding: '8px 0', borderTop: `1px solid ${C.borderSoft}` }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <Icon name={ok ? 'circle-check' : 'triangle-alert'} size={15} color={couleur} style={{ marginTop: 1, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{titre}</div>
+          <div style={{ fontSize: 11.5, lineHeight: 1.4, color: ok ? C.inkSecondary : couleur }}>{detail}</div>
+        </div>
+        {action}
       </div>
+      {children && <div style={{ paddingLeft: 23 }}>{children}</div>}
     </div>
   );
 }
@@ -79,30 +105,96 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+type Retrait = { athlete: number; mode: 'arme' | 'arme-plan' | 'en-cours' | 'fait' };
+
+function Demo({
+  e, lang, retrait, onArmer, onRetirer, onAnnuler,
+}: {
+  e: EtatDemoAthlete; lang: Lang; retrait: Retrait | null;
+  onArmer: (mode: 'arme' | 'arme-plan') => void; onRetirer: (plan: boolean) => void; onAnnuler: () => void;
+}) {
+  const t = T[lang];
+  const mien = retrait?.athlete === e.athlete_id ? retrait.mode : null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 8, borderTop: `1px solid ${C.borderSoft}` }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>{`${t.athlete} #${e.athlete_id} · ${e.nom}`}</div>
+      {e.lots.map((l) => (
+        <div key={l.code} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+          <span style={{ fontFamily: F.mono, fontSize: 13, color: l.n > 0 ? C.ink : C.inkQuiet, minWidth: 28, textAlign: 'right' }}>{l.n}</span>
+          <span style={{ fontSize: 12, color: l.n > 0 ? C.inkBody : C.inkQuiet, lineHeight: 1.4 }}>{l.quoi[lang]}</span>
+        </div>
+      ))}
+      {e.plans.map((p) => (
+        <div key={p.id} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+          <Icon name="calendar-days" size={14} color={C.inkQuiet} />
+          <span style={{ fontSize: 12, color: C.inkBody, lineHeight: 1.4 }}>
+            {`${p.nom} — ${p.actif ? t.planActif : t.planInactif}, ${p.courses.length} ${t.courses}`}
+          </span>
+        </div>
+      ))}
+      {mien === 'arme' || mien === 'arme-plan' ? (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.negative }}>{t.confirmer}</span>
+          <button type="button" onClick={() => onRetirer(mien === 'arme-plan')} style={{ padding: '7px 12px', borderRadius: R.md, background: C.negative, color: '#fff', fontWeight: 700, fontSize: 12, border: 'none' }}>
+            {mien === 'arme-plan' ? t.retirerPlan : t.retirer}
+          </button>
+          <button type="button" onClick={onAnnuler} style={{ padding: '7px 12px', borderRadius: R.md, border: `1px solid ${C.border}`, color: C.inkMuted, fontSize: 12, fontWeight: 600, background: C.surface }}>
+            {t.annuler}
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button type="button" disabled={mien != null} onClick={() => onArmer('arme')} style={{ padding: '7px 12px', borderRadius: R.md, border: `1px solid ${C.negative}`, color: C.negative, fontSize: 12, fontWeight: 600, background: C.surface }}>
+            {mien === 'en-cours' ? t.enCours : mien === 'fait' ? t.retire : t.retirer}
+          </button>
+          {e.plans.some((p) => !p.actif) && (
+            <button type="button" disabled={mien != null} onClick={() => onArmer('arme-plan')} style={{ padding: '7px 12px', borderRadius: R.md, border: `1px solid ${C.border}`, color: C.inkMuted, fontSize: 12, fontWeight: 600, background: C.surface }}>
+              {t.retirerPlan}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SystemeScreen({ app }: { app: App }) {
   const t = T[app.lang];
   const lang = app.lang;
   const [etat, setEtat] = useState<Systeme | null>(null);
+  const [params, setParams] = useState<MscParam[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [retrait, setRetrait] = useState<'idle' | 'arme' | 'arme-plan' | 'en-cours' | 'fait'>('idle');
+  const [ouvert, setOuvert] = useState<keyof typeof REGLAGES | null>(null);
+  const [retrait, setRetrait] = useState<Retrait | null>(null);
 
   const lire = useCallback(() => {
     api.systeme()
       .then((s) => { setEtat(s); setErreur(null); })
       .catch((e) => setErreur(message(e)));
+    api.params()
+      .then((r) => setParams(r.params))
+      .catch(() => setParams(null));
   }, []);
 
   useEffect(() => { lire(); }, [lire]);
 
-  const retirer = async (plan: boolean) => {
-    setRetrait('en-cours');
+  /* Le même geste que dans Réglages, puis l'état des services relu : la ligne
+     doit passer au vert sous les yeux. */
+  const enregistrer = async (cle: string, valeur: string | number | boolean | null) => {
+    const r = await api.majParam(cle, valeur);
+    setParams((ps) => (ps ?? []).map((p) => (p.cle === cle ? r.param : p)));
+    lire();
+  };
+
+  const retirer = async (athleteId: number, plan: boolean) => {
+    setRetrait({ athlete: athleteId, mode: 'en-cours' });
     try {
-      await api.retirerDemo(plan);
-      setRetrait('fait');
+      await api.retirerDemo(athleteId, plan);
+      setRetrait({ athlete: athleteId, mode: 'fait' });
       lire();
-      setTimeout(() => setRetrait('idle'), 2000);
+      setTimeout(() => setRetrait(null), 2000);
     } catch (e) {
-      setErreur(message(e)); setRetrait('idle');
+      setErreur(message(e)); setRetrait(null);
     }
   };
 
@@ -119,7 +211,22 @@ export function SystemeScreen({ app }: { app: App }) {
   const cettePage = __MSC_VERSION__;
   const aJour = etat.version === null || etat.version === cettePage;
   const demo = etat.demo;
-  const demoVide = !demo || demo.erreur || (demo.lots.every((l) => l.n === 0) && demo.plans.length === 0);
+  const demoVide = !demo || Boolean(demo.erreur) || demo.athletes.length === 0;
+
+  const champs = (service: keyof typeof REGLAGES) =>
+    REGLAGES[service]
+      .map((cle) => (params ?? []).find((p) => p.cle === cle))
+      .filter((p): p is MscParam => Boolean(p));
+
+  const bascule = (service: keyof typeof REGLAGES, ok: boolean) => params && champs(service).length > 0 ? (
+    <button type="button" onClick={() => setOuvert((o) => (o === service ? null : service))} aria-expanded={ouvert === service} style={BOUTON_SOBRE}>
+      {ouvert === service ? t.fermer : ok ? t.modifier : t.renseigner}
+    </button>
+  ) : null;
+
+  const reglages = (service: keyof typeof REGLAGES) => ouvert === service
+    ? champs(service).map((p) => <Reglage key={p.cle} p={p} lang={lang} onSave={enregistrer} />)
+    : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -153,7 +260,7 @@ export function SystemeScreen({ app }: { app: App }) {
         )}
       </Card>
 
-      {/* les services */}
+      {/* les services — et leurs réglages, là où le manque est nommé */}
       <Card padding="14px 16px" gap={0}>
         <div style={{ paddingBottom: 6 }}><SectionLabel icon="link" color={C.teal}>{t.services}</SectionLabel></div>
         <Ligne
@@ -161,13 +268,18 @@ export function SystemeScreen({ app }: { app: App }) {
           alerte={etat.cle_illisible}
           titre={t.cle}
           detail={etat.cle_illisible ? t.cleIllisible : etat.cle ? `${t.cleOk} · ${t.sources[etat.cle_source ?? 'defaut'] ?? etat.cle_source}` : t.cleAbsente}
-        />
-        <Ligne ok={etat.strava} titre={t.strava} detail={etat.strava ? t.stravaOk : t.stravaNon} />
+          action={bascule('anthropic', etat.cle && !etat.cle_illisible)}
+        >
+          {reglages('anthropic')}
+        </Ligne>
+        <Ligne ok={etat.strava} titre={t.strava} detail={etat.strava ? t.stravaOk : t.stravaNon} action={bascule('strava', etat.strava)}>
+          {reglages('strava')}
+        </Ligne>
         <Ligne ok={etat.scellement} alerte={!etat.scellement} titre={t.scellement} detail={etat.scellement ? t.scellementOk : t.scellementNon} />
         <Ligne ok={etat.base.ok} alerte={!etat.base.ok} titre={t.base} detail={etat.base.ok ? `${t.baseOk} · ${etat.base.version ?? ''}` : `${t.baseNon} · ${etat.base.erreur ?? ''}`} />
       </Card>
 
-      {/* la démonstration */}
+      {/* la démonstration, athlète par athlète */}
       <Card padding="14px 16px" gap={8}>
         <SectionLabel icon="flask-conical" color={C.teal}>{t.demo}</SectionLabel>
         <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.demoIntro}</div>
@@ -178,49 +290,20 @@ export function SystemeScreen({ app }: { app: App }) {
             <span>{t.rien}</span>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {demo!.lots.map((l) => (
-              <div key={l.code} style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '6px 0', borderTop: `1px solid ${C.borderSoft}` }}>
-                <span style={{ fontFamily: F.mono, fontSize: 13, color: l.n > 0 ? C.ink : C.inkQuiet, minWidth: 28, textAlign: 'right' }}>{l.n}</span>
-                <span style={{ fontSize: 12, color: l.n > 0 ? C.inkBody : C.inkQuiet, lineHeight: 1.4 }}>{l.quoi[lang]}</span>
-              </div>
+          <>
+            {demo!.athletes.map((e) => (
+              <Demo
+                key={e.athlete_id}
+                e={e}
+                lang={lang}
+                retrait={retrait}
+                onArmer={(mode) => setRetrait({ athlete: e.athlete_id, mode })}
+                onRetirer={(plan) => void retirer(e.athlete_id, plan)}
+                onAnnuler={() => setRetrait(null)}
+              />
             ))}
-            {demo!.plans.map((p) => (
-              <div key={p.id} style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '6px 0', borderTop: `1px solid ${C.borderSoft}` }}>
-                <Icon name="calendar-days" size={14} color={C.inkQuiet} />
-                <span style={{ fontSize: 12, color: C.inkBody, lineHeight: 1.4 }}>
-                  {`${p.nom} — ${p.actif ? t.planActif : t.planInactif}, ${p.courses.length} ${t.courses}`}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-        {!demoVide && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {retrait === 'arme' || retrait === 'arme-plan' ? (
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.negative }}>{t.confirmer}</span>
-                <button type="button" onClick={() => void retirer(retrait === 'arme-plan')} style={{ padding: '7px 12px', borderRadius: R.md, background: C.negative, color: '#fff', fontWeight: 700, fontSize: 12, border: 'none' }}>
-                  {retrait === 'arme-plan' ? t.retirerPlan : t.retirer}
-                </button>
-                <button type="button" onClick={() => setRetrait('idle')} style={{ padding: '7px 12px', borderRadius: R.md, border: `1px solid ${C.border}`, color: C.inkMuted, fontSize: 12, fontWeight: 600, background: C.surface }}>
-                  {t.annuler}
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <button type="button" disabled={retrait !== 'idle'} onClick={() => setRetrait('arme')} style={{ padding: '7px 12px', borderRadius: R.md, border: `1px solid ${C.negative}`, color: C.negative, fontSize: 12, fontWeight: 600, background: C.surface }}>
-                  {retrait === 'en-cours' ? t.enCours : retrait === 'fait' ? t.retire : t.retirer}
-                </button>
-                {demo!.plans.some((p) => !p.actif) && (
-                  <button type="button" disabled={retrait !== 'idle'} onClick={() => setRetrait('arme-plan')} style={{ padding: '7px 12px', borderRadius: R.md, border: `1px solid ${C.border}`, color: C.inkMuted, fontSize: 12, fontWeight: 600, background: C.surface }}>
-                    {t.retirerPlan}
-                  </button>
-                )}
-              </div>
-            )}
             <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>{t.planNote}</div>
-          </div>
+          </>
         )}
         {erreur && <div style={{ fontSize: 12, color: C.negative }}>{erreur}</div>}
       </Card>

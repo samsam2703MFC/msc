@@ -465,10 +465,19 @@ export interface PlanDemo {
   retire?: boolean;
 }
 
-export interface EtatDemo {
+export interface EtatDemoAthlete {
   athlete_id: number;
+  nom: string;
   lots: LotDemo[];
   plans: PlanDemo[];
+  total: number;
+}
+
+/** Ce que le seed a laissé, athlète par athlète — seuls ceux chez qui il reste
+    quelque chose sont là. */
+export interface EtatDemo {
+  athletes: EtatDemoAthlete[];
+  scannes: number;
   total: number;
   erreur?: string;
 }
@@ -492,9 +501,9 @@ export function systeme(): Promise<Systeme> {
   return appeler<Systeme>('/admin/systeme');
 }
 
-export function retirerDemo(plan: boolean): Promise<{ retires: LotDemo[]; plans: PlanDemo[] }> {
+export function retirerDemo(athleteId: number, plan: boolean): Promise<{ retires: LotDemo[]; plans: PlanDemo[] }> {
   return appeler<{ retires: LotDemo[]; plans: PlanDemo[] }>('/admin/demo', {
-    method: 'POST', body: JSON.stringify({ plan }),
+    method: 'POST', body: JSON.stringify({ athlete_id: athleteId, plan }),
   });
 }
 

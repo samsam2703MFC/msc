@@ -74,6 +74,19 @@ export async function etatDemo(athleteId = 1) {
   return { athlete_id: athleteId, lots, plans, total: lots.reduce((t, l) => t + l.n, 0) + plans.length };
 }
 
+/** Le même état, pour chaque athlète de la base — le seed crée le sien en
+    auto-incrément, donc rien ne garantit qu'il porte le numéro 1. Ne remonte
+    que ceux chez qui il reste quelque chose. */
+export async function etatDemoTous() {
+  const athletes = await lignes('SELECT id, nom FROM msc_athlete ORDER BY id');
+  const trouves = [];
+  for (const a of athletes) {
+    const e = await etatDemo(a.id);
+    if (e.total > 0) trouves.push({ ...e, nom: a.nom });
+  }
+  return { athletes: trouves, scannes: athletes.length, total: trouves.reduce((t, e) => t + e.total, 0) };
+}
+
 /** Retire le vécu inventé ; avec `plan`, le plan de démonstration aussi, s'il
     n'est pas actif, et les courses que lui seul nomme et qui n'ont pas de
     résultat. */

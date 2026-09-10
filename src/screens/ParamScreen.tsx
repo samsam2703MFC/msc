@@ -45,7 +45,7 @@ const ENTREE = {
   background: C.surface, color: C.ink, fontSize: 14, fontFamily: F.mono,
 };
 
-function Reglage({
+export function Reglage({
   p, lang, onSave,
 }: {
   p: MscParam; lang: Lang; onSave: (cle: string, valeur: string | number | boolean | null) => Promise<void>;

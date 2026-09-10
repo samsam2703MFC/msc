@@ -14,7 +14,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hacher } from './auth.mjs';
 import { bd, ligne, lignes, scellementPret } from './bd.mjs';
-import { etatDemo, retirerDemo } from './demo.mjs';
+import { etatDemoTous, retirerDemo } from './demo.mjs';
 import * as params from './params.mjs';
 import * as strava from './strava.mjs';
 
@@ -288,7 +288,7 @@ export async function systeme(dist) {
   }
   let demo = null;
   try {
-    demo = await etatDemo(1);
+    demo = await etatDemoTous();
   } catch (e) {
     demo = { erreur: e?.message ?? String(e) };
   }

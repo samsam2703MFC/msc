@@ -579,8 +579,10 @@ try {
   check('le système se décrit : version servie, clé, Strava, scellement, base, démo',
     systeme.statut === 200 && 'version' in systeme.corps && typeof systeme.corps.cle === 'boolean'
       && typeof systeme.corps.cle_illisible === 'boolean' && systeme.corps.base?.ok === true
-      && Array.isArray(systeme.corps.demo?.lots),
+      && Array.isArray(systeme.corps.demo?.athletes) && typeof systeme.corps.demo?.scannes === 'number',
     JSON.stringify({ version: systeme.corps.version, base: systeme.corps.base?.version }));
+  const sansAthlete = await c.appel('/api/admin/demo', { method: 'POST', body: JSON.stringify({ plan: false }) });
+  check('retirer la démonstration exige de nommer l’athlète', sansAthlete.statut === 400, sansAthlete.corps.erreur);
   await bd().execute("UPDATE compte SET role = 'athlete' WHERE email = ?", [EMAIL]);
   const redevenu = await c.appel('/api/admin/systeme');
   check('redevenu athlète, la porte se referme', redevenu.statut === 403);

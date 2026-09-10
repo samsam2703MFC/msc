@@ -327,6 +327,13 @@ try {
   check('et l’état des services', /Clé Anthropic/i.test(systemeTexte) && /Base de données/i.test(systemeTexte)
     && /Strava/.test(systemeTexte) && /Scellement/i.test(systemeTexte));
   check('et ce que la démonstration a laissé', /Données de démonstration/i.test(systemeTexte));
+  /* La clé se saisit là où son absence est nommée : le bouton ouvre le même
+     champ que Réglages. On ne l'enregistre pas — une fausse clé en base
+     ferait mentir les autres contrôles. */
+  await page.getByRole('button', { name: /Renseigner|Modifier/ }).first().click();
+  await page.waitForTimeout(400);
+  check('la clé Anthropic se saisit depuis Système',
+    (await page.locator('input[type=password][autocomplete=new-password]').count()) >= 1);
   await bd().execute("UPDATE compte SET role = 'athlete' WHERE email = ?", [EMAIL]);
 
   console.log('\n=== sans réseau ===');

@@ -1094,14 +1094,19 @@ own.
 **Système** answers the question every deploy raises — *am I looking at the
 new version?* — by printing the version built into the page next to the one
 the server serves (`dist/version.txt`), with a **Recharger** button when they
-differ. Then the services, each with the gesture that fixes it: the Anthropic
-key in its three states (absent, set and from where, set but unreadable
-because `MSC_SECRET_KEY` changed), Strava's client, the sealing key, the
-database and its version. And what the demo seed left in the live base — the
-invented October 2026 activities, journal, measures, analyses, and the
-thirty-week demo plan — with a **Retirer** button that does exactly what
-`npm run db:demo -- retirer` does, behind a confirmation. The logic is one
-module, `server/demo.mjs`, shared by the script and the route.
+differ. Then the services, each with the field that fixes it right there: the
+Anthropic key in its three states (absent, set and from where, set but
+unreadable because `MSC_SECRET_KEY` changed or a clear value was pushed by
+SQL) with a **Renseigner** button that opens the same field as Réglages;
+Strava's client ID, secret and verify token the same way; the sealing key;
+the database and its version. And what the demo seed left in the live base —
+the invented October 2026 activities, journal, measures, analyses, and the
+thirty-week demo plan — athlete by athlete, because the seed creates its
+athlete by auto-increment and nothing says it is number 1, with a **Retirer**
+button per athlete that does exactly what `npm run db:demo -- retirer` does,
+behind a confirmation. The logic is one module, `server/demo.mjs`, shared by
+the script and the route; without `--athlete`, the script scans every athlete
+too.
 
 Routes: `GET/POST /api/admin/comptes`, `PUT /api/admin/comptes/:id`,
 `POST /api/admin/athletes`, `PUT /api/admin/acces`, `GET /api/admin/systeme`,

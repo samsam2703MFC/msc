@@ -393,7 +393,9 @@ async function router(req, res, url) {
     }
     if (chemin === '/api/admin/demo' && req.method === 'POST') {
       const corps = await lireCorps(req, 2_000);
-      return json(res, 200, await admin.retirerDemo(1, { plan: Boolean(corps.plan) }));
+      const athleteId = Number(corps.athlete_id);
+      if (!Number.isInteger(athleteId) || athleteId <= 0) return json(res, 400, { erreur: 'champ manquant : athlete_id' });
+      return json(res, 200, await admin.retirerDemo(athleteId, { plan: Boolean(corps.plan) }));
     }
     return json(res, 404, { erreur: 'route inconnue' });
   }
