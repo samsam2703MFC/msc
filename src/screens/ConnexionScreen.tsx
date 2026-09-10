@@ -254,6 +254,9 @@ export function ConnexionScreen({
           {enCours ? t.encours : t.entrer}
         </button>
       </div>
+      <div style={{ fontSize: 10, fontFamily: F.mono, color: C.inkQuiet, textAlign: 'center', marginTop: 4 }}>
+        {`version ${__MSC_VERSION__}`}
+      </div>
     </form>
   );
 }
