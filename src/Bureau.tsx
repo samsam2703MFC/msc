@@ -229,8 +229,8 @@ export function Bureau({
 
         <main className="msc-scroll" style={{ flex: 1, padding: '24px 32px 40px' }}>
           {page.type === 'section' ? (
-            <div style={{ maxWidth: 1120 }}>
-              <SectionAdmin app={app} section={page.section} onSection={(s) => setPage({ type: 'section', section: s })} />
+            <div style={{ maxWidth: 1400 }}>
+              <SectionAdmin app={app} section={page.section} large onSection={(s) => setPage({ type: 'section', section: s })} />
             </div>
           ) : (
             /* Les écrans de l'athlète, à la largeur pour laquelle ils sont

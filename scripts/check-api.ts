@@ -55,8 +55,10 @@ function client() {
 /* Deux comptes et deux athlètes : sans un second, « ce qui ne m'appartient pas
    m'est refusé » n'est pas testable, et c'est la seule assertion qui compte
    vraiment dans un contrôle d'accès. */
-await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?, ?)', [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`, `inscrit-${EMAIL}`]);
-await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?, ?)', ['Athlète du contrôle', 'Athlète créé du contrôle', 'Inscrit du contrôle']);
+await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?, ?, ?, ?)',
+  [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`, `inscrit-${EMAIL}`, `libre-${EMAIL}`, `libre2-${EMAIL}`]);
+await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?, ?, ?)',
+  ['Athlète du contrôle', 'Athlète créé du contrôle', 'Inscrit du contrôle', 'Libre du contrôle']);
 
 const [c1] = (await bd().execute(
   'INSERT INTO compte (email, mot_de_passe, nom, role) VALUES (?, ?, ?, ?)',
@@ -679,6 +681,33 @@ try {
     JSON.stringify(moiStrava?.strava));
   const sansAthlete = await c.appel('/api/admin/demo', { method: 'POST', body: JSON.stringify({ plan: false }) });
   check('retirer la démonstration exige de nommer l’athlète', sansAthlete.statut === 400, sansAthlete.corps.erreur);
+  /* L'inscription libre : un athlète crée son compte, et sa session s'ouvre.
+     L'admin peut la fermer, ou la garder derrière un code — les deux se
+     règlent dans msc_param, donc par l'API, cache compris. */
+  console.log('\n=== l’inscription libre ===');
+  const libre = client();
+  const corpsLibre = { prenom: 'Léa', nom: 'Libre du contrôle', email: `Libre-${EMAIL}`, mot_de_passe: MOT_DE_PASSE, actuelle: '5:30', cible: '5:00' };
+  const court2 = await libre.appel('/api/inscription', { method: 'POST', body: JSON.stringify({ ...corpsLibre, mot_de_passe: 'court' }) });
+  check('un mot de passe trop court est refusé à l’inscription', court2.statut === 400, court2.corps.erreur);
+  const inscrit2 = await libre.appel('/api/inscription', { method: 'POST', body: JSON.stringify(corpsLibre) });
+  check('un athlète s’inscrit seul : son compte, son athlète, sa session',
+    inscrit2.statut === 200 && inscrit2.corps.compte?.role === 'athlete' && inscrit2.corps.athletes?.[0]?.droit === 'ecriture'
+      && inscrit2.corps.athlete?.ref_actuelle_s === 330 && /msc_session=/.test(libre.cookie),
+    JSON.stringify(inscrit2.corps).slice(0, 140));
+  const moiLibre = await libre.appel('/api/moi');
+  check('… et « moi » le reconnaît aussitôt', moiLibre.statut === 200 && moiLibre.corps.compte?.email === `libre-${EMAIL}`);
+  const doublon2 = await client().appel('/api/inscription', { method: 'POST', body: JSON.stringify(corpsLibre) });
+  check('le même email une seconde fois : 409', doublon2.statut === 409, doublon2.corps.erreur);
+  const fermer = await c.appel('/api/param', { method: 'PUT', body: JSON.stringify({ cle: 'securite.inscription_ouverte', valeur: false }) });
+  const ferme = await client().appel('/api/inscription', { method: 'POST', body: JSON.stringify({ ...corpsLibre, email: `libre2-${EMAIL}` }) });
+  check('inscriptions fermées par l’admin : 403', fermer.statut === 200 && ferme.statut === 403, ferme.corps.erreur);
+  await c.appel('/api/param', { method: 'PUT', body: JSON.stringify({ cle: 'securite.inscription_ouverte', valeur: null }) });
+  const codePose = await c.appel('/api/param', { method: 'PUT', body: JSON.stringify({ cle: 'securite.code_invitation', valeur: 'CLUB-2026' }) });
+  const sansCode = await client().appel('/api/inscription', { method: 'POST', body: JSON.stringify({ ...corpsLibre, email: `libre2-${EMAIL}` }) });
+  const avecCode = await client().appel('/api/inscription', { method: 'POST', body: JSON.stringify({ ...corpsLibre, email: `libre2-${EMAIL}`, code: 'CLUB-2026' }) });
+  check('un code d’invitation posé est exigé, et suffit',
+    codePose.statut === 200 && sansCode.statut === 403 && avecCode.statut === 200, `${sansCode.statut} / ${avecCode.statut} ${sansCode.corps.erreur ?? ''}`);
+  await c.appel('/api/param', { method: 'PUT', body: JSON.stringify({ cle: 'securite.code_invitation', valeur: null }) });
   await bd().execute("UPDATE compte SET role = 'athlete' WHERE email = ?", [EMAIL]);
   const redevenu = await c.appel('/api/admin/systeme');
   check('redevenu athlète, la porte se referme', redevenu.statut === 403);
@@ -771,8 +800,11 @@ try {
   await bd().execute('DELETE FROM msc_mutation WHERE id IN (?, ?)', [
     '00000000-0000-4000-8000-00000000cafe', '00000000-0000-4000-8000-0000000dbeef',
   ]);
-  await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?, ?)', [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`, `inscrit-${EMAIL}`]);
-  await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?, ?)', ['Athlète du contrôle', 'Athlète créé du contrôle', 'Inscrit du contrôle']);
+  await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?, ?, ?, ?)',
+    [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`, `inscrit-${EMAIL}`, `libre-${EMAIL}`, `libre2-${EMAIL}`]);
+  await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?, ?, ?)',
+    ['Athlète du contrôle', 'Athlète créé du contrôle', 'Inscrit du contrôle', 'Libre du contrôle']);
+  await bd().execute("UPDATE msc_param SET valeur = NULL, scelle = NULL WHERE cle IN ('securite.inscription_ouverte', 'securite.code_invitation')");
   await fermer();
 }
 

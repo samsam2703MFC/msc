@@ -346,6 +346,22 @@ export function useApp() {
     /* Une fois, au montage. */
   }, [appliquerInstantane, ouvrir]);
 
+  /* S'inscrire ouvre la session comme une connexion : la même amorce, le
+     même écran qui reste monté tant que ça n'a pas marché. */
+  const sInscrire = useCallback(
+    async (corps: Parameters<typeof api.inscription>[0]) => {
+      setAmorceErreur(null);
+      try {
+        await ouvrir(await api.inscription(corps));
+      } catch (e) {
+        if (!monte.current) return;
+        setAmorceErreur(message(e));
+        throw e;
+      }
+    },
+    [ouvrir],
+  );
+
   const seConnecter = useCallback(
     async (email: string, motDePasse: string) => {
       setAmorceErreur(null);
@@ -372,6 +388,15 @@ export function useApp() {
     }
     /* Vider les tables, et pas seulement l'écran : les données d'un athlète ne
        doivent pas rester lisibles par le suivant qui se connecte ici. */
+    /* Les feuilles ouvertes se referment : on se déconnecte depuis Réglages,
+       et sans ça la feuille resterait posée sur l'écran de connexion, puis
+       sur l'application du suivant. */
+    setSettingsOpen(false);
+    setProfilOpen(false);
+    setSessionId(null);
+    /* Le matin appartient à celui qui l'a passé : le suivant qui se connecte
+       sur cet appareil doit donner ses deux chiffres, pas hériter des siens. */
+    setMatinPasse(null);
     db.vider();
     /* La copie locale part avec : les données d'un athlète ne doivent pas
        rester lisibles par le suivant qui se connecte sur cet appareil. La file
@@ -936,6 +961,7 @@ export function useApp() {
     identite,
     seConnecter,
     seDeconnecter,
+    sInscrire,
     recharger,
 
     screen,

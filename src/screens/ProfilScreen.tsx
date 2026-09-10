@@ -9,7 +9,7 @@ import * as strava from '../data/strava';
 import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
-import { Card, SectionLabel } from '../components/primitives';
+import { Card, Colonnes, SectionLabel } from '../components/primitives';
 import { ProfilForm } from '../components/ProfilSheet';
 import type { App } from '../state/useApp';
 
@@ -32,7 +32,7 @@ const T = {
   },
 } satisfies Record<Lang, unknown>;
 
-export function ProfilScreen({ app, onSection }: { app: App; onSection?: (s: 'strava') => void }) {
+export function ProfilScreen({ app, onSection, large = false }: { app: App; onSection?: (s: 'strava') => void; large?: boolean }) {
   const t = T[app.lang];
   const [etat, setEtat] = useState<strava.EtatStrava | null>(null);
   const [job, setJob] = useState<'idle' | 'verif'>('idle');
@@ -52,12 +52,12 @@ export function ProfilScreen({ app, onSection }: { app: App; onSection?: (s: 'st
   const couleur = !etat ? C.inkQuiet : etat.lie ? C.accentDeep : etat.configure ? C.warning : C.negative;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <Colonnes large={large} ratio="minmax(0, 7fr) minmax(0, 5fr)" gauche={
       <Card padding="16px 18px" gap={12}>
         <SectionLabel icon="user" color={C.teal}>{`${t.profil} · ${db.athlete.nom}`}</SectionLabel>
         <ProfilForm app={app} onDone={() => undefined} />
       </Card>
-
+    } droite={<>
       <Card padding="16px 18px" gap={8}>
         <SectionLabel icon="gauge" color={C.teal}>{t.references}</SectionLabel>
         <div style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
@@ -111,6 +111,6 @@ export function ProfilScreen({ app, onSection }: { app: App; onSection?: (s: 'st
         {erreur && <div style={{ fontSize: 12, color: C.negative }}>{erreur}</div>}
         <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>{t.aideStrava}</div>
       </Card>
-    </div>
+    </>} />
   );
 }

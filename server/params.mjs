@@ -113,6 +113,12 @@ export const CATALOGUE = [
   { cle: 'securite.mdp_min', groupe: 'securite', type: 'nombre', defaut: 12, unite: 'caractères', ordre: 10, env: 'MSC_MDP_MIN',
     libelle: { fr: 'Longueur minimale d’un mot de passe', pl: 'Minimalna długość hasła' },
     aide: { fr: 'Appliquée quand un compte reçoit un mot de passe (npm run compte).', pl: 'Stosowana, gdy konto dostaje hasło (npm run compte).' } },
+  { cle: 'securite.inscription_ouverte', groupe: 'securite', type: 'booleen', defaut: true, ordre: 20, env: 'MSC_INSCRIPTION_OUVERTE',
+    libelle: { fr: 'Inscriptions ouvertes', pl: 'Rejestracja otwarta' },
+    aide: { fr: 'Un athlète crée son compte depuis l’écran de connexion. Fermé : seul l’admin crée les comptes.', pl: 'Zawodnik tworzy konto z ekranu logowania. Zamknięte: konta tworzy tylko admin.' } },
+  { cle: 'securite.code_invitation', groupe: 'securite', type: 'secret', defaut: null, ordre: 30, env: 'MSC_CODE_INVITATION',
+    libelle: { fr: 'Code d’invitation', pl: 'Kod zaproszenia' },
+    aide: { fr: 'S’il est renseigné, l’inscription le demande. Vide : l’inscription est libre.', pl: 'Jeśli ustawiony, rejestracja go wymaga. Pusty: rejestracja wolna.' } },
 ];
 
 const PAR_CLE = new Map(CATALOGUE.map((p) => [p.cle, p]));

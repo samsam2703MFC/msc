@@ -16,6 +16,7 @@ import { Avatar } from '../components/Avatar';
 import { AvatarNiveau } from '../components/AvatarNiveau';
 import { CoachAvatar } from '../components/CoachAvatar';
 import { FormeJauge } from '../components/FormeJauge';
+import { Colonnes } from '../components/primitives';
 import { Courbe } from '../components/Courbe';
 import type { Point } from '../components/Courbe';
 import { Icon } from '../components/Icon';
@@ -330,7 +331,7 @@ function Tuile({ label, valeur, sous }: { label: string; valeur: string; sous?: 
 
 /* Le suivi de l'athlète affiché : sa carte de coach — allures, semaine en
    cours, dernier RPE, son coach, sa forme, ce qu'il a demandé. */
-export function SuiviAthlete({ app }: { app: App }) {
+export function SuiviAthlete({ app, large = false }: { app: App; large?: boolean }) {
   const t = T[app.lang];
   const fr = app.lang === 'fr';
   useEffect(() => { void app.chargerApercu(); }, [app.chargerApercu, app.version]);
@@ -344,8 +345,7 @@ export function SuiviAthlete({ app }: { app: App }) {
   if (app.apercu === null) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.chargement}</div>;
   if (!a) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.aucun}</div>;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Carte a={a} app={app} />
+    <Colonnes large={large} ratio="minmax(0, 7fr) minmax(0, 5fr)" gauche={<Carte a={a} app={app} />} droite={
       <div style={{ borderRadius: R.card, background: C.surface, border: `1px solid ${C.border}`, boxShadow: C.shadowCard, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="scale" size={16} color={C.teal} />
@@ -358,7 +358,7 @@ export function SuiviAthlete({ app }: { app: App }) {
           vide={fr ? 'Aucune mesure de poids confirmée.' : 'Brak potwierdzonych pomiarów wagi.'}
         />
       </div>
-    </div>
+    } />
   );
 }
 
@@ -367,7 +367,7 @@ export function SuiviAthlete({ app }: { app: App }) {
    qui en fait l'athlète affiché et ouvre son suivi. Dessous, pour l'admin,
    l'onboarding : l'assistant qui crée un athlète et son compte, une fois. Ce
    qui change tout le temps — son plan, ses starts — est dans ses sections. */
-export function AthletesHub({ app, onSection }: { app: App; onSection?: (s: Suite) => void }) {
+export function AthletesHub({ app, onSection, large = false }: { app: App; onSection?: (s: Suite) => void; large?: boolean }) {
   const t = T[app.lang];
   const fr = app.lang === 'fr';
   useEffect(() => { void app.chargerApercu(); }, [app.chargerApercu, app.version]);
@@ -397,6 +397,63 @@ export function AthletesHub({ app, onSection }: { app: App; onSection?: (s: Suit
           ? <div style={{ color: C.inkSecondary, fontSize: 13, padding: '8px 0' }}>{t.chargement}</div>
           : app.apercu.length === 0
             ? <div style={{ color: C.inkSecondary, fontSize: 13, padding: '8px 0' }}>{t.aucun}</div>
+            : large
+              ? (
+                /* Sur le bureau, un tableau : une colonne par chose, et l'œil
+                   compare d'une ligne à l'autre. */
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {[t.titre.replace(/s$/, ''), fr ? 'Plan' : 'Plan', '10 km', fr ? 'Séances · semaine' : 'Treningi · tydzień', t.rpe, ''].map((h, i) => (
+                        <th key={i} scope="col" style={{ textAlign: 'left', padding: '6px 8px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {app.apercu.map((a) => {
+                      const courant = a.id === db.athleteId;
+                      const affiche = [a.prenom, a.nom].filter(Boolean).join(' ') || a.nom;
+                      const phase = a.bloc ? phaseDe(a.bloc.part) : null;
+                      const cellule: React.CSSProperties = { padding: '8px 8px', borderTop: `1px solid ${C.borderSoft}`, verticalAlign: 'middle' };
+                      return (
+                        <tr key={a.id} style={{ background: courant ? C.accentSoft : 'transparent' }}>
+                          <td style={cellule}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <Avatar nom={affiche} taille={32} palier={a.niveau} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, color: C.ink, whiteSpace: 'nowrap' }}>{affiche}</div>
+                                {a.surnom && <div style={{ fontSize: 11, color: C.inkSecondary }}>{a.surnom}</div>}
+                              </div>
+                            </div>
+                          </td>
+                          <td style={cellule}>
+                            {a.bloc && phase
+                              ? <span style={{ color: phase.couleur, fontWeight: 600, fontSize: 12 }}>{`${a.bloc.nom[app.lang]} · ${t.semaine} ${a.semaine}/${a.total}`}</span>
+                              : <span style={{ color: C.inkQuiet, fontSize: 12 }}>{t.sansPlan}</span>}
+                          </td>
+                          <td style={{ ...cellule, fontFamily: F.mono, fontSize: 12, whiteSpace: 'nowrap' }}>{`${db.format10k(a.ref_actuelle_s)} → ${db.format10k(a.ref_cible_s)}`}</td>
+                          <td style={{ ...cellule, fontFamily: F.mono, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {`${a.cette_semaine.faites}/${a.cette_semaine.prevues} · ${h(a.cette_semaine.volume_realise_min)} / ${h(a.cette_semaine.volume_prevu_min)}`}
+                          </td>
+                          <td style={{ ...cellule, fontFamily: F.mono, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {a.dernier_rpe ? `${a.dernier_rpe.valeur} · ${a.dernier_rpe.date}` : '—'}
+                          </td>
+                          <td style={{ ...cellule, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {courant
+                              ? <span style={{ fontSize: 11, color: C.accentDeep, fontWeight: 600 }}>{t.courant}</span>
+                              : (
+                                <button type="button" className="msc-hover-accent" onClick={() => void ouvrir(a.id)} aria-label={`${t.voir} ${affiche}`}
+                                  style={{ padding: '6px 11px', borderRadius: R.full, border: `1px solid ${C.border}`, fontSize: 12, fontWeight: 600, color: C.ink, background: C.surface }}>
+                                  {t.voir}
+                                </button>
+                              )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )
             : app.apercu.map((a) => {
               const courant = a.id === db.athleteId;
               const affiche = [a.prenom, a.nom].filter(Boolean).join(' ') || a.nom;

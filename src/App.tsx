@@ -309,6 +309,7 @@ function Contenu({ app, framed }: { app: ReturnType<typeof useApp>; framed: bool
           lang={app.lang}
           erreur={app.amorceErreur}
           onConnexion={app.seConnecter}
+          onInscription={app.sInscrire}
         />
       );
     case 'erreur':

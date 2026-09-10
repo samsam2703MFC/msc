@@ -13,7 +13,7 @@ import { appliquerMethode, demanderMethode, MethodeError } from '../data/methode
 import type { Methode } from '../data/methode';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
-import { AccentButton, Card, Grid, Mono, SectionLabel } from '../components/primitives';
+import { AccentButton, Card, Colonnes, Grid, Mono, SectionLabel } from '../components/primitives';
 import type { Lang } from '../data/types';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
@@ -165,19 +165,25 @@ export function sectionsDe(role: 'athlete' | 'coach' | 'admin' | undefined): Sec
     bascule, le bureau la met à côté de son menu. */
 export type Suite = 'strava' | 'plan' | 'suivi' | 'param';
 
-export function SectionAdmin({ app, section, onSection }: { app: App; section: Section; onSection?: (s: Suite) => void }) {
+/** `large` : le bureau, qui a de la largeur — les sections s'y posent en
+    colonnes ; le téléphone empile. */
+export function SectionAdmin({
+  app, section, onSection, large = false,
+}: {
+  app: App; section: Section; onSection?: (s: Suite) => void; large?: boolean;
+}) {
   switch (section) {
-    case 'athletes': return <AthletesHub app={app} onSection={onSection} />;
+    case 'athletes': return <AthletesHub app={app} onSection={onSection} large={large} />;
     case 'classement': return <Classement app={app} />;
     case 'calendrier': return <CalendrierScreen app={app} />;
-    case 'suivi': return <SuiviAthlete app={app} />;
+    case 'suivi': return <SuiviAthlete app={app} large={large} />;
     case 'courses': return <BackOffice app={app} />;
     case 'strava': return <StravaScreen app={app} />;
-    case 'profil': return <ProfilScreen app={app} onSection={onSection} />;
-    case 'param': return <ParamScreen app={app} />;
-    case 'comptes': return <ComptesScreen app={app} onSection={onSection} />;
-    case 'systeme': return <SystemeScreen app={app} onSection={onSection} />;
-    default: return <Generateur app={app} />;
+    case 'profil': return <ProfilScreen app={app} onSection={onSection} large={large} />;
+    case 'param': return <ParamScreen app={app} large={large} />;
+    case 'comptes': return <ComptesScreen app={app} onSection={onSection} large={large} />;
+    case 'systeme': return <SystemeScreen app={app} onSection={onSection} large={large} />;
+    default: return <Generateur app={app} large={large} />;
   }
 }
 
@@ -250,7 +256,7 @@ export function AdminScreen({ app }: { app: App }) {
   );
 }
 
-function Generateur({ app }: { app: App }) {
+function Generateur({ app, large = false }: { app: App; large?: boolean }) {
   const fr = app.lang === 'fr';
   const seed = db.athlete;
 
@@ -329,7 +335,7 @@ function Generateur({ app }: { app: App }) {
     setObjectifs((prev) => prev.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <Colonnes large={large} ratio="minmax(0, 5fr) minmax(0, 6fr)" gauche={<>
       {/* d'où l'on part : ce que Strava sait de l'athlète */}
       <Historique
         activites={db.select('msc_activity')}
@@ -442,6 +448,7 @@ function Generateur({ app }: { app: App }) {
         </div>
       </Card>
 
+    </>} droite={<>
       {/* ce que ça donne */}
       {plan ? (
         <>
@@ -606,7 +613,7 @@ function Generateur({ app }: { app: App }) {
           </div>
         </Card>
       )}
-    </div>
+    </>} />
   );
 }
 

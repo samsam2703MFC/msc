@@ -178,6 +178,15 @@ export function connexion(email: string, mot_de_passe: string): Promise<Identite
   });
 }
 
+/** S'inscrire : l'athlète, son compte, son accès, et la session ouverte —
+    la même réponse qu'une connexion. */
+export function inscription(corps: {
+  prenom: string; nom: string; email: string; mot_de_passe: string;
+  actuelle: string; cible: string; debut?: string; code?: string;
+}): Promise<Identite> {
+  return appeler<Identite>('/inscription', { method: 'POST', body: JSON.stringify(corps) });
+}
+
 export function deconnexion(): Promise<{ ok: boolean }> {
   return appeler<{ ok: boolean }>('/deconnexion', { method: 'POST' });
 }

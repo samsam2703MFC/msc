@@ -807,13 +807,24 @@ journal, the accepted proposals, the coach's output — which the server now
 persists — and the Strava sync: matching still happens in the browser because
 that is where the plan is, and what comes out is posted and read back.
 
-### The login screen
+### The login screen, and signing up
 
-There is no sign-up and there will not be one. MySmartCoach is an athlete's plan
-and their coach's back office, not a service you join — accounts are made with
-`npm run compte` on the server, or by an admin in the **Comptes** section once
-one admin exists. The screen only opens the door for someone who already has
-the key.
+MySmartCoach is a service an athlete joins: the coach is the AI, and the one
+human role above the athletes is a single `admin`. So the login screen has a
+second face — **Créer mon compte**: first name, name, email, a password of
+twelve characters or more, the two 10 km paces (prefilled, adjustable later),
+and an invitation code when the admin requires one. `POST /api/inscription`
+is public: it validates everything, writes the athlete, their account and
+their write access in one transaction (the same `inscrire` the admin's
+onboarding uses, with the role forced to `athlete`), then opens the session
+exactly as a login would. Two settings in **Réglages · Sécurité** govern it:
+`securite.inscription_ouverte` (on by default; off, only the admin creates
+accounts) and `securite.code_invitation` (a sealed secret; set, the form
+demands it). Five sign-ups per hour per address, counted only on success.
+`check:api` exercises the short password, the duplicate email, the closed
+switch and the code; `check:app` signs up in the browser, lands in the app and
+signs out. There is still no "forgot my password": the admin replaces it.
+Accounts can also be made with `npm run compte` on the server.
 
 ### `check:app` drives a real browser
 
@@ -1110,7 +1121,13 @@ their own screens Aujourd'hui, Semaine, Forme, Coach, rendered in a 520 px
 column because they were drawn for a hand), and the settings (Réglages,
 Comptes, Système for an admin) — and a wide page on the right where a table
 has room for its columns. The desk opens on Athlètes; a section of the
-athlete's group carries their name as its eyebrow. The sheets — a session, the profile, Réglages —
+athlete's group carries their name as its eyebrow. The desk is laid out for a desk: the athletes hub is a table, Plan
+puts the athlete, objectives and constraints beside the generated plan, Suivi
+puts the coach card beside the weight curve, Profil the form beside the
+references and the Strava check, Réglages its groups in columns, Comptes the
+accounts beside the assistant, Système the version and services beside the
+demo data (`Colonnes` in `primitives.tsx`, two columns when `large`, one
+on a phone). The sheets — a session, the profile, Réglages —
 open over the whole desk. On a phone the same account keeps the five tabs, and
 an athlete never sees the desk at all: the desk is a layout, not a role, and
 `sectionsDe` in `AdminScreen.tsx` is the one list both shells read.

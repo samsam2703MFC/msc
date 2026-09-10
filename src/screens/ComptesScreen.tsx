@@ -11,7 +11,7 @@ import type { AthleteAdmin, AthleteVisible, CompteAdmin } from '../data/api';
 import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
-import { Card, SectionLabel } from '../components/primitives';
+import { Card, Colonnes, SectionLabel } from '../components/primitives';
 import type { App } from '../state/useApp';
 
 type Role = CompteAdmin['role'];
@@ -25,7 +25,7 @@ const T = {
     intro: 'Qui se connecte, avec quel rôle, et quel athlète chacun voit. Un compte se désactive, il ne se supprime pas : ce qu’il a écrit reste à lui. L’onboarding d’un athlète, avec son compte, se fait dans Athlètes.',
     comptes: 'Comptes', aucun: 'Aucun compte.',
     roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } as Record<Role, string>,
-    rolesAide: 'Un coach ouvre Réglages et Athlètes ; un admin ouvre aussi Comptes et Système.',
+    rolesAide: 'Un admin ouvre le back office ; un athlète a son plan. Le coach, c’est l’IA.',
     actif: 'actif', inactif: 'désactivé', sansMdp: 'sans mot de passe',
     aucunAthlete: 'ne voit aucun athlète',
     droits: { lecture: 'lecture', ecriture: 'écriture' } as Record<Droit, string>,
@@ -42,9 +42,8 @@ const T = {
     etapesLabel: 'Étapes', etapes: { quoi: 'Quoi', athlete: 'Athlète', compte: 'Compte', recap: 'Récap' } as Record<Etape, string>,
     quoi: 'Que veux-tu créer ?',
     modes: [
-      { v: 'les-deux' as Mode, l: 'Un athlète et son compte', d: 'Le cas courant : un nouveau membre, avec son login.' },
-      { v: 'athlete' as Mode, l: 'Un athlète seul', d: 'Encodé par le coach, sans login pour l’instant — un compte pourra s’y relier plus tard.' },
-      { v: 'compte' as Mode, l: 'Un compte seul', d: 'Un coach, un admin, ou un login pour un athlète déjà encodé.' },
+      { v: 'les-deux' as Mode, l: 'Un athlète et son compte', d: 'Un nouveau membre, avec son login — ce qu’il fait lui-même en s’inscrivant, ou que l’admin fait pour lui.' },
+      { v: 'compte' as Mode, l: 'Un compte seul', d: 'Un autre admin, ou un login pour un athlète encodé avant sans compte.' },
     ],
     blocAthlete: 'L’athlète', blocCompte: 'Le compte', recap: 'Récapitulatif',
     athleteAide: 'Les allures sont celles du 10 km, en min/km — entre 2:00 et 15:00. Le plan part de l’allure actuelle et vise la cible.',
@@ -63,7 +62,7 @@ const T = {
     intro: 'Kto się loguje, z jaką rolą i którego zawodnika widzi. Konto się dezaktywuje, nie usuwa: to, co zapisało, zostaje przy nim. Onboarding zawodnika z kontem robi się w Zawodnikach.',
     comptes: 'Konta', aucun: 'Brak kont.',
     roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } as Record<Role, string>,
-    rolesAide: 'Trener otwiera Ustawienia i Zawodników; admin także Konta i System.',
+    rolesAide: 'Admin otwiera zaplecze; zawodnik ma swój plan. Trenerem jest AI.',
     actif: 'aktywne', inactif: 'wyłączone', sansMdp: 'bez hasła',
     aucunAthlete: 'nie widzi żadnego zawodnika',
     droits: { lecture: 'odczyt', ecriture: 'zapis' } as Record<Droit, string>,
@@ -80,9 +79,8 @@ const T = {
     etapesLabel: 'Kroki', etapes: { quoi: 'Co', athlete: 'Zawodnik', compte: 'Konto', recap: 'Podsumowanie' } as Record<Etape, string>,
     quoi: 'Co chcesz utworzyć?',
     modes: [
-      { v: 'les-deux' as Mode, l: 'Zawodnika i jego konto', d: 'Zwykły przypadek: nowy członek z loginem.' },
-      { v: 'athlete' as Mode, l: 'Tylko zawodnika', d: 'Wpisany przez trenera, na razie bez loginu — konto można dołączyć później.' },
-      { v: 'compte' as Mode, l: 'Tylko konto', d: 'Trener, admin albo login dla wpisanego już zawodnika.' },
+      { v: 'les-deux' as Mode, l: 'Zawodnika i jego konto', d: 'Nowy członek z loginem — to, co robi sam przy rejestracji, albo admin za niego.' },
+      { v: 'compte' as Mode, l: 'Tylko konto', d: 'Kolejny admin albo login dla zawodnika wpisanego wcześniej bez konta.' },
     ],
     blocAthlete: 'Zawodnik', blocCompte: 'Konto', recap: 'Podsumowanie',
     athleteAide: 'Tempa dotyczą 10 km, w min/km — między 2:00 a 15:00. Plan wychodzi od obecnego tempa i celuje w docelowe.',
@@ -98,7 +96,9 @@ const T = {
   },
 } satisfies Record<Lang, unknown>;
 
-const ROLES: Role[] = ['athlete', 'coach', 'admin'];
+/* Deux rôles : l'athlète, et l'admin. Le coach, c'est l'IA — un compte
+   « coach » d'avant reste lu, mais on n'en crée plus. */
+const ROLES: Role[] = ['athlete', 'admin'];
 
 const ENTREE: React.CSSProperties = {
   width: '100%', minWidth: 0, boxSizing: 'border-box',
@@ -629,7 +629,7 @@ export function Assistant({
 
 /* ---------------------------------------------------------------- l'écran */
 
-export function ComptesScreen({ app, onSection }: { app: App; onSection?: (s: 'strava' | 'plan') => void }) {
+export function ComptesScreen({ app, onSection, large = false }: { app: App; onSection?: (s: 'strava' | 'plan') => void; large?: boolean }) {
   const t = T[app.lang];
   const [comptes, setComptes] = useState<CompteAdmin[] | null>(null);
   const [athletes, setAthletes] = useState<AthleteAdmin[]>([]);
@@ -661,6 +661,7 @@ export function ComptesScreen({ app, onSection }: { app: App; onSection?: (s: 's
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ fontSize: 12.5, color: C.inkSecondary, lineHeight: 1.5 }}>{t.intro}</div>
 
+      <Colonnes large={large} ratio="minmax(0, 6fr) minmax(0, 5fr)" gauche={
       <Card padding="12px 16px" gap={0}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6 }}>
           <Icon name="user" size={16} color={C.teal} />
@@ -674,8 +675,9 @@ export function ComptesScreen({ app, onSection }: { app: App; onSection?: (s: 's
         ))}
       </Card>
 
-      {/* Un compte seul — un coach, un admin, un login pour un athlète déjà
-          encodé. L'athlète et son compte, c'est l'onboarding, dans Athlètes. */}
+      } droite={
+      /* Un compte seul — un autre admin, un login pour un athlète encodé avant
+         sans compte. L'athlète et son compte, c'est l'onboarding, dans Athlètes. */
       <Assistant
         comptes={comptes}
         athletes={athletes}
@@ -690,6 +692,7 @@ export function ComptesScreen({ app, onSection }: { app: App; onSection?: (s: 's
           void api.adminComptes().then((r) => { setComptes(r.comptes); setAthletes(r.athletes); });
         }}
       />
+      } />
     </div>
   );
 }

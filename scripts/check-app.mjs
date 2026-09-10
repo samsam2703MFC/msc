@@ -26,7 +26,8 @@ const check = (nom, ok, detail = '') => {
 };
 
 /* Un compte qui voit l'athlète 1 — celui que le seed installe. */
-await bd().execute('DELETE FROM compte WHERE email = ?', [EMAIL]);
+await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `libre-${EMAIL}`]);
+await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Libre du navigateur']);
 const [c] = await bd().execute(
   'INSERT INTO compte (email, mot_de_passe, nom, role) VALUES (?, ?, ?, ?)',
   [EMAIL, hacher(MOT_DE_PASSE), 'Navigateur', 'athlete'],
@@ -107,7 +108,47 @@ try {
   check('l’adresse survit à l’échec',
     (await page.inputValue('input[type=email]')) === EMAIL);
 
+  /* L'inscription libre : un athlète qui installe l'application crée son
+     compte ici même, et entre. Puis il ressort, pour laisser la place au
+     compte de contrôle. */
+  console.log('\n=== s’inscrire ===');
+  await page.click('text=Créer mon compte');
+  await page.waitForTimeout(400);
+  await page.getByLabel('Prénom', { exact: true }).fill('Léa');
+  await page.getByLabel('Nom', { exact: true }).fill('Libre du navigateur');
+  await page.fill('input[type=email]', `libre-${EMAIL}`);
+  await page.fill('input[type=password]', MOT_DE_PASSE);
+  await page.getByRole('button', { name: 'Créer mon compte' }).click();
+  await page.waitForSelector('nav', { timeout: 20000 });
+  /* Le premier matin : deux chiffres avant d'entrer, comme pour tout le
+     monde. */
+  const matinLibre = page.getByRole('dialog');
+  await matinLibre.waitFor({ timeout: 10000 });
+  await matinLibre.locator('input').nth(0).fill('52');
+  await matinLibre.locator('input').nth(1).fill('60');
+  await matinLibre.getByRole('button', { name: /Enregistrer et entrer/ }).click();
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), null, { timeout: 15000 });
+  await page.waitForTimeout(600);
+  const inscritTexte = await page.locator('body').innerText();
+  check('un athlète crée son compte depuis l’écran de connexion, et entre',
+    (await page.locator('nav').count()) === 1 && /Aujourd'hui/.test(inscritTexte),
+    inscritTexte.split('\n').slice(0, 3).join(' · '));
+  const [[cree]] = await bd().execute(
+    `SELECT c.role, a.ref_actuelle_s, x.droit FROM compte c
+       JOIN msc_acces x ON x.compte_id = c.id JOIN msc_athlete a ON a.id = x.athlete_id
+     WHERE c.email = ?`, [`libre-${EMAIL}`],
+  );
+  check('avec son athlète en écriture, aux allures saisies',
+    cree?.role === 'athlete' && Number(cree?.ref_actuelle_s) === 330 && cree?.droit === 'ecriture', JSON.stringify(cree));
+  await page.click('[aria-label=Paramètres]');
+  await page.waitForTimeout(500);
+  await page.click('text=Déconnexion');
+  await page.waitForTimeout(900);
+  check('et ressort par la même porte', await page.getByText('Connecte-toi').isVisible());
+
   console.log('\n=== le bon ===');
+  /* L'écran s'est remonté après la déconnexion : l'adresse est à retaper. */
+  await page.fill('input[type=email]', EMAIL);
   await page.fill('input[type=password]', MOT_DE_PASSE);
   await page.click('button[type=submit]');
   await page.waitForSelector('nav', { timeout: 20000 });
@@ -398,6 +439,7 @@ try {
       && /Comptes/.test(menuTexte) && /Système/.test(menuTexte),
     menuTexte.replace(/\n+/g, ' · ').slice(0, 200));
   check('et plus de barre d’onglets', (await page.locator('nav button').count()) > 5);
+  check('le hub des athlètes est un tableau sur le bureau', (await page.locator('main table').count()) >= 1);
   await menu.getByRole('button', { name: 'Système' }).click();
   await page.waitForTimeout(900);
   check('une section s’ouvre depuis le menu', /cette page/i.test(await page.locator('body').innerText()));
@@ -468,7 +510,8 @@ try {
   if (nav) await nav.close();
   serveur.kill('SIGTERM');
   await bd().execute("DELETE FROM msc_competition WHERE nom LIKE '%de contrôle'");
-  await bd().execute('DELETE FROM compte WHERE email = ?', [EMAIL]);
+  await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `libre-${EMAIL}`]);
+  await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Libre du navigateur']);
   await fermer();
 }
 

@@ -383,3 +383,26 @@ export function IconLine({
     </div>
   );
 }
+
+/** Deux colonnes sur un écran large, une seule sur un téléphone : le bureau
+    se sert de la largeur, le téléphone empile. */
+export function Colonnes({
+  large, gauche, droite, ratio = 'minmax(0, 1fr) minmax(0, 1fr)', gap = 12,
+}: {
+  large: boolean; gauche: ReactNode; droite: ReactNode; ratio?: string; gap?: number;
+}) {
+  if (!large) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap }}>
+        {gauche}
+        {droite}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: ratio, gap, alignItems: 'start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap, minWidth: 0 }}>{gauche}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap, minWidth: 0 }}>{droite}</div>
+    </div>
+  );
+}

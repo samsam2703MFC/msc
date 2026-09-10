@@ -16,7 +16,7 @@ import type { EtatDemoAthlete, Systeme } from '../data/api';
 import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
-import { Card, SectionLabel } from '../components/primitives';
+import { Card, Colonnes, SectionLabel } from '../components/primitives';
 import type { App } from '../state/useApp';
 
 const T = {
@@ -151,7 +151,7 @@ function Demo({
   );
 }
 
-export function SystemeScreen({ app, onSection }: { app: App; onSection?: (s: 'param') => void }) {
+export function SystemeScreen({ app, onSection, large = false }: { app: App; onSection?: (s: 'param') => void; large?: boolean }) {
   const t = T[app.lang];
   const lang = app.lang;
   const [etat, setEtat] = useState<Systeme | null>(null);
@@ -200,7 +200,7 @@ export function SystemeScreen({ app, onSection }: { app: App; onSection?: (s: 'p
   ) : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <Colonnes large={large} gauche={<>
       {/* la version */}
       <Card padding="14px 16px" gap={8}>
         <SectionLabel icon="git-commit-horizontal" color={C.teal}>{t.version}</SectionLabel>
@@ -246,6 +246,7 @@ export function SystemeScreen({ app, onSection }: { app: App; onSection?: (s: 'p
         <Ligne ok={etat.base.ok} alerte={!etat.base.ok} titre={t.base} detail={etat.base.ok ? `${t.baseOk} · ${etat.base.version ?? ''}` : `${t.baseNon} · ${etat.base.erreur ?? ''}`} />
       </Card>
 
+    </>} droite={<>
       {/* la démonstration, athlète par athlète */}
       <Card padding="14px 16px" gap={8}>
         <SectionLabel icon="flask-conical" color={C.teal}>{t.demo}</SectionLabel>
@@ -274,6 +275,6 @@ export function SystemeScreen({ app, onSection }: { app: App; onSection?: (s: 'p
         )}
         {erreur && <div style={{ fontSize: 12, color: C.negative }}>{erreur}</div>}
       </Card>
-    </div>
+    </>} />
   );
 }

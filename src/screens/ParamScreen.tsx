@@ -153,7 +153,7 @@ export function Reglage({
   );
 }
 
-export function ParamScreen({ app }: { app: App }) {
+export function ParamScreen({ app, large = false }: { app: App; large?: boolean }) {
   const t = T[app.lang];
   const [params, setParams] = useState<MscParam[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -182,8 +182,12 @@ export function ParamScreen({ app }: { app: App }) {
   if (params === null) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.chargement}</div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 12.5, color: C.inkSecondary, lineHeight: 1.5 }}>{t.intro}</div>
+    /* Sur le bureau, les groupes se posent en colonnes ; le téléphone empile. */
+    <div style={large
+      ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 12, alignItems: 'start' }
+      : { display: 'flex', flexDirection: 'column', gap: 12 }}
+    >
+      <div style={{ fontSize: 12.5, color: C.inkSecondary, lineHeight: 1.5, gridColumn: '1 / -1' }}>{t.intro}</div>
       {GROUPES.map((g) => {
         const lignes = params.filter((p) => p.groupe === g.code).sort((a, b) => a.ordre - b.ordre);
         if (lignes.length === 0) return null;

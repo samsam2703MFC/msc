@@ -294,6 +294,30 @@ async function routesStrava(req, res, url, chemin) {
   return json(res, 404, { erreur: 'route inconnue' });
 }
 
+/* ---------------------------------------------------- les inscriptions */
+
+/* Derrière un relais, l'adresse du client est dans X-Forwarded-For ; sinon
+   c'est la prise. Ce n'est qu'un frein, pas une authentification. */
+function adresseDe(req) {
+  const relais = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+  return relais || req.socket?.remoteAddress || '?';
+}
+
+const INSCRIPTIONS_MAX = 5;
+const INSCRIPTIONS_FENETRE_MS = 60 * 60 * 1000;
+const inscriptions = new Map();
+
+function inscriptionPermise(adresse) {
+  const limite = Date.now() - INSCRIPTIONS_FENETRE_MS;
+  const recentes = (inscriptions.get(adresse) ?? []).filter((t) => t > limite);
+  inscriptions.set(adresse, recentes);
+  return recentes.length < INSCRIPTIONS_MAX;
+}
+
+function noterInscription(adresse) {
+  inscriptions.set(adresse, [...(inscriptions.get(adresse) ?? []), Date.now()]);
+}
+
 /* ------------------------------------------------------------- les routes */
 
 async function router(req, res, url) {
@@ -316,6 +340,39 @@ async function router(req, res, url) {
       strava: strava.configure(),
       scellement: scellementPret(),
     });
+  }
+
+  /* L'inscription libre : un athlète crée son compte depuis l'écran de
+     connexion — c'est un service qu'on rejoint, et son coach est l'IA.
+     L'admin peut la fermer (securite.inscription_ouverte) ou la garder
+     derrière un code (securite.code_invitation). Tout est validé et écrit
+     d'un coup — l'athlète, son compte, son accès — puis la session s'ouvre,
+     comme après une connexion. Cinq par heure et par adresse : de quoi
+     inscrire une famille, pas de quoi remplir la base. */
+  if (chemin === '/api/inscription' && req.method === 'POST') {
+    if (!(await params.param('securite.inscription_ouverte'))) {
+      return json(res, 403, { erreur: 'Les inscriptions sont fermées. Demande un compte à l’admin.' });
+    }
+    const adresse = adresseDe(req);
+    if (!inscriptionPermise(adresse)) {
+      return json(res, 429, { erreur: 'Trop d’inscriptions depuis cette adresse. Réessaie dans une heure.' });
+    }
+    const corps = await lireCorps(req, 8_000);
+    const code = await params.param('securite.code_invitation');
+    if (code && String(corps.code ?? '').trim() !== String(code).trim()) {
+      return json(res, 403, { erreur: 'Code d’invitation incorrect.' });
+    }
+    const nom = String(corps.nom ?? '').trim();
+    const prenom = String(corps.prenom ?? '').trim();
+    const r = await admin.inscrire({
+      athlete: { nom, prenom: prenom || null, actuelle: corps.actuelle, cible: corps.cible, debut: corps.debut },
+      compte: { email: corps.email, nom: [prenom, nom].filter(Boolean).join(' '), role: 'athlete', mot_de_passe: corps.mot_de_passe },
+      droit: 'ecriture',
+    });
+    noterInscription(adresse);
+    const compte = await connecter(corps.email, corps.mot_de_passe);
+    res.setHeader('set-cookie', cookieSession(ouvrirSession(compte.id)));
+    return json(res, 200, { compte, athletes: await athletesVisibles(compte.id), athlete: r.athlete });
   }
 
   if (chemin === '/api/connexion' && req.method === 'POST') {
