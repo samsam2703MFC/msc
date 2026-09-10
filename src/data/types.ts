@@ -85,6 +85,10 @@ export interface MscActivity {
   allure_moy?: string;
   fc_moy?: number;
   splits_blocs?: number[];
+  /** Ce que l'historique importé apporte : de quoi compter des kilomètres. */
+  nom?: string;
+  distance_km?: number;
+  duree_s?: number;
 }
 
 export interface MscJournal {

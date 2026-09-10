@@ -40,6 +40,10 @@ const T = {
     ouvrirIci: 'Ouvrir ici', ouvrirAide: 'Depuis l’appareil de l’athlète : c’est le compte Strava ouvert dans la fenêtre qui sera relié.',
     attente: 'En attente de Strava…',
     delier: 'Délier', delierConfirme: 'Délier ce compte Strava ?', oui: 'Oui, délier', annuler: 'Annuler',
+    importer: 'Importer l’historique', importDepuis: 'depuis le', importEnCours: 'Import en cours…',
+    importAide: 'Tout ce que Strava a de cet athlète depuis cette date, rangé tel quel : de quoi écrire un plan. Les séances déjà appariées le restent.',
+    importFait: (n: number, premiere: string | null, derniere: string | null) =>
+      `${n} activité${n > 1 ? 's' : ''} importée${n > 1 ? 's' : ''}${premiere ? ` · du ${premiere} au ${derniere ?? premiere}` : ''}`,
     appPropre: 'Application Strava de cet athlète',
     appPropreOui: (id: string) => `application propre · ID ${id}`,
     appCommuneOui: (id: string) => `application commune · ID ${id}`,
@@ -68,6 +72,10 @@ const T = {
     ouvrirIci: 'Otwórz tutaj', ouvrirAide: 'Z urządzenia zawodnika: połączone zostanie konto Strava otwarte w oknie.',
     attente: 'Czekam na Stravę…',
     delier: 'Odłącz', delierConfirme: 'Odłączyć to konto Strava?', oui: 'Tak, odłącz', annuler: 'Anuluj',
+    importer: 'Importuj historię', importDepuis: 'od', importEnCours: 'Import w toku…',
+    importAide: 'Wszystko, co Strava ma o tym zawodniku od tej daty, zapisane tak jak jest: podstawa do napisania planu. Już dopasowane treningi zostają.',
+    importFait: (n: number, premiere: string | null, derniere: string | null) =>
+      `${n} zaimportowanych aktywności${premiere ? ` · od ${premiere} do ${derniere ?? premiere}` : ''}`,
     appPropre: 'Aplikacja Strava tego zawodnika',
     appPropreOui: (id: string) => `własna aplikacja · ID ${id}`,
     appCommuneOui: (id: string) => `wspólna aplikacja · ID ${id}`,
@@ -126,7 +134,9 @@ function AthleteStrava({
   const t = T[lang];
   const [lien, setLien] = useState<{ url: string; expire_le: string | null } | null>(null);
   const [copie, setCopie] = useState(false);
-  const [job, setJob] = useState<'idle' | 'lien' | 'popup' | 'delier' | 'app'>('idle');
+  const [job, setJob] = useState<'idle' | 'lien' | 'popup' | 'delier' | 'app' | 'import'>('idle');
+  const [depuis, setDepuis] = useState(() => new Date(Date.now() - 2 * 365 * 86400 * 1000).toISOString().slice(0, 10));
+  const [importe, setImporte] = useState<strava.ImportHistorique | null>(null);
   const [confirme, setConfirme] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [appOuverte, setAppOuverte] = useState(false);
@@ -194,6 +204,18 @@ function AthleteStrava({
     setConfirme(false); setErreur(null); setJob('delier');
     try {
       await strava.delier(a.id);
+      await recharger();
+    } catch (e) {
+      setErreur(message(e));
+    } finally {
+      setJob('idle');
+    }
+  };
+
+  const importer = async () => {
+    setErreur(null); setJob('import'); setImporte(null);
+    try {
+      setImporte(await strava.importerHistorique(a.id, depuis));
       await recharger();
     } catch (e) {
       setErreur(message(e));
@@ -291,6 +313,25 @@ function AthleteStrava({
           </button>
         ))}
       </div>
+
+      {s.lie && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 42 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button type="button" disabled={job !== 'idle'} onClick={() => void importer()} style={BOUTON}>
+              {job === 'import' ? t.importEnCours : t.importer}
+            </button>
+            <span style={{ fontSize: 11, color: C.inkSecondary }}>{t.importDepuis}</span>
+            <input type="date" value={depuis} onChange={(e) => setDepuis(e.target.value)} aria-label={t.importDepuis} style={{ ...ENTREE, width: 'auto', fontSize: 12, padding: '6px 8px' }} />
+          </div>
+          <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.4 }}>{t.importAide}</div>
+          {importe && (
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.accentDeep }}>
+              <Icon name="circle-check" size={13} />
+              <span>{t.importFait(importe.importees, importe.premiere, importe.derniere)}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {lien && !s.lie && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 42 }}>

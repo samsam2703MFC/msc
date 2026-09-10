@@ -10,6 +10,7 @@
      npm run db:migrate && npm run db:seed && npm run check:api */
 
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { msc_session } from '../src/data/plan.generated';
 import { genererPlan } from '../src/data/generateur';
 import { bd, fermer } from '../server/bd.mjs';
@@ -501,6 +502,39 @@ try {
      le compte de contrôle par SQL, sans se reconnecter. */
   /* L'application Strava propre à un athlète : l'ID se lit, le secret jamais,
      et sans elle c'est l'application commune qui vaut. */
+  /* La synchro de l'application ne touche qu'à sa fenêtre : l'historique plus
+     ancien que le plan, tiré par le coach, lui survit. */
+  console.log('\n=== l’historique et la fenêtre de synchro ===');
+  await bd().execute('DELETE FROM msc_activity WHERE athlete_id = 1 AND id_strava IN (777001, 777002)');
+  await bd().execute(
+    `INSERT INTO msc_activity (athlete_id, id_strava, date, nom, sport, duree_min, duree_s, distance_m, statut)
+     VALUES (1, 777001, '2020-01-05', 'Sortie d’avant le plan', 'run', 50, 3000, 10000, 'fait')`,
+  );
+  const idSynchro = randomUUID();
+  const synchro = await c.appel('/api/activites', {
+    method: 'POST',
+    body: JSON.stringify({
+      mutation_id: idSynchro, depuis: '2026-10-01',
+      activites: [{ id_strava: 777002, date: '2026-10-22', sport: 'run', duree_min: 30, statut: 'fait' }],
+    }),
+  });
+  const [[survie]] = (await bd().execute(
+    'SELECT COUNT(*) AS n, SUM(distance_m) AS m FROM msc_activity WHERE athlete_id = 1 AND id_strava IN (777001, 777002)',
+  )) as any;
+  check('une synchro bornée à sa fenêtre laisse l’historique plus ancien en place',
+    synchro.statut === 200 && Number(survie.n) === 2 && Number(survie.m) === 10000,
+    `${synchro.statut} · lignes ${survie.n} · distance gardée ${survie.m}`);
+  const instantHist = await c.appel('/api/db/instantane');
+  const ancienne = instantHist.corps.msc_activity?.find((a: any) => a.id_strava === 777001);
+  check('et l’instantané porte la distance et le nom de l’historique',
+    ancienne?.distance_km === 10 && ancienne?.nom === 'Sortie d’avant le plan' && ancienne?.duree_s === 3000,
+    JSON.stringify(ancienne));
+  await bd().execute('DELETE FROM msc_activity WHERE athlete_id = 1 AND id_strava IN (777001, 777002)');
+  await bd().execute('DELETE FROM msc_mutation WHERE id = ?', [idSynchro]);
+  const histRefuse = await c.appel('/api/strava/historique', { method: 'POST', body: JSON.stringify({}) });
+  check('tirer l’historique d’un athlète sans Strava relié est refusé, pas planté',
+    histRefuse.statut === 409 || histRefuse.statut === 501, `${histRefuse.statut} ${histRefuse.corps.erreur ?? ''}`);
+
   console.log('\n=== l’application Strava d’un athlète ===');
   const appAvant = await c.appel('/api/strava/app');
   check('sans application propre, l’athlète passe par la commune', appAvant.statut === 200 && appAvant.corps.propre === false,

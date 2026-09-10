@@ -125,6 +125,24 @@ export function delier(athleteId?: number | null): Promise<{ lie: boolean }> {
   return appeler<{ lie: boolean }>(chez('/delier', athleteId), { method: 'POST' });
 }
 
+/** Tout l'historique d'un athlète, tiré et rangé par le serveur. */
+export interface ImportHistorique {
+  importees: number;
+  recues: number;
+  depuis: string;
+  premiere: string | null;
+  derniere: string | null;
+  quotas: Quotas | null;
+}
+
+export function importerHistorique(athleteId: number | null | undefined, depuis?: string): Promise<ImportHistorique> {
+  return appeler<ImportHistorique>(chez('/historique', athleteId), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ depuis }),
+  });
+}
+
 /** L'application Strava propre à un athlète — l'ID se lit, le secret jamais. */
 export interface AppStrava {
   propre: boolean;

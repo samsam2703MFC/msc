@@ -1124,6 +1124,35 @@ block says which of the two is in force. `/api/strava/app` (GET, PUT, DELETE)
 returns the ID and whether a secret is set, never the secret; `check:api`
 walks the round trip and asserts the link carries the athlete's own client ID.
 
+### The Strava history, and what a plan takes from it
+
+A coach writing a plan starts from what the athlete has actually done. Once
+an athlete is linked, their Connexions block gets **Importer l'historique**
+with a date (two years back by default): the server pulls every activity
+since then from Strava — up to eighty pages, summaries only — and stores
+each with its rich columns (distance, elevation, exact duration, heart rate,
+cadence, Strava's effort score) in `msc_activity`, through
+`POST /api/strava/historique`. An activity already matched to a session is
+completed, never un-matched.
+
+That import had to survive the phone: the athlete's own sync used to erase
+every Strava row and rewrite the plan's window, which would have thrown two
+years of history away at the next open. `ecrireActivites` now works inside
+the window it is given (`depuis`, the plan's first day): rows Strava no
+longer has disappear from that window, matches are re-laid, and everything
+older stays untouched — `check:api` plants a 2020 run, syncs an October
+window, and asserts the run and its distance are still there.
+
+The **Plan** section then opens with **Historique Strava**: kilometres run
+per week over fifty-two weeks (one series, so no legend; the biggest week and
+the last one carry their figure; hovering a bar says the week, its
+kilometres and its sessions), the eight-week average, sessions per week, the
+longest run, and the 10 km pace the best runs of the last twenty-six weeks
+imply — Riegel over every run of at least 5 km, the best kept, the same
+`equivalent10k` the generator uses. **Utiliser comme allure actuelle** pours
+that figure into the generator's current 10 km, and the plan is built from
+it.
+
 ### Comptes and Système — the admin's back office
 
 There is still no sign-up. What `npm run compte` does from the server, the

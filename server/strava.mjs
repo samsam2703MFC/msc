@@ -485,13 +485,15 @@ function normaliser(a) {
 
 /**
  * The athlete's activities since `depuis` (an ISO date or an epoch in seconds).
- * Summaries only — one or two requests for a month of training.
+ * Summaries only — one or two requests for a month of training. `pagesMax`
+ * borne le nombre de pages : dix pour la synchro d'un plan, bien plus pour
+ * l'historique complet qu'un coach tire une fois.
  */
-export async function activites(athleteId, { depuis, jusqua } = {}) {
+export async function activites(athleteId, { depuis, jusqua, pagesMax = PAGES_MAX } = {}) {
   const after = epoch(depuis);
   const before = epoch(jusqua);
   const out = [];
-  for (let page = 1; page <= PAGES_MAX; page += 1) {
+  for (let page = 1; page <= pagesMax; page += 1) {
     const lot = await api(athleteId, '/athlete/activities', { after, before, page, per_page: PAGE });
     if (!Array.isArray(lot) || lot.length === 0) break;
     out.push(...lot.map(normaliser));

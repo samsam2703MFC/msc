@@ -389,10 +389,17 @@ export function useApp() {
     setAmorce('connexion');
   }, []);
 
+  /* Quand l'état Strava a été lu pour la dernière fois : la carte le dit,
+     parce qu'un « non configuré » lu à l'ouverture peut avoir une heure. */
+  const [stravaVerifie, setStravaVerifie] = useState<string | null>(null);
+
   const rafraichirEtat = useCallback(async () => {
     try {
       const e = await strava.etat();
-      if (monte.current) setStravaEtat(e);
+      if (monte.current) {
+        setStravaEtat(e);
+        setStravaVerifie(new Date().toISOString());
+      }
       return e;
     } catch (e) {
       if (monte.current) setStravaErreur(message(e));
@@ -406,7 +413,7 @@ export function useApp() {
   const appliquer = useCallback(async () => {
     const sessions = db.select('msc_session');
     const resultat = strava.apparier(brutes.current, sessions, details.current);
-    await api.ecrireActivites(resultat.activites);
+    await api.ecrireActivites(resultat.activites, sessions[0]?.date);
     await recharger(db.athleteId);
     if (monte.current) setOrphelines(resultat.orphelines);
     return resultat;
@@ -557,6 +564,20 @@ export function useApp() {
         }
       })();
     }, SONDAGE_MS);
+  }, [rafraichirEtat, synchroniser]);
+
+  /* Relire l'état seul (la carte s'ouvre), ou l'état puis les activités
+     (le bouton) : ce qu'une configuration faite ailleurs — le bureau, le
+     serveur — a changé sans que cette page le sache. */
+  const verifierStrava = useCallback(async () => {
+    setStravaErreur(null);
+    await rafraichirEtat();
+  }, [rafraichirEtat]);
+
+  const rafraichirStrava = useCallback(async () => {
+    setStravaErreur(null);
+    const e = await rafraichirEtat();
+    if (e?.lie) await synchroniser();
   }, [rafraichirEtat, synchroniser]);
 
   const delierStrava = useCallback(async () => {
@@ -934,6 +955,9 @@ export function useApp() {
     lierStrava,
     delierStrava,
     synchroniser,
+    stravaVerifie,
+    verifierStrava,
+    rafraichirStrava,
     /* Bumped whenever the activity table is rewritten, so screens re-read. */
     version,
 

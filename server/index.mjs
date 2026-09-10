@@ -252,6 +252,17 @@ async function routesStrava(req, res, url, chemin) {
     const lien = await strava.lienAutorisation(athlete_id, { duree: longue ? strava.ETAT_TTL_LONG_MS : undefined });
     return json(res, 200, { url: lien.url, expire_le: lien.expire_le });
   }
+  /* Tout l'historique, tiré par le serveur et rangé tel quel : ce dont un
+     coach part pour écrire un plan. Deux ans par défaut. */
+  if (chemin === '/historique' && req.method === 'POST') {
+    const corps = await lireCorps(req, 4_000);
+    const depuis = /^\d{4}-\d{2}-\d{2}$/.test(String(corps.depuis ?? ''))
+      ? corps.depuis
+      : new Date(Date.now() - 2 * 365 * 86400 * 1000).toISOString().slice(0, 10);
+    const activites = await strava.activites(athlete_id, { depuis, pagesMax: 80 });
+    const resultat = await depots.importerHistorique(athlete_id, activites);
+    return json(res, 200, { ...resultat, depuis, recues: activites.length, quotas: strava.derniersQuotas() });
+  }
   /* L'application Strava propre à l'athlète — l'ID se lit, le secret jamais. */
   if (chemin === '/app') {
     if (req.method === 'GET') return json(res, 200, await strava.appPublique(athlete_id));
@@ -468,7 +479,7 @@ async function router(req, res, url) {
     const { athlete_id } = await athleteDe(req, url, 'ecriture');
     const corps = await lireCorps(req, 2_000_000);
     return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'activites', (cnx) =>
-      depots.ecrireActivites(athlete_id, corps.activites, cnx)));
+      depots.ecrireActivites(athlete_id, corps.activites, cnx, { depuis: corps.depuis })));
   }
 
   /* La photo arrive en octets bruts avec son content-type, pas en multipart :

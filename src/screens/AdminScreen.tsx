@@ -22,6 +22,7 @@ import { ParamScreen } from './ParamScreen';
 import { ComptesScreen } from './ComptesScreen';
 import { SystemeScreen } from './SystemeScreen';
 import { ConnexionsScreen } from './ConnexionsScreen';
+import { Historique } from '../components/Historique';
 
 /** mm:ss → seconds. */
 function versSecondes(texte: string): number {
@@ -301,6 +302,13 @@ function Generateur({ app }: { app: App }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* d'où l'on part : ce que Strava sait de l'athlète */}
+      <Historique
+        activites={db.select('msc_activity')}
+        lang={app.lang}
+        onUtiliserAllure={(dixKm) => setActuelle(versTexte(dixKm))}
+      />
+
       {/* l'athlète */}
       <Card padding="16px 18px" gap={10}>
         <SectionLabel icon="target">{fr ? 'Athlète' : 'Zawodnik'}</SectionLabel>

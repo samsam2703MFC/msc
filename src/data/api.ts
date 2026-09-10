@@ -239,10 +239,12 @@ export function ecrireMesure(corps: EcritureMesure) {
     Celles-ci ne vont PAS dans la file : elles viennent de Strava, qui n'était
     joignable que s'il y avait du réseau. Les mettre en attente rejouerait un
     appariement périmé sur des données que la synchro suivante refera mieux. */
-export function ecrireActivites(activites: MscActivity[]): Promise<{ ecrites: number }> {
+export function ecrireActivites(activites: MscActivity[], depuis?: string): Promise<{ ecrites: number }> {
   return appeler('/activites', {
     method: 'POST',
-    body: JSON.stringify({ activites, mutation_id: idMutation() }),
+    /* `depuis` : la fenêtre synchronisée. Le serveur n'y touche qu'à
+       l'intérieur — l'historique plus ancien reste. */
+    body: JSON.stringify({ activites, depuis, mutation_id: idMutation() }),
   });
 }
 

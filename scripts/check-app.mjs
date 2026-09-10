@@ -76,6 +76,9 @@ try {
     /* Les polices viennent d'un CDN : une machine sans sortie internet n'y
        accède pas, et ce n'est pas un défaut de l'application. */
     if (/fonts\.(googleapis|gstatic)\.com/.test(r.url())) return;
+    /* Une requête coupée par notre propre rechargement (version.txt en vol
+       quand on recharge) n'est pas un défaut de l'application. */
+    if (/ERR_ABORTED/.test(r.failure()?.errorText ?? '')) return;
     erreurs.push(`échec : ${r.url()} ${r.failure()?.errorText ?? ''}`);
   });
   page.on('response', (r) => {
@@ -230,6 +233,8 @@ try {
   const createur = await page.locator('body').innerText();
   check('l’écran Créer montre le plan généré',
     /Plan généré/i.test(createur) && /semaines/i.test(createur));
+  check('et, en tête, l’historique Strava d’où l’on part',
+    /Historique Strava/i.test(createur), createur.split('\n').find((l) => /Historique/i.test(l)) ?? '');
   check('et propose de l’enregistrer',
     /Enregistrer et activer/i.test(createur),
     createur.split('\n').find((l) => /Enregistrer/i.test(l)) ?? '');

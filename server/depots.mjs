@@ -226,6 +226,10 @@ async function leVecu(athleteId) {
       fc_moy: nombre(a.fc_moy),
       splits_blocs: parActivite.get(a.id),
       statut: a.statut,
+      /* Ce que l'historique apporte : de quoi compter des kilomètres. */
+      nom: a.nom ?? undefined,
+      distance_km: a.distance_m ? Number(a.distance_m) / 1000 : undefined,
+      duree_s: a.duree_s ?? undefined,
     })),
     msc_journal: journal.map((j) => ({
       date: j.date, session_id: j.session_id ?? 0,
@@ -876,21 +880,47 @@ export async function ecrireProfil(athleteId, { prenom, nom, surnom, annee_naiss
  * Ce qui n'est pas touché : les activités saisies à la main, qui n'ont pas
  * d'identifiant Strava et que Strava ne peut donc pas confirmer.
  */
-export async function ecrireActivites(athleteId, activites, cnx) {
+/* Ce que l'application a apparié, rangé dans la fenêtre qu'elle a synchronisée
+   — les dates du plan — et rien au-delà. Avant, tout ce qui venait de Strava
+   était effacé puis réécrit : l'historique tiré par le coach (plus ancien que
+   le plan) ne survivait pas à la première synchro du téléphone. Maintenant :
+   dans la fenêtre, ce que Strava n'a plus disparaît, le reste se met à jour ;
+   hors de la fenêtre, rien ne bouge. Les colonnes que l'appariement ne porte
+   pas (distance, nom, durée exacte) restent telles que l'import les a posées. */
+export async function ecrireActivites(athleteId, activites, cnx, { depuis } = {}) {
   const q = cnx ?? (await import('./bd.mjs')).bd();
-  await q.execute(
-    'DELETE FROM msc_activity WHERE athlete_id = ? AND id_strava IS NOT NULL', [athleteId],
-  );
+  const lot = (activites ?? []).filter((a) => a?.id_strava);
+  const fenetre = /^\d{4}-\d{2}-\d{2}$/.test(String(depuis ?? ''))
+    ? depuis
+    : lot.map((a) => a.date).filter(Boolean).sort()[0] ?? null;
+  if (fenetre) {
+    /* Une séance est faite une fois (uq_activity_session) : on libère toutes
+       celles de la fenêtre avant de reposer l'appariement. */
+    await q.execute(
+      'UPDATE msc_activity SET session_id = NULL WHERE athlete_id = ? AND id_strava IS NOT NULL AND date >= ?',
+      [athleteId, fenetre],
+    );
+    const ids = lot.map((a) => Number(a.id_strava));
+    await q.execute(
+      `DELETE FROM msc_activity WHERE athlete_id = ? AND id_strava IS NOT NULL AND date >= ?
+       ${ids.length ? `AND id_strava NOT IN (${ids.map(() => '?').join(',')})` : ''}`,
+      [athleteId, fenetre, ...ids],
+    );
+  }
   let ecrites = 0;
-  for (const a of activites ?? []) {
-    if (!a?.id_strava) continue;
+  for (const a of lot) {
     const [r] = await q.execute(
       `INSERT INTO msc_activity (athlete_id, id_strava, session_id, date, sport, duree_min,
          allure_s_km, fc_moy, statut)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), session_id = VALUES(session_id),
+         date = VALUES(date), sport = VALUES(sport), duree_min = VALUES(duree_min),
+         allure_s_km = COALESCE(VALUES(allure_s_km), allure_s_km),
+         fc_moy = COALESCE(VALUES(fc_moy), fc_moy), statut = VALUES(statut)`,
       [athleteId, a.id_strava, a.session_id ?? null, a.date, a.sport, a.duree_min,
        a.allure_moy ? secondesDAllure(a.allure_moy) : null, a.fc_moy ?? null, a.statut ?? 'fait'],
     );
+    await q.execute('DELETE FROM msc_activity_bloc WHERE activity_id = ?', [r.insertId]);
     for (const [ordre, allure] of (a.splits_blocs ?? []).entries()) {
       await q.execute(
         'INSERT INTO msc_activity_bloc (activity_id, ordre, allure_s_km) VALUES (?, ?, ?)',
@@ -900,6 +930,47 @@ export async function ecrireActivites(athleteId, activites, cnx) {
     ecrites += 1;
   }
   return { ecrites };
+}
+
+/** « 2026-09-09T18:02:11Z » (le local de Strava, avec un faux Z) → DATETIME. */
+function dateHeure(iso) {
+  const m = String(iso ?? '').match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
+  return m ? `${m[1]} ${m[2]}` : null;
+}
+
+/**
+ * L'historique Strava d'un athlète, tel que le serveur l'a tiré : chaque
+ * activité avec ses colonnes riches — distance, dénivelé, durée exacte, FC,
+ * cadence, effort. Une activité déjà connue est complétée, jamais dépariée :
+ * l'appariement aux séances reste ce que l'application en a fait.
+ */
+export async function importerHistorique(athleteId, activites) {
+  const q = (await import('./bd.mjs')).bd();
+  let importees = 0;
+  let premiere = null;
+  let derniere = null;
+  for (const a of activites ?? []) {
+    if (!a?.id_strava || !a.date) continue;
+    await q.execute(
+      `INSERT INTO msc_activity (athlete_id, id_strava, session_id, date, debut, nom, sport, sport_strava,
+         duree_min, duree_s, distance_m, denivele_m, allure_s_km, fc_moy, fc_max, cadence_moy, effort,
+         manuelle, privee, statut)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'fait')
+       ON DUPLICATE KEY UPDATE date = VALUES(date), debut = VALUES(debut), nom = VALUES(nom),
+         sport = VALUES(sport), sport_strava = VALUES(sport_strava), duree_min = VALUES(duree_min),
+         duree_s = VALUES(duree_s), distance_m = VALUES(distance_m), denivele_m = VALUES(denivele_m),
+         allure_s_km = VALUES(allure_s_km), fc_moy = VALUES(fc_moy), fc_max = VALUES(fc_max),
+         cadence_moy = VALUES(cadence_moy), effort = VALUES(effort), privee = VALUES(privee)`,
+      [athleteId, a.id_strava, a.date, dateHeure(a.debut), String(a.nom ?? '').slice(0, 190), a.sport,
+       String(a.sport_strava ?? '').slice(0, 48) || null, a.duree_min ?? 0, a.duree_s ?? null,
+       a.distance_m ?? null, a.denivele_m ?? null, a.allure_s_km ? Math.round(a.allure_s_km) : null,
+       a.fc_moy ?? null, a.fc_max ?? null, a.cadence_moy ?? null, a.effort ?? null, a.privee ? 1 : 0],
+    );
+    importees += 1;
+    if (!premiere || a.date < premiere) premiere = a.date;
+    if (!derniere || a.date > derniere) derniere = a.date;
+  }
+  return { importees, premiere, derniere };
 }
 
 /** « 4:56/km » → 296. L'inverse de `formatAllure`. */
