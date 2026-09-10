@@ -410,6 +410,11 @@ try {
   check('Strava, pour l’athlète affiché : sa liaison et son application à lui',
     /Strava · non connecté|Strava · connecté/.test(stravaTexte) && /Application Strava de cet athlète/i.test(stravaTexte),
     stravaTexte.split('\n').find((l) => /Strava · /.test(l)) ?? '');
+  /* Le réglage que Strava juge chez lui, et qui rate en silence ici : l'écran
+     le montre avant le clic, plutôt que « Bad Request » sur strava.com. */
+  check('et l’adresse de retour, celle que Strava vérifie',
+    /Adresse de retour/i.test(stravaTexte) && /\/api\/strava\/callback/.test(stravaTexte),
+    stravaTexte.split('\n').find((l) => /callback/.test(l)) ?? '');
   await page.getByRole('button', { name: /Renseigner une application propre/ }).first().click();
   await page.waitForTimeout(400);
   check('et l’application propre se saisit là',

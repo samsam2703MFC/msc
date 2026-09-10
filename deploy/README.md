@@ -43,7 +43,7 @@ complet est `.env.example` ; voici ce qui change en production.
 | `MSC_SECRET_KEY` | 32 octets. Chiffre les jetons Strava **et** signe les sessions. La perdre : tous les comptes Strava à relier, toutes les sessions invalidées. Elle ne va ni dans le dépôt ni dans la base. |
 | `MSC_DB_*` | un utilisateur MySQL dédié à `msc`, avec les droits sur cette base seule — pas `root`. |
 | `ANTHROPIC_API_KEY` | sans elle, les routes du coach répondent 401 et le reste marche. |
-| `STRAVA_*` | `STRAVA_REDIRECT_URI` doit être ton vrai domaine en HTTPS, et le domaine doit être enregistré comme *Authorization Callback Domain* sur l'application Strava. |
+| `STRAVA_*` | `publier.sh` écrit `STRAVA_REDIRECT_URI` et `STRAVA_APP_ORIGIN` à l'adresse publique réelle — chemin de montage compris. Il reste à déclarer ce **nom** comme *Authorization Callback Domain* sur l'application Strava : une IP n'en est pas un, Strava refuse l'autorisation. Le back office le vérifie (Athlète → Strava, « Adresse de retour »). |
 | `MSC_ATHLETE_ID` | **ne pas définir.** C'est la porte de service du développement. |
 | `MSC_SANS_TLS=1` | **seulement sans HTTPS**, donc seulement sur une IP nue. Lève `Secure` sur le cookie de session, qui voyage alors en clair. `publier.sh` le pose lui-même en mode IP. |
 

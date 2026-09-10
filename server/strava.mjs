@@ -71,6 +71,34 @@ export function config() {
   };
 }
 
+/* L'adresse de retour est le seul réglage que Strava vérifie de son côté :
+   il refuse l'autorisation si le domaine du `redirect_uri` n'est pas celui
+   déclaré « Authorization Callback Domain » sur l'application. Une IP nue n'en
+   est pas un — Strava n'accepte que des noms. Autant le dire ici plutôt que de
+   laisser l'athlète lire « Bad Request » sur strava.com. */
+export function rappel() {
+  const url = config().redirectUri;
+  let u = null;
+  try {
+    u = new URL(url);
+  } catch {
+    return { url, domaine: null, souci: 'illisible' };
+  }
+  const hote = u.hostname;
+  const ip = /^\d{1,3}(\.\d{1,3}){3}$/.test(hote) || hote.startsWith('[');
+  const local = hote === 'localhost' || hote === '127.0.0.1' || hote === '::1';
+  const prod = process.env.NODE_ENV === 'production';
+  return {
+    url,
+    domaine: hote,
+    /* `local` en développement n'est pas un souci : Strava l'accepte. */
+    souci: local ? (prod ? 'local' : null) : ip ? 'ip' : null,
+    /* En développement la page (5173) et l'API (8787) ne sont pas sur la même
+       origine, exprès : comparer les deux n'aurait aucun sens là. */
+    prod,
+  };
+}
+
 /** Whether the server has what it needs to talk to Strava at all. */
 export function configure() {
   const c = config();
@@ -616,6 +644,7 @@ export async function etat(athleteId) {
   return {
     configure: Boolean(c.clientId && c.clientSecret),
     app_propre: c.propre,
+    rappel: rappel(),
     webhook: Boolean(c.verifyToken),
     lie: Boolean(s),
     athlete: s ? { id: s.strava_athlete_id, prenom: s.prenom, nom: s.nom } : null,

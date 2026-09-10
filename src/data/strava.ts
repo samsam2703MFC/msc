@@ -64,9 +64,20 @@ export interface Quotas {
   } | null;
 }
 
+/** L'adresse de retour telle que le serveur l'enverra à Strava. */
+export interface Rappel {
+  url: string;
+  domaine: string | null;
+  souci: 'ip' | 'local' | 'illisible' | null;
+  /** Le serveur tourne en production : la page et l'API partagent une origine. */
+  prod?: boolean;
+}
+
 export interface EtatStrava {
   /** Les identifiants qui valent pour cet athlète sont les siens, pas ceux du serveur. */
   app_propre?: boolean;
+  /** Ce que Strava vérifie de son côté — et qui rate en silence quand il est faux. */
+  rappel?: Rappel;
   /** The server has a client id and secret. Without it nothing else is true. */
   configure: boolean;
   /** A verify token is set, so a push subscription is possible. */
@@ -79,6 +90,64 @@ export interface EtatStrava {
   evenements: number;
   dernier_evenement: string | null;
   quotas: Quotas | null;
+}
+
+/* ------------------------------------------------ l'adresse de retour
+
+   Strava compare le domaine du `redirect_uri` à celui déclaré sur
+   l'application, et rend « Bad Request · redirect_uri invalid » sinon. Rien
+   dans MySmartCoach ne peut le voir venir : le réglage vit dans l'environnement
+   du serveur, la vérification vit chez Strava. Sauf que la page qui pose la
+   question SAIT d'où elle est servie — donc ce que le retour devrait valoir.
+   On compare, et on le dit avant le clic plutôt qu'après. */
+
+/** L'adresse de retour attendue : celle de cette page, plus la route. */
+export function rappelAttendu(): string {
+  if (typeof window === 'undefined') return '';
+  return `${window.location.origin}${RACINE_API}/strava/callback`;
+}
+
+/** Là où l'application est servie — ce que `STRAVA_APP_ORIGIN` doit valoir. */
+export function origineAttendue(): string {
+  if (typeof window === 'undefined') return '';
+  return `${window.location.origin}${RACINE_API.replace(/\/api$/, '')}`.replace(/\/+$/, '');
+}
+
+export type CauseRappel = 'ip' | 'local' | 'illisible' | 'ailleurs';
+
+/** L'hôte d'une adresse, ou '' — et s'il ne peut pas être un domaine Strava. */
+export function hoteDe(url: string): string {
+  try { return new URL(url).hostname; } catch { return ''; }
+}
+
+function nomPossible(hote: string): boolean {
+  if (!hote) return false;
+  if (hote === 'localhost' || hote.startsWith('[')) return false;
+  return !/^\d{1,3}(\.\d{1,3}){3}$/.test(hote);
+}
+
+/** Ce qui cloche dans l'adresse de retour, ou rien.
+
+    `attenduOk` dit si l'adresse à proposer en remplacement en vaut la peine :
+    une page servie sur une IP ne peut pas en fabriquer une bonne — il faut
+    d'abord publier sous un nom, et c'est ça qu'il faut dire. */
+export function verdictRappel(r: Rappel | undefined | null): {
+  ok: boolean; cause: CauseRappel | null; attendu: string; attenduOk: boolean;
+} {
+  const attendu = rappelAttendu();
+  const attenduOk = nomPossible(hoteDe(attendu));
+  const sortie = (ok: boolean, cause: CauseRappel | null) => ({ ok, cause, attendu, attenduOk });
+  if (!r) return sortie(true, null);
+  if (r.souci) return sortie(false, r.souci);
+  const nu = (u: string) => u.replace(/\/+$/, '').toLowerCase();
+  /* En développement, page et API vivent sur deux ports : l'écart est voulu. */
+  if (r.prod && attendu && nu(r.url) !== nu(attendu)) return sortie(false, 'ailleurs');
+  return sortie(true, null);
+}
+
+/** Le nom sslip.io d'une IPv4 : un domaine gratuit qui résout vers elle. */
+export function sslip(hote: string): string {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(hote) ? `${hote.replace(/\./g, '-')}.sslip.io` : '';
 }
 
 /* ------------------------------------------------------------ les appels */

@@ -341,6 +341,22 @@ sessions and the past seven days' load by the same rule
 3. `npm run server` alongside `npm run dev`, then **Take my data** in the
    settings sheet.
 
+**The callback address is the one setting Strava judges from its side**, and
+the one whose failure is invisible here: `STRAVA_REDIRECT_URI` must match, host
+for host, the *Authorization Callback Domain* registered on the application, or
+the authorisation is refused before the athlete ever sees Strava's screen —
+`Bad Request · redirect_uri invalid`. Strava accepts **names only**: a bare IP
+can never be that domain. And the address must carry the mount path the app is
+served under (`https://exemple.tld/msc/api/strava/callback`), not just the host.
+`deploy/publier.sh` writes both `STRAVA_REDIRECT_URI` and `STRAVA_APP_ORIGIN`
+from the address it just published, so the two cannot drift; what the browser
+knows and the server does not — where the page is actually served from — is
+compared client-side, and the back office says so before the click: *Athlète →
+Strava*, card **Adresse de retour** (also on the profile's *Vérifier la
+connexion*, when it is wrong). `strava.rappel()` on the server carries the URL,
+its host, and the verdict; `verdictRappel()` in `src/data/strava.ts` compares it
+with `window.location`.
+
 The webhook is the one part that cannot work from a laptop: Strava validates
 the callback URL synchronously, from the internet, when the subscription is
 created. So it is a deployment step rather than a startup one, and it lives in

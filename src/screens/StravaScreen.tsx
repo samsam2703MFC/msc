@@ -15,7 +15,7 @@ import type { Lang } from '../data/types';
 import { C, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { Card, SectionLabel } from '../components/primitives';
-import { BlocStrava } from '../components/StravaAthlete';
+import { AdresseRetour, BlocStrava } from '../components/StravaAthlete';
 import type { App } from '../state/useApp';
 
 const T = {
@@ -37,11 +37,11 @@ function message(e: unknown): string {
 
 /* Ce que le back office sait d'un athlète, lu pour celui-ci seul : l'état de
    la liaison et l'application par l'API, les activités depuis l'instantané. */
-async function lireUn(id: number, nom: string, droit: 'lecture' | 'ecriture'): Promise<StravaAthlete> {
+async function lireUn(id: number, nom: string, droit: 'lecture' | 'ecriture'): Promise<{ a: StravaAthlete; rappel: strava.Rappel | null }> {
   const [e, app] = await Promise.all([strava.etat(id), strava.app(id)]);
   const aujourdhui = aujourdhuiISO();
   const recues = db.select('msc_activity').filter((a) => a.date <= aujourdhui);
-  return {
+  return { rappel: e.rappel ?? null, a: {
     id, nom, droit,
     strava: {
       configure: e.configure, app_propre: Boolean(e.app_propre), lie: e.lie,
@@ -50,7 +50,7 @@ async function lireUn(id: number, nom: string, droit: 'lecture' | 'ecriture'): P
     },
     app,
     activites: { n: recues.length, derniere: recues.length ? recues[recues.length - 1].date : null },
-  };
+  } };
 }
 
 export function StravaScreen({ app }: { app: App }) {
@@ -59,15 +59,17 @@ export function StravaScreen({ app }: { app: App }) {
   const nom = db.athlete.nom;
   const droit = db.droit;
   const [a, setA] = useState<StravaAthlete | null>(null);
+  const [rappel, setRappel] = useState<strava.Rappel | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const recharger = useCallback(async () => {
     if (!id) return null;
     try {
       const x = await lireUn(id, nom, droit);
-      setA(x);
+      setA(x.a);
+      setRappel(x.rappel);
       setErreur(null);
-      return [x];
+      return [x.a];
     } catch (e) {
       setErreur(message(e));
       return null;
@@ -89,6 +91,9 @@ export function StravaScreen({ app }: { app: App }) {
             <span>{erreur}</span>
           </div>
         )}
+        <div style={{ padding: '4px 0 8px' }}>
+          <AdresseRetour rappel={rappel} lang={app.lang} />
+        </div>
         {a
           ? (
             <BlocStrava

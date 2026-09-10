@@ -44,6 +44,19 @@ const T = {
     renseignerApp: 'Renseigner une application propre', modifierApp: 'Modifier', fermer: 'Fermer',
     clientId: 'ID client', secret: 'Secret client', secretAide: 'Jamais réaffiché. Laisse vide pour garder l’actuel.',
     enregistrer: 'Enregistrer', enregistre: 'Enregistré', effacer: 'Revenir à l’application commune',
+    retour: 'Adresse de retour',
+    retourOk: 'valide', retourKo: 'à corriger',
+    retourAide: 'Strava renvoie l’athlète ici après son accord, et refuse l’autorisation si ce domaine n’est pas celui déclaré sur l’application.',
+    causeIp: 'C’est une adresse IP. Strava n’accepte que des noms de domaine comme « Authorization Callback Domain » : l’autorisation est refusée avant même que l’athlète voie l’écran de Strava — « Bad Request · redirect_uri invalid ».',
+    causeLocal: 'Elle pointe vers cette machine (localhost) alors que le serveur tourne en production : Strava ne saura pas où renvoyer l’athlète.',
+    causeIllisible: 'STRAVA_REDIRECT_URI n’est pas une URL lisible.',
+    causeAilleurs: 'Elle ne mène pas là où l’application est servie : Strava refusera l’autorisation, ou renverra l’athlète sur une page qui n’existe pas.',
+    retourServeur: 'Le serveur enverra', retourAttendu: 'Il faudrait',
+    retourCorriger: 'Dans le .env du serveur :',
+    retourDomaine: (d: string) => `Et sur https://www.strava.com/settings/api, « Authorization Callback Domain » : ${d}`,
+    retourRedemarrer: 'Puis : systemctl restart msc',
+    retourSansNom: 'Cette page elle-même est servie sur une adresse IP : il n’y a donc rien de correct à proposer ici tant que le serveur n’a pas de nom. Publie-le sous un nom — un sslip.io gratuit suffit, il résout vers cette IP par construction :',
+    retourPuis: 'Le script écrit l’adresse de retour tout seul. Reviens ensuite ici : cette carte dira « valide ».',
   },
   pl: {
     chargement: 'Wczytywanie połączeń…',
@@ -76,6 +89,19 @@ const T = {
     renseignerApp: 'Wpisz własną aplikację', modifierApp: 'Edytuj', fermer: 'Zamknij',
     clientId: 'ID klienta', secret: 'Sekret klienta', secretAide: 'Nigdy nie pokazywany. Zostaw puste, by zachować obecny.',
     enregistrer: 'Zapisz', enregistre: 'Zapisano', effacer: 'Wróć do wspólnej aplikacji',
+    retour: 'Adres zwrotny',
+    retourOk: 'poprawny', retourKo: 'do poprawy',
+    retourAide: 'Strava odsyła tu zawodnika po zgodzie i odmawia autoryzacji, jeśli ta domena nie jest zadeklarowana w aplikacji.',
+    causeIp: 'To adres IP. Strava przyjmuje jako « Authorization Callback Domain » wyłącznie nazwy domen: autoryzacja jest odrzucana, zanim zawodnik zobaczy ekran Stravy — « Bad Request · redirect_uri invalid ».',
+    causeLocal: 'Wskazuje na tę maszynę (localhost), a serwer działa produkcyjnie: Strava nie będzie wiedziała, dokąd odesłać zawodnika.',
+    causeIllisible: 'STRAVA_REDIRECT_URI nie jest czytelnym adresem URL.',
+    causeAilleurs: 'Nie prowadzi tam, gdzie serwowana jest aplikacja: Strava odmówi autoryzacji albo odeśle zawodnika na nieistniejącą stronę.',
+    retourServeur: 'Serwer wyśle', retourAttendu: 'Powinno być',
+    retourCorriger: 'W pliku .env serwera:',
+    retourDomaine: (d: string) => `A na https://www.strava.com/settings/api, « Authorization Callback Domain »: ${d}`,
+    retourRedemarrer: 'Następnie: systemctl restart msc',
+    retourSansNom: 'Ta strona sama jest serwowana pod adresem IP: dopóki serwer nie ma nazwy, nie ma czego tu zaproponować. Opublikuj go pod nazwą — wystarczy darmowy sslip.io, który z definicji wskazuje na to IP:',
+    retourPuis: 'Skrypt sam zapisze adres zwrotny. Wróć tutaj: ta karta powie « poprawny ».',
   },
 } satisfies Record<Lang, unknown>;
 
@@ -108,6 +134,79 @@ function Pastille({ texte, ok }: { texte: string; ok: boolean }) {
     <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: R.full, whiteSpace: 'nowrap', background: ok ? C.accentSoft : C.surfaceAlt, color: ok ? C.accentDeep : C.inkMuted, border: `1px solid ${ok ? C.accent : C.border}` }}>
       {texte}
     </span>
+  );
+}
+
+/* ------------------------------------------------- l'adresse de retour
+
+   Un réglage du serveur que Strava juge, et qui rate sans rien dire ici : la
+   liaison s'arrête sur « Bad Request » chez eux. L'écran, lui, sait d'où il
+   est servi — donc ce que le retour devrait valoir. Il compare, et il donne
+   les deux lignes à coller plutôt qu'un diagnostic. */
+
+export function AdresseRetour({ rappel, lang }: { rappel: strava.Rappel | null | undefined; lang: Lang }) {
+  const t = T[lang];
+  const [copie, setCopie] = useState(false);
+  if (!rappel) return null;
+  const v = strava.verdictRappel(rappel);
+  const lignes = `STRAVA_REDIRECT_URI=${v.attendu}\nSTRAVA_APP_ORIGIN=${strava.origineAttendue()}`;
+  const domaine = strava.hoteDe(v.attendu);
+  const nomPropose = strava.sslip(domaine);
+  const cause = v.cause === 'ip' ? t.causeIp
+    : v.cause === 'local' ? t.causeLocal
+      : v.cause === 'illisible' ? t.causeIllisible
+        : v.cause === 'ailleurs' ? t.causeAilleurs : '';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', borderRadius: R.md, background: v.ok ? C.surfaceAlt : C.warningBg, border: `1px solid ${v.ok ? C.borderSoft : C.warning}` }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Icon name={v.ok ? 'circle-check' : 'triangle-alert'} size={13} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: v.ok ? C.ink : C.warning }}>{t.retour}</span>
+        <Pastille texte={v.ok ? t.retourOk : t.retourKo} ok={v.ok} />
+      </div>
+      <code style={{ fontSize: 11, color: C.inkSecondary, wordBreak: 'break-all' }}>
+        {v.ok ? rappel.url : `${t.retourServeur} : ${rappel.url}`}
+      </code>
+      {v.ok
+        ? <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.4 }}>{t.retourAide}</div>
+        : (
+          <>
+            <div style={{ fontSize: 11.5, color: C.warning, lineHeight: 1.45 }}>{cause}</div>
+            {v.attenduOk
+              ? (
+                <>
+                  <div style={{ fontSize: 11, color: C.inkSecondary, fontWeight: 600 }}>{t.retourCorriger}</div>
+                  <pre style={{ margin: 0, padding: '8px 10px', borderRadius: R.sm, background: C.surface, border: `1px solid ${C.borderSoft}`, fontSize: 11, color: C.ink, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{lignes}</pre>
+                  <div style={{ fontSize: 11, color: C.inkSecondary, lineHeight: 1.45 }}>{t.retourDomaine(domaine)}</div>
+                  <div style={{ fontSize: 11, color: C.inkQuiet }}>{t.retourRedemarrer}</div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(lignes).then(
+                          () => { setCopie(true); setTimeout(() => setCopie(false), 2000); },
+                          () => {},
+                        );
+                      }}
+                      style={BOUTON_SOBRE}
+                    >
+                      {copie ? t.copie : t.copier}
+                    </button>
+                  </div>
+                </>
+              )
+              : (
+                <>
+                  <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.retourSansNom}</div>
+                  {nomPropose && (
+                    <pre style={{ margin: 0, padding: '8px 10px', borderRadius: R.sm, background: C.surface, border: `1px solid ${C.borderSoft}`, fontSize: 11, color: C.ink, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{`sudo bash deploy/publier.sh ${nomPropose} ton@courriel.tld`}</pre>
+                  )}
+                  <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>{t.retourPuis}</div>
+                </>
+              )}
+          </>
+        )}
+    </div>
   );
 }
 

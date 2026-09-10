@@ -622,6 +622,15 @@ try {
   const appEffacee = await c.appel('/api/strava/app', { method: 'DELETE' });
   check('l’effacer ramène à l’application commune', appEffacee.statut === 200 && appEffacee.corps.propre === false);
 
+  /* L'adresse de retour : le seul réglage que Strava juge chez lui. L'état la
+     porte pour que l'écran puisse dire « redirect_uri invalid » AVANT le clic,
+     et non strava.com après. En développement elle vaut localhost — accepté. */
+  const rappel = etatPropre.corps.rappel;
+  check('l’état porte l’adresse de retour et son verdict',
+    typeof rappel?.url === 'string' && rappel.url.endsWith('/api/strava/callback')
+      && typeof rappel.domaine === 'string' && rappel.souci === null,
+    JSON.stringify(rappel));
+
   console.log('\n=== le back office ===');
   const refuseAdmin = await c.appel('/api/admin/comptes');
   check('les comptes sont refusés à un athlète', refuseAdmin.statut === 403, String(refuseAdmin.statut));

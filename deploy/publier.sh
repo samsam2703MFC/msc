@@ -23,6 +23,20 @@ COURRIEL=${2:-${COURRIEL:-}}
 
 dire() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
+# Pose « CLE=VALEUR » dans le .env : remplace la ligne si elle y est, l'ajoute
+# sinon. Rend 0 si le fichier a changé — de quoi savoir s'il faut redémarrer.
+poser_env() {
+  local cle=$1 val=$2 env=$RACINE/.env
+  [ -f "$env" ] || return 1
+  if grep -q "^$cle=" "$env"; then
+    grep -qxF "$cle=$val" "$env" && return 1
+    sed -i "s|^$cle=.*|$cle=$val|" "$env"
+  else
+    printf '%s=%s\n' "$cle" "$val" >> "$env"
+  fi
+  return 0
+}
+
 ADRESSES=$(hostname -I)
 IP=$(awk '{print $1}' <<< "$ADRESSES")
 
@@ -325,7 +339,40 @@ EOF
   RACINE_URL="http://$CIBLE$MONTAGE"
 fi
 
-dire "7 · l'essai"
+dire "7 · l'adresse de retour Strava"
+# Le seul réglage que Strava vérifie de son côté, et le seul dont l'erreur
+# n'apparaît pas ici : il refuse l'autorisation quand le domaine du
+# `redirect_uri` n'est pas celui déclaré sur l'application, et l'athlète
+# lit « Bad Request · redirect_uri invalid » sur strava.com sans que le
+# serveur ait rien vu passer. preparer.sh a posé l'IP de la machine faute de
+# mieux ; maintenant que l'adresse publique est connue, on l'écrit.
+if [ -f "$RACINE/.env" ]; then
+  CHANGE=0
+  poser_env STRAVA_REDIRECT_URI "$RACINE_URL/api/strava/callback" && CHANGE=1
+  poser_env STRAVA_APP_ORIGIN "$RACINE_URL" && CHANGE=1
+  if [ "$CHANGE" = 1 ]; then
+    echo "   $RACINE/.env : STRAVA_REDIRECT_URI=$RACINE_URL/api/strava/callback"
+    echo "                 STRAVA_APP_ORIGIN=$RACINE_URL"
+    systemctl restart msc 2>/dev/null && echo "   msc redémarré" \
+      || echo "   ⚠ msc n'a pas redémarré — il prendra ces valeurs au prochain démarrage"
+  else
+    echo "   déjà à jour : $RACINE_URL/api/strava/callback"
+  fi
+  if [ "$MODE" = domaine ]; then
+    echo "   À déclarer sur https://www.strava.com/settings/api,"
+    echo "   « Authorization Callback Domain » :  $CIBLE"
+  else
+    echo "   ⚠ Strava n'acceptera pas : son domaine de rappel doit être un NOM,"
+    echo "     jamais une IP. Tant que l'application est servie sur $CIBLE, la"
+    echo "     liaison Strava échouera avec « redirect_uri invalid ». Republie"
+    echo "     sous un nom — même un sslip.io fait l'affaire :"
+    echo "       bash deploy/publier.sh $(tr '.' '-' <<< "$CIBLE").sslip.io ton@courriel"
+  fi
+else
+  echo "   ⚠ $RACINE/.env absent : rien à écrire."
+fi
+
+dire "8 · l'essai"
 # `systemctl restart` rend la main dès que le processus démarre, pas quand il
 # écoute — et l'étape 6 vient justement de redémarrer msc. Interroger tout de
 # suite, c'est cueillir un 503 du mandataire (« backend pas encore là ») sur une
@@ -372,10 +419,8 @@ cat <<EOF
 EOF
 [ "$MODE" = domaine ] && cat <<EOF
 
-   Et dans $RACINE/.env, pour Strava :
-     STRAVA_REDIRECT_URI=$RACINE_URL/api/strava/callback
-     STRAVA_APP_ORIGIN=$RACINE_URL
-   Le domaine doit être déclaré « Authorization Callback Domain » sur
-   https://www.strava.com/settings/api.  Puis : systemctl restart msc
+   Et sur https://www.strava.com/settings/api, « Authorization Callback
+   Domain » : $CIBLE — l'étape 7 vient d'écrire le reste dans $RACINE/.env.
+   Le back office le vérifie : Athlète → Strava, « Adresse de retour ».
 EOF
 printf '\n\033[1mL'"'"'adresse : %s\033[0m\n\n' "$RACINE_URL/"

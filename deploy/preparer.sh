@@ -169,7 +169,10 @@ MSC_PHOTOS_DIR=$RACINE/var/photos
 ANTHROPIC_API_KEY=
 
 # https://www.strava.com/settings/api — le domaine doit être enregistré
-# comme « Authorization Callback Domain » sur l'application Strava.
+# comme « Authorization Callback Domain » sur l'application Strava, et Strava
+# n'accepte que des NOMS : l'IP ci-dessous ne vaut que jusqu'à publier.sh, qui
+# la remplace par l'adresse publique réelle (nom + chemin de montage). Laissée
+# telle quelle, la liaison Strava échoue sur « redirect_uri invalid ».
 STRAVA_CLIENT_ID=
 STRAVA_CLIENT_SECRET=
 STRAVA_REDIRECT_URI=https://$(hostname -I | awk '{print $1}')/api/strava/callback

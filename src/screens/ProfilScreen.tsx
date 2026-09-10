@@ -11,6 +11,7 @@ import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { Card, Colonnes, SectionLabel } from '../components/primitives';
 import { ProfilForm } from '../components/ProfilSheet';
+import { AdresseRetour } from '../components/StravaAthlete';
 import type { App } from '../state/useApp';
 
 const T = {
@@ -109,6 +110,11 @@ export function ProfilScreen({ app, onSection, large = false }: { app: App; onSe
           )}
         </div>
         {erreur && <div style={{ fontSize: 12, color: C.negative }}>{erreur}</div>}
+        {/* Le réglage que Strava juge, et qui fait rater la liaison sans rien
+            dire ici : on ne le montre que quand il cloche. */}
+        {etat && !strava.verdictRappel(etat.rappel).ok && (
+          <AdresseRetour rappel={etat.rappel} lang={app.lang} />
+        )}
         <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>{t.aideStrava}</div>
       </Card>
     </>} />
