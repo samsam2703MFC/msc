@@ -32,6 +32,9 @@ npm run db:migrate     # create the database, apply db/schema.sql, add later col
 npm run db:seed        # load the workbook into it
 npm run compte -- lister          # the accounts, and who sees which athlete
 npm run compte -- role <email> coach   # opens the back office: Athlètes, Réglages
+npm run param                          # every setting and where it comes from
+npm run param -- anthropic.cle         # set one from the server: a secret is asked
+                                       # at the keyboard, unseen, and sealed
 npm run strava:webhook -- etat      # the push subscription, see « Strava »
 ```
 
@@ -1039,7 +1042,12 @@ A secret (`anthropic.cle`, `strava.client_secret`, `strava.verify_token`) is
 sealed with `MSC_SECRET_KEY` like the Strava tokens — never in clear in the
 table, never sent back to the screen: the screen knows it is set and sees its
 last four characters. Without `MSC_SECRET_KEY` the server refuses to store one
-rather than storing it in clear.
+rather than storing it in clear. That is also why there is no SQL to paste a
+key with: a clear value in `msc_param.valeur` is ignored for a secret. From
+the server, `npm run param -- anthropic.cle` asks for it at the keyboard
+(unseen, so it stays out of the shell history) and seals it exactly as
+Réglages would; `npm run param` lists every setting, its source, and flags
+a secret sealed with another `MSC_SECRET_KEY` as ILLISIBLE.
 
 **When the coach says the key is missing or refused**, three different things
 can be behind it, and the server now names which:
