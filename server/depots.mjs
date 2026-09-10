@@ -173,6 +173,7 @@ async function lePlan(planId) {
       id: o.id, date: o.date, semaine: o.semaine, principal: Boolean(o.principal),
       distance_km: Number(o.distance_km), cible_s: o.cible_s, cible_haute_s: o.cible_haute_s,
       type_course: o.type_course ?? undefined, competition_id: o.competition_id,
+      parties: Array.isArray(o.parties) ? o.parties : undefined,
       nom: { fr: o.nom, pl: o.nom }, cible: L(o, 'cible'),
       role: Lnul(o, 'role') ?? { fr: '', pl: '' },
     })),
@@ -1513,7 +1514,21 @@ export async function enregistrerPlan(athleteId, plan, cnx) {
     : transaction((c) => ecrirePlan(c, athleteId, plan));
 }
 
-async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessions, objectifs = [], origine }) {
+async function ecrirePlan(cnx, athleteId, { nom, athlete, methode, blocs, semaines, sessions, objectifs = [], origine }) {
+  /* Le plan est bâti sur deux références 10 km. Les poser sur l'athlète est
+     la moitié du geste : sans ça, les séances afficheraient des allures que
+     le plan n'a pas utilisées. Les bornes sont celles du reste (2:00–15:00
+     au km, cible au moins aussi rapide). */
+  if (athlete && Number.isFinite(Number(athlete.ref_actuelle_s)) && Number.isFinite(Number(athlete.ref_cible_s))) {
+    const actuelle = entier(athlete.ref_actuelle_s, 120, 900, 0);
+    const cible = entier(athlete.ref_cible_s, 120, 900, 0);
+    if (actuelle && cible && cible <= actuelle) {
+      await cnx.execute(
+        'UPDATE msc_athlete SET ref_actuelle_s = ?, ref_cible_s = ? WHERE id = ?',
+        [actuelle, cible, athleteId],
+      );
+    }
+  }
   if (!Array.isArray(blocs) || blocs.length === 0) throw new DepotError('Plan sans bloc.');
   if (!Array.isArray(sessions) || sessions.length === 0) throw new DepotError('Plan sans séance.');
   if (blocs.length > MAX_BLOCS) throw new DepotError(`Plus de ${MAX_BLOCS} blocs.`);
@@ -1653,14 +1668,23 @@ async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessi
         : `${Math.floor(basse / 60)}:${String(basse % 60).padStart(2, '0')}`;
       await cnx.execute(
         `INSERT INTO msc_objectif (plan_id, competition_id, semaine, principal,
-           cible_s, cible_haute_s, type_course, cible_fr, cible_pl)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE semaine = VALUES(semaine), type_course = VALUES(type_course)`,
+           cible_s, cible_haute_s, type_course, parties, cible_fr, cible_pl)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE semaine = VALUES(semaine), type_course = VALUES(type_course),
+           parties = VALUES(parties)`,
         /* La semaine de l'objectif est celle de la séance qui tombe ce jour-là.
            Elle se déduit du plan qu'on vient d'écrire ; la demander au
            formulaire serait demander un nombre qu'on connaît déjà. */
         [planId, c.id, semaineDe.get(o.date) ?? 0, o.principal ? 1 : 0,
          basse, haute, o.type_course ? texte(o.type_course, 24) : null,
+         /* Les parties d'un enchaînement, telles que le formulaire les vise :
+            un tableau de { discipline, cible_s }, dans l'ordre du catalogue. */
+         Array.isArray(o.parties) && o.parties.length > 0
+           ? JSON.stringify(o.parties.slice(0, 6).map((x) => ({
+             discipline: texte(x.discipline ?? '', 16),
+             cible_s: entier(x.cible_s, 1, 86400, 0),
+           })))
+           : null,
          libelle, o.cible?.pl ? texte(o.cible.pl, 80) : libelle],
       );
       vises += 1;

@@ -153,6 +153,15 @@ model reproduces the workbook rather than approximating it.
 Anything the generator has to bend is surfaced, not swallowed: a block too short
 to train is folded into the one before it, and the screen shows what happened.
 
+### The plan's two references become the athlete's
+
+The generator's Athlète card no longer offers to rename anyone: the name is
+the profile's, shown read-only, changed in **Profil**. What the card does own
+are the two 10 km references and the plan's start — and saving the plan now
+writes those references onto the athlete (`ecrirePlan`, same 2:00–15:00 /km
+gate). Without that, the sessions would show paces computed from a profile
+the plan had not used.
+
 ### Saving it
 
 **« Enregistrer et activer » writes the plan into `msc_session`,** and the app is
@@ -1028,6 +1037,20 @@ target, and one flag that matters: `comparable`, whether its time can be
 turned into a 10 km pace. Running types can; a 70.3 cannot, and the generator
 says so — such an objective's block aims at the date and keeps the previous
 block's progression instead of inventing a reference pace.
+
+A multi-discipline type carries its legs, and the objective is aimed leg by
+leg: swim, bike, run, each with its own target time, the total being their sum
+plus the transitions. That is what makes such a race comparable again — the
+run leg, corrected by the deficit, *is* a 10 km reference. Four settings in
+**Réglages · Enchaînements** hold those deficits: by how many per cent one is
+slower inside the race than over the same distance on its own (swim 5 %, bike
+6 %, run 8 % by default — open water and a wetsuit are not a pool, and running
+on bike legs is not running fresh) and the transitions' time. The objective
+shows the arithmetic in words: *the run leg is worth 41:40 fresh over 10 km —
+that is what sets the plan's paces*. `referenceAPied` in `courses.ts` is the
+one place that conversion lives; the generator calls it, and only falls back
+to "this block aims at the date" when there is no run leg at all (a
+cyclosportive, an open-water swim).
 
 The **Objectifs** of the Plan section therefore open with a **Type de course**
 dropdown, grouped by discipline. Picking one fills the distance, names the

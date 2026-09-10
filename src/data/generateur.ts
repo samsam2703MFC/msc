@@ -24,8 +24,9 @@
    Claude's part is the session *content* (see ./methode); it never sets a pace
    or a volume. */
 
-import { comparableAuDixKm } from './courses';
-import { formatAllure } from './engine';
+import { DEFICITS_DEFAUT, comparableAuDixKm, referenceAPied } from './courses';
+import type { Deficits } from './courses';
+import { formatAllure, param } from './engine';
 import type {
   Localized,
   MscBloc,
@@ -70,6 +71,9 @@ export interface Objectif {
       chrono se ramène à une allure 10 km. */
   type_course?: string;
   discipline?: string;
+  /** Un enchaînement : le chrono visé pour chaque partie. La partie course,
+      corrigée du déficit, est ce qui règle l'allure du bloc. */
+  parties?: Array<{ discipline: string; cible_s: number }>;
   /** The fast end of the target range, in seconds. */
   cible_s: number;
   /** The slow end. Optional — without it the fast end is used on its own. */
@@ -192,14 +196,25 @@ export function periodiser(
       avertissements.push(`« ${o.nom} » tombe pendant le réamorçage : bloc ignoré.`);
       return;
     }
-    /* Un triathlon, une cyclo, une nage : le chrono ne se ramène pas à une
-       allure de course à pied. Le bloc vise alors la date, et garde la
-       progression du bloc précédent plutôt que d'inventer une allure. */
-    const comparable = comparableAuDixKm(o.type_course);
-    const allureCible = comparable ? equivalent10k(tempsDeReference(o), o.distance_km) : null;
+    /* Une course à pied donne son allure directement. Un enchaînement la
+       donne par sa partie course, corrigée du déficit — courir après le vélo
+       est plus lent que la même distance à sec, et le pour cent se règle dans
+       le back office. Une cyclo ou une nage, elles, ne disent rien d'une
+       allure : le bloc vise la date. */
+    const deficits: Deficits = {
+      natation: param('multi.deficit_natation_pct', DEFICITS_DEFAUT.natation ?? 5),
+      velo: param('multi.deficit_velo_pct', DEFICITS_DEFAUT.velo ?? 6),
+      cap: param('multi.deficit_cap_pct', DEFICITS_DEFAUT.cap ?? 8),
+    };
+    const ref = referenceAPied(o, tempsDeReference(o), deficits);
+    const allureCible = ref ? equivalent10k(ref.temps_s, ref.distance_km) : null;
     const partPrecedente = blocs.length > 0 ? blocs[blocs.length - 1].part : 0;
-    if (!comparable) {
-      avertissements.push(`« ${o.nom} » n’est pas une course à pied : le bloc vise la date, pas une allure.`);
+    if (!ref) {
+      avertissements.push(
+        comparableAuDixKm(o.type_course)
+          ? `« ${o.nom} » n’est pas une course à pied : le bloc vise la date, pas une allure.`
+          : `« ${o.nom} » : sans chrono visé sur la partie course, le bloc vise la date, pas une allure.`,
+      );
     }
     blocs.push({
       code: codes[blocs.length] ?? `B${i}`,
@@ -211,7 +226,9 @@ export function periodiser(
       nom: l(o.principal ? 'Bloc final' : `Vers ${o.nom}`),
       quoi: l(allureCible === null
         ? `${o.nom} le ${o.date} — préparation spécifique, sans allure de référence.`
-        : `${o.nom} le ${o.date} — référence ${formatAllure(allureCible)}.`),
+        : ref && ref.distance_km !== o.distance_km
+          ? `${o.nom} le ${o.date} — partie course ramenée à sec : référence ${formatAllure(allureCible)}.`
+          : `${o.nom} le ${o.date} — référence ${formatAllure(allureCible)}.`),
     });
     curseur = fin + 1;
   });

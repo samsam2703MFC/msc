@@ -109,6 +109,21 @@ export const CATALOGUE = [
   { cle: 'niveau.palier_6', groupe: 'niveau', type: 'nombre', defaut: 95, unite: '/100', ordre: 120,
     libelle: { fr: 'Palier 6 — Ultra', pl: 'Próg 6 — Ultra' }, aide: null },
 
+  /* les enchaînements : de combien on est plus lent dans un triathlon que
+     sur la même distance « à sec » */
+  { cle: 'multi.deficit_natation_pct', groupe: 'multi', type: 'nombre', defaut: 5, unite: '%', ordre: 10,
+    libelle: { fr: 'Déficit natation en enchaînement', pl: 'Strata na pływaniu w wieloboju' },
+    aide: { fr: 'Eau libre, combinaison, départ groupé : plus lent que la même distance en bassin, de ce pour cent.', pl: 'Wody otwarte, pianka, start grupowy: o tyle procent wolniej niż ten sam dystans na basenie.' } },
+  { cle: 'multi.deficit_velo_pct', groupe: 'multi', type: 'nombre', defaut: 6, unite: '%', ordre: 20,
+    libelle: { fr: 'Déficit vélo en enchaînement', pl: 'Strata na rowerze w wieloboju' },
+    aide: { fr: 'Rouler en gardant des jambes pour courir : plus lent qu’un contre-la-montre seul, de ce pour cent.', pl: 'Jazda z zapasem na bieg: o tyle procent wolniej niż sama jazda na czas.' } },
+  { cle: 'multi.deficit_cap_pct', groupe: 'multi', type: 'nombre', defaut: 8, unite: '%', ordre: 30,
+    libelle: { fr: 'Déficit course à pied en enchaînement', pl: 'Strata na biegu w wieloboju' },
+    aide: { fr: 'Courir sur des jambes de vélo : plus lent que la même distance à sec, de ce pour cent. C’est ce chiffre qui ramène la partie course à une allure 10 km comparable.', pl: 'Bieg po rowerze: o tyle procent wolniej niż ten sam dystans na świeżo. Ta liczba sprowadza część biegową do porównywalnego tempa 10 km.' } },
+  { cle: 'multi.transitions_min', groupe: 'multi', type: 'nombre', defaut: 5, unite: 'min', ordre: 40,
+    libelle: { fr: 'Transitions', pl: 'Strefy zmian' },
+    aide: { fr: 'Le temps des deux transitions, compté dans le total visé.', pl: 'Czas obu stref zmian, wliczony w cel łączny.' } },
+
   /* la sécurité */
   { cle: 'securite.mdp_min', groupe: 'securite', type: 'nombre', defaut: 12, unite: 'caractères', ordre: 10, env: 'MSC_MDP_MIN',
     libelle: { fr: 'Longueur minimale d’un mot de passe', pl: 'Minimalna długość hasła' },

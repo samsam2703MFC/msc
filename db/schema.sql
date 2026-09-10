@@ -456,6 +456,7 @@ CREATE TABLE IF NOT EXISTS msc_objectif (
   cible_s        MEDIUMINT UNSIGNED NOT NULL COMMENT 'le bas de la fourchette, en secondes',
   cible_haute_s  MEDIUMINT UNSIGNED NOT NULL COMMENT 'le haut',
   type_course    VARCHAR(24) NULL COMMENT 'le même catalogue que msc_competition',
+  parties        JSON NULL COMMENT 'un enchaînement : le chrono visé pour chaque partie, dans l''ordre du catalogue',
   cible_fr       VARCHAR(80) NOT NULL, cible_pl VARCHAR(80) NOT NULL,
   role_fr        TEXT NULL, role_pl TEXT NULL COMMENT 'ce que la course joue dans le plan : jalon, juge de paix, objectif',
   PRIMARY KEY (id),

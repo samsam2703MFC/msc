@@ -13,6 +13,13 @@ import type { Lang } from './types';
 
 export type Discipline = 'cap' | 'trail' | 'natation' | 'velo' | 'triathlon' | 'multi';
 
+/** Une partie d'un enchaînement : la nage, le vélo, la course. */
+export interface Partie {
+  discipline: Discipline;
+  distance_km: number;
+  exemple: string;
+}
+
 export interface TypeCourse {
   code: string;
   discipline: Discipline;
@@ -23,6 +30,9 @@ export interface TypeCourse {
   comparable: boolean;
   /** Un ordre de grandeur, pour le champ « Cible » : h:mm:ss ou mm:ss. */
   exemple: string;
+  /** Les parties d'un enchaînement, dans l'ordre où on les fait. Une course
+      à discipline unique n'en a pas. */
+  parties?: Partie[];
 }
 
 export const DISCIPLINES: Array<{ code: Discipline; nom: Record<Lang, string>; icon: string }> = [
@@ -71,13 +81,46 @@ export const TYPES_COURSE: TypeCourse[] = [
   { code: 'velo_vtt', discipline: 'velo', nom: { fr: 'VTT / marathon VTT', pl: 'MTB / maraton MTB' }, distance_km: 60, comparable: false, exemple: '3:00:00' },
 
   /* triathlon et enchaînements — la distance est le total des trois */
-  { code: 'tri_sprint', discipline: 'triathlon', nom: { fr: 'Triathlon S (0,75 / 20 / 5)', pl: 'Triathlon S (0,75 / 20 / 5)' }, distance_km: 25.75, comparable: false, exemple: '1:15:00' },
-  { code: 'tri_olympique', discipline: 'triathlon', nom: { fr: 'Triathlon M · olympique (1,5 / 40 / 10)', pl: 'Triathlon M · olimpijski (1,5 / 40 / 10)' }, distance_km: 51.5, comparable: false, exemple: '2:30:00' },
-  { code: 'tri_70_3', discipline: 'triathlon', nom: { fr: 'Half · 70.3 (1,9 / 90 / 21,1)', pl: 'Half · 70.3 (1,9 / 90 / 21,1)' }, distance_km: 113, comparable: false, exemple: '5:30:00' },
-  { code: 'tri_ironman', discipline: 'triathlon', nom: { fr: 'Ironman (3,8 / 180 / 42,2)', pl: 'Ironman (3,8 / 180 / 42,2)' }, distance_km: 226, comparable: false, exemple: '12:00:00' },
-  { code: 'tri_duathlon', discipline: 'triathlon', nom: { fr: 'Duathlon (10 / 40 / 5)', pl: 'Duatlon (10 / 40 / 5)' }, distance_km: 55, comparable: false, exemple: '2:20:00' },
-  { code: 'tri_swimrun', discipline: 'triathlon', nom: { fr: 'Swimrun', pl: 'Swimrun' }, distance_km: 30, comparable: false, exemple: '4:00:00' },
-  { code: 'tri_aquathlon', discipline: 'triathlon', nom: { fr: 'Aquathlon (1 / 5)', pl: 'Aquathlon (1 / 5)' }, distance_km: 6, comparable: false, exemple: '35:00' },
+  { code: 'tri_sprint', discipline: 'triathlon', nom: { fr: 'Triathlon S (0,75 / 20 / 5)', pl: 'Triathlon S (0,75 / 20 / 5)' }, distance_km: 25.75, comparable: false, exemple: '1:15:00',
+    parties: [
+      { discipline: 'natation', distance_km: 0.75, exemple: '13:00' },
+      { discipline: 'velo', distance_km: 20, exemple: '33:00' },
+      { discipline: 'cap', distance_km: 5, exemple: '22:00' },
+    ] },
+  { code: 'tri_olympique', discipline: 'triathlon', nom: { fr: 'Triathlon M · olympique (1,5 / 40 / 10)', pl: 'Triathlon M · olimpijski (1,5 / 40 / 10)' }, distance_km: 51.5, comparable: false, exemple: '2:30:00',
+    parties: [
+      { discipline: 'natation', distance_km: 1.5, exemple: '26:00' },
+      { discipline: 'velo', distance_km: 40, exemple: '1:08:00' },
+      { discipline: 'cap', distance_km: 10, exemple: '45:00' },
+    ] },
+  { code: 'tri_70_3', discipline: 'triathlon', nom: { fr: 'Half · 70.3 (1,9 / 90 / 21,1)', pl: 'Half · 70.3 (1,9 / 90 / 21,1)' }, distance_km: 113, comparable: false, exemple: '5:30:00',
+    parties: [
+      { discipline: 'natation', distance_km: 1.9, exemple: '35:00' },
+      { discipline: 'velo', distance_km: 90, exemple: '2:50:00' },
+      { discipline: 'cap', distance_km: 21.097, exemple: '1:45:00' },
+    ] },
+  { code: 'tri_ironman', discipline: 'triathlon', nom: { fr: 'Ironman (3,8 / 180 / 42,2)', pl: 'Ironman (3,8 / 180 / 42,2)' }, distance_km: 226, comparable: false, exemple: '12:00:00',
+    parties: [
+      { discipline: 'natation', distance_km: 3.8, exemple: '1:12:00' },
+      { discipline: 'velo', distance_km: 180, exemple: '5:50:00' },
+      { discipline: 'cap', distance_km: 42.195, exemple: '4:15:00' },
+    ] },
+  { code: 'tri_duathlon', discipline: 'triathlon', nom: { fr: 'Duathlon (10 / 40 / 5)', pl: 'Duatlon (10 / 40 / 5)' }, distance_km: 55, comparable: false, exemple: '2:20:00',
+    parties: [
+      { discipline: 'cap', distance_km: 10, exemple: '44:00' },
+      { discipline: 'velo', distance_km: 40, exemple: '1:10:00' },
+      { discipline: 'cap', distance_km: 5, exemple: '23:00' },
+    ] },
+  { code: 'tri_swimrun', discipline: 'triathlon', nom: { fr: 'Swimrun', pl: 'Swimrun' }, distance_km: 30, comparable: false, exemple: '4:00:00',
+    parties: [
+      { discipline: 'natation', distance_km: 5, exemple: '1:40:00' },
+      { discipline: 'cap', distance_km: 25, exemple: '2:20:00' },
+    ] },
+  { code: 'tri_aquathlon', discipline: 'triathlon', nom: { fr: 'Aquathlon (1 / 5)', pl: 'Aquathlon (1 / 5)' }, distance_km: 6, comparable: false, exemple: '35:00',
+    parties: [
+      { discipline: 'natation', distance_km: 1, exemple: '17:00' },
+      { discipline: 'cap', distance_km: 5, exemple: '21:00' },
+    ] },
 
   /* hyrox et obstacles */
   { code: 'multi_hyrox', discipline: 'multi', nom: { fr: 'Hyrox', pl: 'Hyrox' }, distance_km: 8, comparable: false, exemple: '1:20:00' },
@@ -113,6 +156,50 @@ export function disciplineEnClair(code: string | null | undefined, lang: Lang): 
   const t = typeCourse(code);
   const d = DISCIPLINES.find((x) => x.code === (t?.discipline ?? 'cap'));
   return d ? d.nom[lang] : '';
+}
+
+/** Vrai quand la course enchaîne plusieurs disciplines : l'objectif se vise
+    alors partie par partie. */
+export function estMulti(code: string | null | undefined): boolean {
+  return (typeCourse(code)?.parties?.length ?? 0) > 1;
+}
+
+/** Le déficit d'une discipline dans un enchaînement : de combien de pour cent
+    on y est plus lent que sur la même distance « à sec ». Nager en eau libre,
+    en combinaison, dans un départ groupé, puis courir sur des jambes de vélo,
+    ce n'est pas la même chose que la même distance seule ; c'est réglable dans
+    le back office parce que ça dépend de l'athlète autant que de la course. */
+export type Deficits = Partial<Record<Discipline, number>>;
+
+export const DEFICITS_DEFAUT: Deficits = { natation: 5, velo: 6, cap: 8, trail: 0, triathlon: 0, multi: 0 };
+
+/**
+ * Ce qu'un objectif dit d'une course à pied « à sec », quand il en dit
+ * quelque chose : la course elle-même si c'en est une, sinon la partie course
+ * de l'enchaînement, corrigée du déficit — c'est elle qui se compare au 10 km
+ * de référence, et donc qui règle l'allure d'un bloc.
+ */
+export function referenceAPied(
+  o: { type_course?: string; distance_km: number; parties?: Array<{ discipline: string; cible_s: number }> },
+  temps_s: number,
+  deficits: Deficits = DEFICITS_DEFAUT,
+): { distance_km: number; temps_s: number } | null {
+  const t = typeCourse(o.type_course);
+  if (!t || t.comparable) return { distance_km: o.distance_km, temps_s };
+  const parties = t.parties ?? [];
+  /* La partie course la plus longue : dans un duathlon, celle de 10 km dit
+     plus que les 5 km d'après. */
+  let choisie: { index: number; distance_km: number } | null = null;
+  parties.forEach((p, i) => {
+    if (p.discipline !== 'cap') return;
+    if (!choisie || p.distance_km > choisie.distance_km) choisie = { index: i, distance_km: p.distance_km };
+  });
+  if (!choisie) return null;
+  const partie = choisie as { index: number; distance_km: number };
+  const cible = o.parties?.[partie.index]?.cible_s;
+  if (!cible) return null;
+  const deficit = deficits.cap ?? DEFICITS_DEFAUT.cap ?? 0;
+  return { distance_km: partie.distance_km, temps_s: cible / (1 + deficit / 100) };
 }
 
 /** Les types groupés par discipline, dans l'ordre du catalogue : ce qu'une

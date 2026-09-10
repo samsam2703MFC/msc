@@ -63,6 +63,7 @@ try {
        objectif et le start qui le réalise. */
     ['msc_competition', 'type_course', "ADD COLUMN type_course VARCHAR(24) NULL AFTER discipline"],
     ['msc_objectif', 'type_course', "ADD COLUMN type_course VARCHAR(24) NULL AFTER cible_haute_s"],
+    ['msc_objectif', 'parties', "ADD COLUMN parties JSON NULL AFTER type_course"],
     ['msc_adaptation', 'avant', "ADD COLUMN avant JSON NULL AFTER applique_le"],
     ['msc_ajustement', 'avant', "ADD COLUMN avant JSON NULL AFTER applique_le"],
     /* Le profil et la forme. Le poids vit déjà dans les mesures ; la HRV les

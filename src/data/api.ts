@@ -340,6 +340,9 @@ export interface PlanEnregistre {
  */
 export function enregistrerPlan(corps: {
   nom: string;
+  /** Les références sur lesquelles le plan est bâti : elles deviennent celles
+      de l'athlète, sinon les allures affichées ne seraient pas celles du plan. */
+  athlete?: { ref_actuelle_s: number; ref_cible_s: number; debut?: string };
   methode?: unknown;
   blocs: unknown[];
   semaines: unknown[];

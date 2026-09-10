@@ -606,6 +606,9 @@ export interface MscObjectif {
   /** Le type du catalogue, et la course que l'objectif vise. */
   type_course?: string;
   competition_id?: number;
+  /** Un enchaînement : le chrono visé pour chaque partie, dans l'ordre du
+      catalogue (nage, vélo, course). */
+  parties?: Array<{ discipline: string; cible_s: number }>;
   /** The fast end of the target range, in seconds. */
   cible_s: number;
   /** The slow end. Intermediate races are checkpoints, so the generator takes

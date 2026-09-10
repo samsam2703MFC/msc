@@ -419,9 +419,12 @@ try {
     method: 'POST',
     body: JSON.stringify({
       nom: 'Plan du contrôle',
+      /* Les deux références sur lesquelles le plan est bâti : elles doivent
+         devenir celles de l'athlète. */
+      athlete: { ref_actuelle_s: 336, ref_cible_s: 300, debut: '2031-01-06' },
       blocs: genere.blocs, semaines: genere.semaines, sessions: genere.sessions,
       objectifs: [{ date: '2031-04-13', nom: 'Semi du contrôle', cible_s: 5400,
-        distance_km: 21.1, principal: true }],
+        distance_km: 21.1, principal: true, type_course: 'cap_semi' }],
     }),
   });
   check('un plan généré s’enregistre',
@@ -433,6 +436,37 @@ try {
     vu.corps.plan?.origine === 'genere' && vu.corps.msc_session.length === genere.sessions.length,
     `${vu.corps.plan?.origine} · ${vu.corps.msc_session.length}`);
   check('avec ses objectifs', vu.corps.msc_objectif.length === 1);
+  check('et son type de course', vu.corps.msc_objectif[0]?.type_course === 'cap_semi');
+  const [[refs]] = (await bd().execute(
+    'SELECT ref_actuelle_s, ref_cible_s FROM msc_athlete WHERE id = ?', [a2.insertId],
+  )) as any;
+  check('les références du plan deviennent celles de l’athlète',
+    Number(refs?.ref_actuelle_s) === 336 && Number(refs?.ref_cible_s) === 300, JSON.stringify(refs));
+
+  /* Un enchaînement se vise partie par partie, et les parties se relisent. */
+  const multi = await c2c.appel('/api/plan', {
+    method: 'POST',
+    body: JSON.stringify({
+      nom: 'Plan multi du contrôle',
+      blocs: genere.blocs, semaines: genere.semaines, sessions: genere.sessions,
+      objectifs: [{
+        date: '2031-04-13', nom: 'Triathlon du contrôle', cible_s: 9000, distance_km: 51.5,
+        principal: true, type_course: 'tri_olympique',
+        parties: [
+          { discipline: 'natation', cible_s: 1560 },
+          { discipline: 'velo', cible_s: 4080 },
+          { discipline: 'cap', cible_s: 2700 },
+        ],
+      }],
+    }),
+  });
+  const vuMulti = await c2c.appel('/api/db/instantane');
+  const objMulti = vuMulti.corps.msc_objectif?.[0];
+  check('un objectif d’enchaînement garde le chrono de chaque partie',
+    multi.statut === 200 && objMulti?.type_course === 'tri_olympique'
+      && objMulti?.parties?.length === 3 && objMulti.parties[2].cible_s === 2700
+      && objMulti.parties[2].discipline === 'cap',
+    JSON.stringify(objMulti?.parties));
 
   /* Un refus de forme est une réponse, pas une panne : il doit se lire. */
   const vide = await c2c.appel('/api/plan', {

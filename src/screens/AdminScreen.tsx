@@ -5,7 +5,7 @@
    placement need nothing but the form. Asking Claude for the methodology is a
    second, optional step that fills in what each session actually is. */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as db from '../data/db';
 import { genererPlan } from '../data/generateur';
 import type { Contraintes, Objectif, PlanGenere, ProfilAthlete } from '../data/generateur';
@@ -14,8 +14,8 @@ import type { Methode } from '../data/methode';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { AccentButton, Card, Colonnes, Grid, Mono, SectionLabel } from '../components/primitives';
-import { TYPES_COURSE, typeCourse, typesGroupes } from '../data/courses';
-import type { TypeCourse } from '../data/courses';
+import { DEFICITS_DEFAUT, DISCIPLINES, TYPES_COURSE, estMulti, referenceAPied, typeCourse, typesGroupes } from '../data/courses';
+import type { Deficits, TypeCourse } from '../data/courses';
 import type { Lang } from '../data/types';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
@@ -305,7 +305,9 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
   const fr = app.lang === 'fr';
   const seed = db.athlete;
 
-  const [nom, setNom] = useState(seed.nom);
+  /* Le nom vient du profil de l'athlète affiché ; le générateur ne fait que
+     le lire, pour nommer le plan. */
+  const nom = seed.nom;
   const [actuelle, setActuelle] = useState(versTexte(seed.ref_actuelle_s * 10));
   const [cible, setCible] = useState(versTexte(seed.ref_cible_s * 10));
   const [debut, setDebut] = useState(seed.debut);
@@ -391,7 +393,17 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
       {/* l'athlète */}
       <Card padding="16px 18px" gap={10}>
         <SectionLabel icon="target">{fr ? 'Athlète' : 'Zawodnik'}</SectionLabel>
-        <Champ label={fr ? 'Nom' : 'Imię'} value={nom} onChange={setNom} />
+        {/* Le nom appartient au profil, pas au générateur : l'écrire ici ne
+            renommait personne. Il s'affiche, et Profil le change. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 11, color: C.inkSecondary }}>{fr ? 'Nom' : 'Imię'}</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{nom}</span>
+            <span style={{ fontSize: 10.5, color: C.inkQuiet }}>
+              {fr ? '— se change dans Profil' : '— zmienia się w Profilu'}
+            </span>
+          </div>
+        </div>
         <Grid cols={2} gap={10}>
           <Champ
             label={fr ? '10 km actuel' : 'Obecne 10 km'}
@@ -448,9 +460,21 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
                 value={versTexte(o.cible_s)}
                 onChange={(v) => majObjectif(i, { cible_s: versSecondes(v) })}
                 mono
-                aide={typeCourse(o.type_course)?.exemple}
+                aide={estMulti(o.type_course)
+                  ? (fr ? 'total, transitions comprises' : 'łącznie ze strefami zmian')
+                  : typeCourse(o.type_course)?.exemple}
               />
             </Grid>
+            {/* Un enchaînement se vise partie par partie : le total est leur
+                somme plus les transitions, et la partie course, corrigée du
+                déficit, est ce qui règle l'allure des blocs. */}
+            {estMulti(o.type_course) && (
+              <PartiesObjectif
+                objectif={o}
+                lang={app.lang}
+                onChange={(patch) => majObjectif(i, patch)}
+              />
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <Bascule
                 label={fr ? 'Objectif principal' : 'Cel główny'}
@@ -601,7 +625,7 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
             </SectionLabel>
             <div style={{ fontSize: 12, lineHeight: 1.45, color: C.inkQuiet }}>
               {fr
-                ? `Le plan actif devient celui-ci : ${sessions.length} séances du ${plan.sessions[0]?.date} au ${plan.sessions[plan.sessions.length - 1]?.date}. L'ancien n'est pas supprimé — ses séances restent, et le journal comme les activités qui les visent avec.`
+                ? `Le plan actif devient celui-ci : ${sessions.length} séances du ${plan.sessions[0]?.date} au ${plan.sessions[plan.sessions.length - 1]?.date}. Les deux références 10 km deviennent celles de l'athlète. L'ancien plan n'est pas supprimé — ses séances restent, et le journal comme les activités qui les visent avec.`
                 : `Ten plan staje się aktywny: ${sessions.length} treningów od ${plan.sessions[0]?.date} do ${plan.sessions[plan.sessions.length - 1]?.date}. Poprzedni nie znika — jego treningi zostają, a z nimi dziennik i aktywności.`}
             </div>
             <AccentButton
@@ -618,6 +642,14 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
                 if (app.planJob === 'envoi') return;
                 void app.enregistrerPlan({
                   nom: `${objectifs.find((o) => o.principal)?.nom ?? 'Plan'} — ${nom}`,
+                  /* Le plan est bâti sur ces deux allures : elles deviennent
+                     celles de l'athlète, sinon les séances afficheraient des
+                     allures que le plan n'a pas utilisées. */
+                  athlete: {
+                    ref_actuelle_s: athlete.ref_actuelle_s,
+                    ref_cible_s: athlete.ref_cible_s,
+                    debut,
+                  },
                   methode: methode ?? undefined,
                   blocs: plan.blocs,
                   semaines: plan.semaines,
@@ -677,6 +709,89 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
         </Card>
       )}
     </>} />
+  );
+}
+
+/* Les parties d'un enchaînement : un chrono par discipline, le total qui en
+   découle, et ce que la partie course vaudrait « à sec ». Les pour cent de
+   déficit se règlent dans Réglages · Enchaînements. */
+function PartiesObjectif({
+  objectif, lang, onChange,
+}: {
+  objectif: Objectif; lang: Lang; onChange: (patch: Partial<Objectif>) => void;
+}) {
+  const fr = lang === 'fr';
+  const t = typeCourse(objectif.type_course);
+  const parties = t?.parties ?? [];
+  const transitions = db.param('multi.transitions_min', 5) * 60;
+  const deficits: Deficits = {
+    natation: db.param('multi.deficit_natation_pct', DEFICITS_DEFAUT.natation ?? 5),
+    velo: db.param('multi.deficit_velo_pct', DEFICITS_DEFAUT.velo ?? 6),
+    cap: db.param('multi.deficit_cap_pct', DEFICITS_DEFAUT.cap ?? 8),
+  };
+  const visees = parties.map((p, i) => objectif.parties?.[i]?.cible_s ?? versSecondes(p.exemple));
+
+  /* Un objectif relu d'un plan d'avant les parties : on pose celles du
+     catalogue une fois, pour que le générateur voie ce que l'écran montre. */
+  const pose = useRef(false);
+  useEffect(() => {
+    if (pose.current || parties.length === 0 || (objectif.parties?.length ?? 0) > 0) return;
+    pose.current = true;
+    onChange({
+      parties: parties.map((p, i) => ({ discipline: p.discipline, cible_s: visees[i] })),
+      cible_s: visees.reduce((somme, x) => somme + x, 0) + transitions,
+    });
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [objectif.type_course]);
+
+  const poser = (index: number, secondes: number) => {
+    const suite = parties.map((p, i) => ({
+      discipline: p.discipline,
+      cible_s: i === index ? secondes : visees[i],
+    }));
+    const total = suite.reduce((somme, x) => somme + x.cible_s, 0) + transitions;
+    onChange({ parties: suite, cible_s: total });
+  };
+
+  const total = visees.reduce((somme, x) => somme + x, 0) + transitions;
+  const aSec = referenceAPied({ ...objectif, parties: parties.map((p, i) => ({ discipline: p.discipline, cible_s: visees[i] })) }, objectif.cible_s, deficits);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, borderRadius: 10, background: C.page }}>
+      <div style={{ fontSize: 10.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary, fontWeight: 600 }}>
+        {fr ? 'Par discipline' : 'Według dyscypliny'}
+      </div>
+      <Grid cols={parties.length > 2 ? 3 : 2} gap={8}>
+        {parties.map((p, i) => {
+          const d = DISCIPLINES.find((x) => x.code === p.discipline);
+          return (
+            <Champ
+              key={`${p.discipline}-${i}`}
+              label={`${d ? d.nom[lang] : p.discipline} · ${p.distance_km} km`}
+              value={versTexte(visees[i])}
+              onChange={(v) => poser(i, versSecondes(v))}
+              mono
+              aide={p.exemple}
+            />
+          );
+        })}
+      </Grid>
+      <div style={{ fontSize: 11, color: C.inkSecondary, lineHeight: 1.45 }}>
+        {fr
+          ? `Total ${versTexte(total)}, transitions comprises (${Math.round(transitions / 60)} min).`
+          : `Łącznie ${versTexte(total)}, ze strefami zmian (${Math.round(transitions / 60)} min).`}
+        {aSec && (
+          fr
+            ? ` La partie course vaut ${versTexte(Math.round(aSec.temps_s))} à sec sur ${aSec.distance_km} km — c’est elle qui règle les allures du plan.`
+            : ` Część biegowa to ${versTexte(Math.round(aSec.temps_s))} na świeżo na ${aSec.distance_km} km — to ona ustawia tempa planu.`
+        )}
+      </div>
+      <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>
+        {fr
+          ? `Déficits appliqués : natation ${deficits.natation} %, vélo ${deficits.velo} %, course ${deficits.cap} % — Réglages · Enchaînements.`
+          : `Zastosowane straty: pływanie ${deficits.natation} %, rower ${deficits.velo} %, bieg ${deficits.cap} % — Ustawienia · Wieloboje.`}
+      </div>
+    </div>
   );
 }
 

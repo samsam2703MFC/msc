@@ -19,6 +19,7 @@ const GROUPES: Array<{ code: string; icon: string; nom: Record<Lang, string> }> 
   { code: 'coach', icon: 'bot', nom: { fr: 'Coach', pl: 'Trener' } },
   { code: 'niveau', icon: 'zap', nom: { fr: 'Niveaux', pl: 'Poziomy' } },
   { code: 'strava', icon: 'link', nom: { fr: 'Strava', pl: 'Strava' } },
+  { code: 'multi', icon: 'repeat', nom: { fr: 'Enchaînements', pl: 'Wieloboje' } },
   { code: 'securite', icon: 'user', nom: { fr: 'Sécurité', pl: 'Bezpieczeństwo' } },
 ];
 

@@ -280,8 +280,11 @@ try {
     /Enregistrer et activer/i.test(createur),
     createur.split('\n').find((l) => /Enregistrer/i.test(l)) ?? '');
   check('en disant ce que ça remplace',
-    /L'ancien n'est pas supprimé|L’ancien n’est pas supprimé/.test(createur),
+    /L'ancien plan n'est pas supprimé|L’ancien plan n’est pas supprimé/.test(createur),
     createur.split('\n').find((l) => /ancien/i.test(l))?.slice(0, 80) ?? '');
+  check('et que les deux références deviennent celles de l’athlète',
+    /références 10\s?km deviennent celles de l’athlète|références 10 km deviennent celles de l'athlète/.test(createur),
+    createur.split('\n').find((l) => /références/i.test(l))?.slice(0, 90) ?? '');
   check('et combien de séances deviennent actives',
     /\d+ séances du \d{4}-\d{2}-\d{2} au \d{4}-\d{2}-\d{2}/.test(createur),
     createur.split('\n').find((l) => /séances du/.test(l))?.slice(0, 80) ?? '');
