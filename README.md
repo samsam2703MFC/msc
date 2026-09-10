@@ -290,10 +290,13 @@ plan, one square per day from Monday down to Sunday, coloured by what the
 session became (done, done otherwise, missed, today, ahead, rest); under it
 the week's load — planned in light, done in emerald over it, same unit — so
 the periodisation reads at a glance; then the blocks as alternating bands
-with their letter, and a flag over each competition week. The current week
-is outlined; a tap on any column moves the app to that week (the same
-`allerA` the settings date picker uses). Everything is derived from what the
-screens already hold; nothing is stored for it.
+with their letter, a flag over each competition week, and a row of months
+above. Forty-four weeks do not fit legibly in a phone's width, so the squares
+are 14 px and the frame scrolls sideways: it opens with the current week in
+the middle (outlined), and a finger walks the rest. A tap on any column moves
+the app to that week (the same `allerA` the settings date picker uses).
+Everything is derived from what the screens already hold; nothing is stored
+for it.
 
 ### Done, done otherwise, missed
 
