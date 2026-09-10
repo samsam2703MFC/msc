@@ -12,6 +12,7 @@ import type { Contraintes, Objectif, PlanGenere, ProfilAthlete } from '../data/g
 import { appliquerMethode, demanderMethode, MethodeError } from '../data/methode';
 import type { Methode } from '../data/methode';
 import { C, F, R } from '../design/theme';
+import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { AccentButton, Card, Colonnes, Grid, Mono, SectionLabel } from '../components/primitives';
 import { DEFICITS_DEFAUT, DISCIPLINES, estMulti, referenceAPied, typeCourse, typesGroupes } from '../data/courses';
@@ -166,93 +167,243 @@ function ChoixType({
   );
 }
 
+/* ------------------------------------------------- le plan du back office
+
+   Deux niveaux, et pas trois. Le premier tient en six destinations, rangées
+   en deux familles dont les noms disent ce qu'on y fait :
+
+     ENTRAÎNEMENT   Athlètes · Calendrier · Classement
+     APPLICATION    Paramètres · Comptes · Système
+
+   Le second niveau est la fiche d'un athlète, ouverte en le touchant dans la
+   liste : tout ce qui lui appartient y est réuni sous son nom — son suivi,
+   son plan, ses starts, son profil, son Strava — au lieu d'être éparpillé
+   dans le menu avec un sélecteur « athlète affiché » qu'il fallait deviner.
+
+   La règle qui tient le tout : une entrée de menu ne dépend jamais d'un choix
+   fait ailleurs. Le menu porte ce qui vaut pour le club et pour l'application ;
+   la fiche porte ce qui vaut pour une personne, et elle dit laquelle. */
+
 export const SECTIONS = {
-  fr: { athletes: 'Athlètes', classement: 'Classement', calendrier: 'Calendrier', suivi: 'Suivi', plan: 'Plan', courses: 'Starts', strava: 'Strava', profil: 'Profil', param: 'Réglages', comptes: 'Comptes', systeme: 'Système' },
-  pl: { athletes: 'Zawodnicy', classement: 'Ranking', calendrier: 'Kalendarz', suivi: 'Podgląd', plan: 'Plan', courses: 'Starty', strava: 'Strava', profil: 'Profil', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
+  fr: { athletes: 'Athlètes', calendrier: 'Calendrier', classement: 'Classement', param: 'Paramètres', comptes: 'Comptes', systeme: 'Système' },
+  pl: { athletes: 'Zawodnicy', calendrier: 'Kalendarz', classement: 'Ranking', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
 } as const;
 
 export type Section = keyof typeof SECTIONS.fr;
 
-/* Trois groupes, dans cet ordre. Le club : la liste des athlètes (le point
-   d'entrée du coach, avec l'onboarding qui en crée un — une fois), le
-   classement, le calendrier. L'athlète affiché : ce qui change tout le temps
-   d'abord — son suivi, son plan, ses starts — puis sa configuration — son
-   Strava, son profil. Les paramètres de l'application : réglages, comptes,
-   système. Une chose par section, jamais deux fois. Le menu du bureau les
-   affiche par groupe ; la barre du téléphone, à la suite. */
-export const GROUPES: Array<{ code: 'club' | 'athlete' | 'parametres'; titre: Record<Lang, string>; sections: Section[] }> = [
-  { code: 'club', titre: { fr: 'Club', pl: 'Klub' }, sections: ['athletes', 'classement', 'calendrier'] },
-  { code: 'athlete', titre: { fr: 'Athlète', pl: 'Zawodnik' }, sections: ['suivi', 'plan', 'courses', 'strava', 'profil'] },
-  { code: 'parametres', titre: { fr: 'Paramètres', pl: 'Ustawienia' }, sections: ['param', 'comptes', 'systeme'] },
+/** Les onglets de la fiche d'un athlète — le second niveau, et le seul. */
+export const ONGLETS = {
+  fr: { suivi: 'Suivi', plan: 'Plan', courses: 'Starts', profil: 'Profil', strava: 'Strava' },
+  pl: { suivi: 'Podgląd', plan: 'Plan', courses: 'Starty', profil: 'Profil', strava: 'Strava' },
+} as const;
+
+export type Onglet = keyof typeof ONGLETS.fr;
+
+export const ONGLETS_ORDRE: Onglet[] = ['suivi', 'plan', 'courses', 'profil', 'strava'];
+
+/* Ce que chaque onglet répond, en une ligne : la fiche le dit sous le nom de
+   l'athlète, pour qu'on n'ait pas à ouvrir les cinq pour trouver le bon. */
+const ONGLET_AIDE: Record<Onglet, Record<Lang, string>> = {
+  suivi: { fr: 'Ce qui a été fait : forme, charge, poids, séances de la semaine.', pl: 'Co zostało zrobione: forma, obciążenie, waga, treningi tygodnia.' },
+  plan: { fr: 'Le plan : objectifs, contraintes, et le plan que le coach en tire.', pl: 'Plan: cele, ograniczenia i plan, który z nich wynika.' },
+  courses: { fr: 'Les starts : les courses déjà faites, et celles qui viennent.', pl: 'Starty: biegi już zrobione i nadchodzące.' },
+  profil: { fr: 'L’identité : nom, références 10 km, coach choisi, langue.', pl: 'Dane: nazwisko, odniesienia 10 km, wybrany trener, język.' },
+  strava: { fr: 'La liaison Strava : relier, importer l’historique, l’application.', pl: 'Połączenie Strava: łączenie, import historii, aplikacja.' },
+};
+
+export const ICONES_SECTION: Record<Section, string> = {
+  athletes: 'footprints', calendrier: 'calendar-days', classement: 'zap',
+  param: 'settings', comptes: 'user', systeme: 'database',
+};
+
+export const ICONES_ONGLET: Record<Onglet, string> = {
+  suivi: 'heart-pulse', plan: 'wand-sparkles', courses: 'flag', profil: 'pencil', strava: 'link',
+};
+
+/* Deux familles, dans cet ordre : ce que le club fait, puis ce que
+   l'application est. Le menu du bureau les affiche ainsi, la barre du
+   téléphone à la suite. */
+export const GROUPES: Array<{ code: 'entrainement' | 'application'; titre: Record<Lang, string>; sections: Section[] }> = [
+  { code: 'entrainement', titre: { fr: 'Entraînement', pl: 'Trening' }, sections: ['athletes', 'calendrier', 'classement'] },
+  { code: 'application', titre: { fr: 'Application', pl: 'Aplikacja' }, sections: ['param', 'comptes', 'systeme'] },
 ];
 
-/* Dans le groupe de l'athlète : l'entraînement (ce qui bouge) et la
-   configuration (ce qu'on pose une fois). */
-export const CONFIGURATION: Section[] = ['strava', 'profil'];
-
-/** Les sections qu'un compte peut ouvrir. Un athlète : les siennes, et le
-    club. Un coach : la liste des athlètes et leur suivi en plus, et les
-    réglages. Un admin : Comptes et Système en plus. La même liste sert la
-    barre du téléphone et le menu du bureau. */
+/** Les sections qu'un compte peut ouvrir. Un athlète n'a que la première
+    famille — et sa fiche à lui, puisqu'il ne voit que lui. Un admin a tout. */
 export function sectionsDe(role: 'athlete' | 'coach' | 'admin' | undefined): Section[] {
   const coach = role === 'coach' || role === 'admin';
   return [
-    ...(coach ? (['athletes'] as Section[]) : []),
-    'classement', 'calendrier',
-    ...(coach ? (['suivi'] as Section[]) : []),
-    'plan', 'courses', 'strava', 'profil',
+    'athletes', 'calendrier', 'classement',
     ...(coach ? (['param'] as Section[]) : []),
     ...(role === 'admin' ? (['comptes', 'systeme'] as Section[]) : []),
   ];
 }
 
-/** Le contenu d'une section, sans la barre : le téléphone la met sous sa
-    bascule, le bureau la met à côté de son menu. */
-export type Suite = 'strava' | 'plan' | 'suivi' | 'param';
+/** Le titre d'une section. « Athlètes » pour qui en gère — même s'il n'y en a
+    qu'un aujourd'hui, il en créera d'autres ; « Mon entraînement » pour un
+    athlète, qui ne gère que lui. Le rôle décide, pas le nombre : un intitulé
+    qui change quand on ajoute quelqu'un serait une surprise de plus. */
+export function titreSection(section: Section, lang: Lang, role: string | undefined): string {
+  if (section === 'athletes' && role !== 'coach' && role !== 'admin') {
+    return lang === 'fr' ? 'Mon entraînement' : 'Mój trening';
+  }
+  return SECTIONS[lang][section];
+}
+
+/** Où l'on est dans le back office : une section, et pour la fiche d'un
+    athlète, l'onglet ouvert. `onglet` absent sur « athletes » = la liste. */
+export interface Vue {
+  section: Section;
+  onglet?: Onglet;
+}
 
 /** `large` : le bureau, qui a de la largeur — les sections s'y posent en
     colonnes ; le téléphone empile. */
 export function SectionAdmin({
-  app, section, onSection, large = false,
+  app, vue, onVue, large = false,
 }: {
-  app: App; section: Section; onSection?: (s: Suite) => void; large?: boolean;
+  app: App; vue: Vue; onVue: (v: Vue) => void; large?: boolean;
 }) {
-  switch (section) {
-    case 'athletes': return <AthletesHub app={app} onSection={onSection} large={large} />;
-    case 'classement': return <Classement app={app} />;
+  switch (vue.section) {
+    case 'athletes': return <Athletes app={app} vue={vue} onVue={onVue} large={large} />;
     case 'calendrier': return <CalendrierScreen app={app} />;
-    case 'suivi': return <SuiviAthlete app={app} large={large} />;
-    case 'courses': return <BackOffice app={app} />;
-    case 'strava': return <StravaScreen app={app} />;
-    case 'profil': return <ProfilScreen app={app} onSection={onSection} large={large} />;
+    case 'classement': return <Classement app={app} />;
     case 'param': return <ParamScreen app={app} large={large} />;
-    case 'comptes': return <ComptesScreen app={app} onSection={onSection} large={large} />;
-    case 'systeme': return <SystemeScreen app={app} onSection={onSection} large={large} />;
-    default: return <Generateur app={app} large={large} />;
+    /* « Relier Strava » / « Écrire son plan » à la fin de l'assistant : ce
+       sont des onglets de la fiche du nouvel athlète, pas des sections. */
+    case 'comptes': return <ComptesScreen app={app} onSection={(o: Onglet) => onVue({ section: 'athletes', onglet: o })} large={large} />;
+    case 'systeme': return <SystemeScreen app={app} onSection={() => onVue({ section: 'param' })} large={large} />;
+    default: return null;
   }
 }
 
-/* L'écran Créer porte deux choses différentes : fabriquer un plan, et tenir le
-   registre des courses. Une bascule plutôt qu'un sixième onglet — la barre en a
-   déjà cinq, et un back office n'est pas un écran qu'on ouvre tous les jours.
+/* La section « Athlètes » a deux états : la liste, et la fiche de celui qu'on
+   a touché. Un athlète qui ne voit que lui n'a pas de liste à traverser — on
+   ouvre sa fiche directement. */
+function Athletes({
+  app, vue, onVue, large,
+}: {
+  app: App; vue: Vue; onVue: (v: Vue) => void; large: boolean;
+}) {
+  const role = app.identite?.compte.role;
+  /* Un athlète ne gère que lui : pas de liste à traverser pour arriver chez
+     lui. Un coach ou un admin passe par la liste, même à un seul athlète —
+     c'est là qu'on en ajoute un. */
+  const seul = role !== 'coach' && role !== 'admin';
+  const onglet = vue.onglet ?? (seul ? 'suivi' : undefined);
+  if (!onglet) {
+    return (
+      <AthletesHub
+        app={app}
+        large={large}
+        onAthlete={(o: Onglet) => onVue({ section: 'athletes', onglet: o })}
+      />
+    );
+  }
+  return (
+    <FicheAthlete
+      app={app}
+      onglet={onglet}
+      onOnglet={(o) => onVue({ section: 'athletes', onglet: o })}
+      onListe={seul ? undefined : () => onVue({ section: 'athletes' })}
+      large={large}
+    />
+  );
+}
 
-   Pour un coach ou un admin, le même onglet devient le back office : Réglages
-   pour les deux, Comptes et Système pour l'admin seul — les mots de passe des
-   autres et l'état du serveur ne regardent pas un coach. */
+/** La fiche d'un athlète : son nom en tête, cinq onglets, et rien qui
+    appartienne à quelqu'un d'autre. */
+export function FicheAthlete({
+  app, onglet, onOnglet, onListe, large = false,
+}: {
+  app: App; onglet: Onglet; onOnglet: (o: Onglet) => void; onListe?: () => void; large?: boolean;
+}) {
+  const lang = app.lang;
+  const fr = lang === 'fr';
+  const athletes = app.identite?.athletes ?? [];
+  const nom = [db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ') || db.athlete.nom;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Card padding="12px 16px" gap={10}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {onListe && (
+            <button
+              type="button"
+              className="msc-hover-surface"
+              onClick={onListe}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.inkMuted, fontSize: 12, fontWeight: 600 }}
+            >
+              <Icon name="chevron-right" size={13} style={{ transform: 'rotate(180deg)' }} />
+              {fr ? 'Tous les athlètes' : 'Wszyscy zawodnicy'}
+            </button>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <Avatar nom={nom} taille={34} palier={db.athlete.niveau ?? null} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: F.display, fontSize: 17, fontWeight: 600, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nom}</div>
+              <div style={{ fontSize: 11, color: C.inkSecondary }}>{db.athlete.surnom ?? (fr ? 'athlète' : 'zawodnik')}</div>
+            </div>
+          </div>
+          {/* Changer d'athlète sans repasser par la liste, quand le compte en
+              voit plusieurs : la fiche reste sur le même onglet. */}
+          {athletes.length > 1 && (
+            <select
+              aria-label={fr ? 'Athlète' : 'Zawodnik'}
+              value={db.athleteId ?? ''}
+              onChange={(e) => void app.basculerAthlete(Number(e.target.value))}
+              style={{ marginLeft: 'auto', padding: '6px 8px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.ink, fontSize: 12, fontFamily: F.body }}
+            >
+              {athletes.map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}
+            </select>
+          )}
+        </div>
+
+        <div role="tablist" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {ONGLETS_ORDRE.map((o) => {
+            const actif = o === onglet;
+            return (
+              <button
+                key={o}
+                type="button"
+                role="tab"
+                aria-selected={actif}
+                onClick={() => onOnglet(o)}
+                className={actif ? undefined : 'msc-hover-accent'}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: R.full,
+                  border: `1px solid ${actif ? C.accent : C.border}`,
+                  background: actif ? C.accentSoft : C.surface,
+                  color: actif ? C.accentDeep : C.inkMuted, fontSize: 12, fontWeight: 600,
+                }}
+              >
+                <Icon name={ICONES_ONGLET[o]} size={13} />
+                {ONGLETS[lang][o]}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{ONGLET_AIDE[onglet][lang]}</div>
+      </Card>
+
+      {onglet === 'suivi' && <SuiviAthlete app={app} large={large} />}
+      {onglet === 'plan' && <Generateur app={app} large={large} />}
+      {onglet === 'courses' && <BackOffice app={app} />}
+      {onglet === 'profil' && <ProfilScreen app={app} onSection={() => onOnglet('strava')} large={large} />}
+      {onglet === 'strava' && <StravaScreen app={app} />}
+    </div>
+  );
+}
+
+/* L'onglet Admin du téléphone : le même plan, dans une barre. Le back office
+   est dessiné pour un écran large — sur un téléphone il reste lisible, mais
+   c'est le bureau qui est sa maison. */
 export function AdminScreen({ app }: { app: App }) {
-  /* Les réglages valent pour tout le serveur : un rôle coach ou admin, et le
-     serveur le vérifie de son côté. */
   const role = app.identite?.compte.role ?? 'athlete';
-  const [section, setSection] = useState<Section>(() => (role === 'athlete' ? 'plan' : 'athletes'));
-  const libelles = SECTIONS[app.lang];
-  /* Le calendrier et le classement sont communs — un club, tout le monde les
-     voit. Les cartes de suivi, elles, ne montrent que les athlètes visibles
-     du compte : un seul pour un athlète, tous pour un coach. */
   const sections = sectionsDe(role);
-  /* Jusqu'à cinq, les sections se partagent la largeur. Au-delà — l'admin —
-     la barre défile : sept intitulés serrés dans 360 px ne se lisent plus. */
+  const [vue, setVue] = useState<Vue>({ section: 'athletes' });
   const serre = sections.length > 3;
-  const defile = sections.length > 5;
+  const defile = sections.length > 4;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -273,30 +424,30 @@ export function AdminScreen({ app }: { app: App }) {
             key={cle}
             type="button"
             role="tab"
-            onClick={() => setSection(cle)}
-            aria-selected={section === cle}
-            aria-pressed={section === cle}
+            onClick={() => setVue({ section: cle })}
+            aria-selected={vue.section === cle}
+            aria-pressed={vue.section === cle}
             style={{
               flex: defile ? '0 0 auto' : 1,
               minWidth: 0,
-              padding: defile ? '7px 12px' : serre ? '7px 4px' : '7px 12px',
+              padding: defile ? '7px 12px' : serre ? '7px 6px' : '7px 12px',
               borderRadius: R.full,
               fontSize: serre && !defile ? 11 : 12,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               fontWeight: 600,
-              background: section === cle ? C.surface : 'transparent',
-              color: section === cle ? C.ink : C.inkSecondary,
-              boxShadow: section === cle ? C.shadowCard : 'none',
+              background: vue.section === cle ? C.surface : 'transparent',
+              color: vue.section === cle ? C.ink : C.inkSecondary,
+              boxShadow: vue.section === cle ? C.shadowCard : 'none',
             }}
           >
-            {libelles[cle]}
+            {titreSection(cle, app.lang, role)}
           </button>
         ))}
       </div>
 
-      <SectionAdmin app={app} section={section} onSection={setSection} />
+      <SectionAdmin app={app} vue={vue} onVue={setVue} />
     </div>
   );
 }
@@ -719,7 +870,7 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
 
 /* Les parties d'un enchaînement : un chrono par discipline, le total qui en
    découle, et ce que la partie course vaudrait « à sec ». Les pour cent de
-   déficit se règlent dans Réglages · Enchaînements. */
+   déficit se règlent dans Paramètres · Enchaînements. */
 function PartiesObjectif({
   objectif, lang, onChange,
 }: {
@@ -793,7 +944,7 @@ function PartiesObjectif({
       </div>
       <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>
         {fr
-          ? `Déficits appliqués : natation ${deficits.natation} %, vélo ${deficits.velo} %, course ${deficits.cap} % — Réglages · Enchaînements.`
+          ? `Déficits appliqués : natation ${deficits.natation} %, vélo ${deficits.velo} %, course ${deficits.cap} % — Paramètres · Enchaînements.`
           : `Zastosowane straty: pływanie ${deficits.natation} %, rower ${deficits.velo} %, bieg ${deficits.cap} % — Ustawienia · Wieloboje.`}
       </div>
     </div>

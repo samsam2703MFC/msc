@@ -5,7 +5,7 @@
    que je vois la dernière version ? », posée une fois pour toutes. Puis les
    services : la clé Anthropic en trois états, Strava, le scellement, la base ;
    la clé et les identifiants Strava se saisissent ici même (ce sont les mêmes
-   réglages que dans Réglages, msc_param). Et ce que le seed de démonstration a
+   réglages que dans Paramètres, msc_param). Et ce que le seed de démonstration a
    laissé, athlète par athlète, avec le bouton pour le retirer — ce que
    `npm run db:demo -- retirer` fait sur le serveur. */
 
@@ -27,12 +27,12 @@ const T = {
     sansBuild: 'pas de build servi (dist/version.txt absent)', recharger: 'Recharger',
     node: 'Node', env: 'environnement', depuis: 'démarré le',
     sansTls: 'MSC_SANS_TLS est levé : le cookie de session voyage en clair. À ne garder que sur un serveur d’essai.',
-    services: 'Services', reglages: 'Réglages',
+    services: 'Services', reglages: 'Paramètres',
     cle: 'Clé Anthropic', cleOk: 'renseignée', cleAbsente: 'absente — à renseigner ici, ou ANTHROPIC_API_KEY dans le .env',
     cleIllisible: 'renseignée mais illisible : scellée avec une autre MSC_SECRET_KEY, ou posée en clair par SQL. Ressaisis-la ici.',
     sources: { base: 'réglée ici (msc_param)', env: 'variable d’environnement', defaut: 'défaut du code' } as Record<string, string>,
     strava: 'Strava', stravaOk: 'client configuré',
-    stravaNon: 'non configuré — l’application commune se renseigne dans Réglages · Strava ; chaque athlète peut aussi porter la sienne, dans sa section Strava',
+    stravaNon: 'non configuré — l’application commune se renseigne dans Paramètres · Strava ; chaque athlète peut aussi porter la sienne, dans sa section Strava',
     scellement: 'Scellement', scellementOk: 'MSC_SECRET_KEY prête', scellementNon: 'MSC_SECRET_KEY absente ou invalide : aucun secret ne peut être lu ni écrit',
     base: 'Base de données', baseOk: 'répond', baseNon: 'ne répond pas',
     demo: 'Données de démonstration',
@@ -193,7 +193,7 @@ export function SystemeScreen({ app, onSection, large = false }: { app: App; onS
   const demo = etat.demo;
   const demoVide = !demo || Boolean(demo.erreur) || demo.athletes.length === 0;
 
-  /* Un service se règle dans Réglages, avec tout le reste ; ici on constate,
+  /* Un service se règle dans Paramètres, avec tout le reste ; ici on constate,
      et on y renvoie d'un bouton. */
   const versReglages = onSection ? (
     <button type="button" onClick={() => onSection('param')} style={BOUTON_SOBRE}>{`→ ${t.reglages}`}</button>

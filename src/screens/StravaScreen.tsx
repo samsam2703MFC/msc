@@ -4,7 +4,7 @@
    Chaque athlète se relie avec son propre compte Strava, et peut porter sa
    propre application (strava.com/settings/api) : Strava n'autorise, sur une
    application neuve, que le compte qui l'a créée. Sans application propre,
-   c'est l'application commune des Réglages qui vaut — l'écran dit laquelle. */
+   c'est l'application commune des Paramètres qui vaut — l'écran dit laquelle. */
 
 import { useCallback, useEffect, useState } from 'react';
 import type { StravaAthlete } from '../data/api';
@@ -21,7 +21,7 @@ import type { App } from '../state/useApp';
 const T = {
   fr: {
     titre: 'Strava',
-    intro: 'La liaison Strava de cet athlète, son historique, et son application Strava à lui — chacun la sienne, créée sur strava.com/settings/api avec le domaine de rappel du serveur. Sans application propre, c’est l’application commune des Réglages qui vaut.',
+    intro: 'La liaison Strava de cet athlète, son historique, et son application Strava à lui — chacun la sienne, créée sur strava.com/settings/api avec le domaine de rappel du serveur. Sans application propre, c’est l’application commune des Paramètres qui vaut.',
     chargement: 'Lecture de Strava…',
   },
   pl: {

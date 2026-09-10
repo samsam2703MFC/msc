@@ -31,7 +31,7 @@ npm run check:app      # the app itself, in a real browser
 npm run db:migrate     # create the database, apply db/schema.sql, add later columns
 npm run db:seed        # load the workbook into it
 npm run compte -- lister          # the accounts, and who sees which athlete
-npm run compte -- role <email> admin   # opens the back office: Réglages, Comptes, Système
+npm run compte -- role <email> admin   # opens the back office: Paramètres, Comptes, Système
 npm run param                          # every setting and where it comes from
 npm run param -- anthropic.cle         # set one from the server: a secret is asked
                                        # at the keyboard, unseen, and sealed
@@ -858,7 +858,7 @@ and an invitation code when the admin requires one. `POST /api/inscription`
 is public: it validates everything, writes the athlete, their account and
 their write access in one transaction (the same `inscrire` the admin's
 onboarding uses, with the role forced to `athlete`), then opens the session
-exactly as a login would. Two settings in **Réglages · Sécurité** govern it:
+exactly as a login would. Two settings in **Paramètres · Sécurité** govern it:
 `securite.inscription_ouverte` (on by default; off, only the admin creates
 accounts) and `securite.code_invitation` (a sealed secret; set, the form
 demands it). Five sign-ups per hour per address, counted only on success.
@@ -1030,32 +1030,41 @@ The **Créer** tab carries two things now, behind a segmented control: building 
 plan, and keeping the register of races. A switch rather than a sixth tab — the
 bar already has five, and a back office is not a screen you open every day.
 
-The sections come in three groups, one thing per section and nothing twice.
-**Club**: **Athlètes** — the coach's entry point, every athlete the account
-sees in one line each (where they are in their plan, their 10 km references,
-this week's sessions) with **Ouvrir**, which makes them the athlete on screen
-and opens their Suivi; below it, for an admin, the onboarding assistant that
-creates an athlete and their account, once — then **Classement** and
-**Calendrier**. **The athlete on screen**, in two halves: what moves all the
-time — **Suivi** (the coach card: paces, week, last RPE, their coach, form,
-what they asked, and the weight curve), **Plan**, **Starts** (their races and
-the progression they draw) — and what is set once — **Strava** (their link,
-their history, their own API application) and **Profil** (the same fields as
-the phone's profile sheet, the two 10 km references, and a button that checks
-the Strava connection). **Paramètres**: **Réglages** for a `coach` or
-`admin`, **Comptes** and **Système** for the admin alone — the passwords of
-other people and the state of the server are not a coach's business. Comptes
-holds login accounts only (its assistant starts at "un compte seul"); Système
-states the services and points to Réglages instead of repeating their
-fields. What is the athlete's (weight, references, Strava, profile) never
-sits next to what is the application's (settings, accounts, system), and the
-phone follows the same line: the avatar opens the athlete's profile — with
+**Two levels, and no third.** The first is six destinations in two families
+whose names say what you do there — `SECTIONS` and `GROUPES` in
+`AdminScreen.tsx`:
+
+| Entraînement | Application |
+|---|---|
+| **Athlètes** · every athlete the account sees, one line each, with **Ouvrir** | **Paramètres** · every `msc_param` row, the Anthropic key, the common Strava application |
+| **Calendrier** · who races what, and when | **Comptes** · login accounts (`coach`/`admin` only) |
+| **Classement** · the club's standings by discipline | **Système** · versions, services, demo data (admin only) |
+
+The second level is **an athlete's page**, opened by touching them in the
+list: everything that belongs to them, under their name, in five tabs —
+**Suivi** (the coach card: paces, week, last RPE, their coach, form, what they
+asked, and the weight curve), **Plan** (objectives, constraints, the generated
+plan), **Starts** (their races and the progression they draw), **Profil**
+(identity, the two 10 km references, a button that checks the Strava link) and
+**Strava** (their link, their history, their own API application). Each tab
+says in one line what it answers, a back button returns to the list, and a
+select changes athlete without leaving the tab.
+
+The rule that holds it together: **a menu entry never depends on a choice made
+somewhere else.** The menu carries what belongs to the club and to the
+application; a person's own things live on their page, and the page says whose
+it is. Before this, five menu entries silently followed an "athlete on screen"
+picked from a dropdown in the menu — you could not tell, from the menu alone,
+whose plan you were about to edit.
+
+An athlete's own account sees the same first level, minus what is not theirs:
+their section is called **Mon entraînement** and opens straight onto their own
+page, with no list to walk through. For a `coach` or `admin` account the tab
+reads **Admin**. What is the athlete's (weight, references, Strava, profile)
+never sits next to what is the application's (settings, accounts, system), and
+the phone follows the same line: the avatar opens the athlete's profile — with
 the 10 km references and the Strava card — while the gear holds the
-application: language, plan day, the account, the version. An athlete's own
-tab keeps Classement, Calendrier, Plan, Starts, Strava and Profil. For a
-`coach` or `admin` account the tab reads **Admin**; beyond five sections the
-segmented control scrolls sideways instead of squeezing eleven labels into
-360 px.
+application: language, plan day, the account, the version.
 
 ### Race types, objectives and starts
 
@@ -1074,7 +1083,7 @@ A multi-discipline type carries its legs, and the objective is aimed leg by
 leg: swim, bike, run, each with its own target time, the total being their sum
 plus the transitions. That is what makes such a race comparable again — the
 run leg, corrected by the deficit, *is* a 10 km reference. Four settings in
-**Réglages · Enchaînements** hold those deficits: by how many per cent one is
+**Paramètres · Enchaînements** hold those deficits: by how many per cent one is
 slower inside the race than over the same distance on its own (swim 5 %, bike
 6 %, run 8 % by default — open water and a wetsuit are not a pool, and running
 on bike legs is not running fresh) and the transitions' time. The objective
@@ -1137,10 +1146,10 @@ point markers were **ovals**: `preserveAspectRatio="none"` stretches the viewBox
 horizontally, which flattens a line correctly and deforms every circle on it.
 The chart now measures its container and draws in real pixels.
 
-### Réglages — `msc_param`
+### Paramètres — `msc_param`
 
 Every knob the application has lives in one table, `msc_param`, and the
-**Réglages** section (a `coach` or `admin` account) sets them without a
+**Paramètres** section (a `coach` or `admin` account) sets them without a
 redeploy. The catalogue — keys, types, defaults, labels — is
 `server/params.mjs`; `db:migrate` lays it into the table and the table only
 carries the value chosen.
@@ -1168,7 +1177,7 @@ rather than storing it in clear. That is also why there is no SQL to paste a
 key with: a clear value in `msc_param.valeur` is ignored for a secret. From
 the server, `npm run param -- anthropic.cle` asks for it at the keyboard
 (unseen, so it stays out of the shell history) and seals it exactly as
-Réglages would; `npm run param` lists every setting, its source, and flags
+Paramètres would; `npm run param` lists every setting, its source, and flags
 a secret sealed with another `MSC_SECRET_KEY` as ILLISIBLE.
 
 **When the coach says the key is missing or refused**, three different things
@@ -1176,12 +1185,12 @@ can be behind it, and the server now names which:
 
 | the screen says | what it means | what to do |
 |---|---|---|
-| *Aucune clé Anthropic* | nothing in Réglages, no `ANTHROPIC_API_KEY` on the server | paste a key in Créer → Réglages (coach account) |
-| *scellée avec une autre MSC_SECRET_KEY* | the key is in the table, but `.env` has a different sealing key than when it was stored (a regenerated `.env`, a restored dump on another server) | paste it again; Réglages shows the row in red until then |
-| *L'API Anthropic refuse la clé* | the key reached Anthropic and came back 401: revoked, mistyped, or an old one | generate a new key on console.anthropic.com → API keys, paste it in Réglages |
+| *Aucune clé Anthropic* | nothing in Paramètres, no `ANTHROPIC_API_KEY` on the server | paste a key in Admin → Paramètres (coach account) |
+| *scellée avec une autre MSC_SECRET_KEY* | the key is in the table, but `.env` has a different sealing key than when it was stored (a regenerated `.env`, a restored dump on another server) | paste it again; Paramètres shows the row in red until then |
+| *L'API Anthropic refuse la clé* | the key reached Anthropic and came back 401: revoked, mistyped, or an old one | generate a new key on console.anthropic.com → API keys, paste it in Paramètres |
 
 `GET /api/sante` says the same without a login: `cle` (something applies),
-`cle_source` (`base` for Réglages, `env` for the variable, `null`),
+`cle_source` (`base` for Paramètres, `env` for the variable, `null`),
 `cle_illisible`. `journalctl -u msc` carries the same line at startup and on
 every refused call. A key with no credit left (`credit balance is too low`)
 and an unknown model (`coach.modele`) get their own messages too.
@@ -1191,34 +1200,33 @@ and an unknown model (`coach.modele`) get their own messages too.
 The phone is the athlete's application: five tabs, one hand, installable.
 The coach works sitting down, so a `coach` or `admin` account on a screen at
 least 1024 px wide gets **le bureau** instead of the phone shell
-(`src/Bureau.tsx`): a menu on the left in the same three groups — the club
-(Athlètes, Classement, Calendrier), the athlete on screen under their own
-name (a select to pick them when the account sees several, then
-*Entraînement*: Suivi, Plan, Starts; *Configuration*: Strava, Profil; and
-their own screens Aujourd'hui, Semaine, Forme, Coach, rendered in a 520 px
-column because they were drawn for a hand), and the settings (Réglages,
-Comptes, Système for an admin) — and a wide page on the right where a table
-has room for its columns. The desk opens on Athlètes; a section of the
-athlete's group carries their name as its eyebrow. The desk is laid out for a desk: the athletes hub is a table, Plan
+(`src/Bureau.tsx`): a menu on the left carrying the same two families as the
+phone — *Entraînement* (Athlètes, Calendrier, Classement), *Application*
+(Paramètres, Comptes, Système) — then *Vue athlète*, the athlete's own screens
+(Aujourd'hui, Semaine, Forme, Coach) rendered in a 520 px column because they
+were drawn for a hand, and at the foot *Mon application* (the gear) and the
+sign-out. Nothing in that menu depends on a chosen athlete: their five tabs
+live on their page, reached from the list. The desk opens on Athlètes, and an
+athlete's page carries their name as the page title. The desk is laid out for a desk: the athletes hub is a table, Plan
 puts the athlete, objectives and constraints beside the generated plan, Suivi
 puts the coach card beside the weight curve, Profil the form beside the
-references and the Strava check, Réglages its groups in columns, Comptes the
+references and the Strava check, Paramètres its groups in columns, Comptes the
 accounts beside the assistant, Système the version and services beside the
 demo data (`Colonnes` in `primitives.tsx`, two columns when `large`, one
-on a phone). The sheets — a session, the profile, Réglages —
+on a phone). The sheets — a session, the profile, *Mon application* —
 open over the whole desk. On a phone the same account keeps the five tabs, and
 an athlete never sees the desk at all: the desk is a layout, not a role, and
 `sectionsDe` in `AdminScreen.tsx` is the one list both shells read.
 
 ### Strava, athlete by athlete
 
-Strava belongs to the athlete, so it is a section of the athlete's group:
-**Strava** shows, for the athlete on screen, whether their account is linked
+Strava belongs to the athlete, so it is a tab of their page:
+**Strava** shows whether their account is linked
 — the Strava athlete, when it was linked, the last sync — how many activities
 have arrived and when the last one did (activities sync when the athlete
 opens the app, not from here), and, below, their own API application. The
 application's own settings — the Anthropic key, the common Strava
-application (client ID, secret, verify token) — live in **Réglages** with
+application (client ID, secret, verify token) — live in **Paramètres** with
 every other `msc_param` row, and only there; Système states them and points
 back. An athlete opens the same section for themselves.
 
@@ -1312,7 +1320,7 @@ the server serves (`dist/version.txt`), with a **Recharger** button when they
 differ. Then the services, each with the gesture that fixes it: the
 Anthropic key in its three states (absent, set and from where, set but
 unreadable because `MSC_SECRET_KEY` changed or a clear value was pushed by
-SQL) and Strava's common application, each with a **→ Réglages** button
+SQL) and Strava's common application, each with a **→ Paramètres** button
 rather than a second copy of the field; the sealing key; the database and
 its version. And what the demo seed left in the live base —
 the invented October 2026 activities, journal, measures, analyses, and the

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import * as api from '../data/api';
 import type { AthleteAdmin, CompteAdmin } from '../data/api';
 import { Assistant } from './ComptesScreen';
-import type { Suite } from './AdminScreen';
+import type { Onglet } from './AdminScreen';
 import * as db from '../data/db';
 import type { ApercuAthlete, Axe, Classement as ClassementDonnees, Conversation as ConversationType, Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
@@ -268,18 +268,8 @@ function Carte({ a, app }: { a: ApercuAthlete; app: App }) {
             <div style={{ marginTop: 3, fontSize: 12, color: C.inkQuiet }}>{t.sansPlan}</div>
           )}
         </div>
-        {!courant && (
-          <button
-            type="button"
-            className="msc-hover-accent"
-            onClick={() => void app.basculerAthlete(a.id)}
-            aria-label={`${t.voir} ${affiche}`}
-            style={{ padding: '7px 11px', borderRadius: R.full, border: `1px solid ${C.border}`, fontSize: 12, fontWeight: 600, color: C.ink, background: C.surface }}
-          >
-            {t.voir}
-          </button>
-        )}
-        {courant && <span style={{ fontSize: 11, color: C.accentDeep, fontWeight: 600 }}>{t.courant}</span>}
+        {/* La carte vit dans la fiche de l'athlète, qui dit déjà de qui il
+            s'agit : ni bascule ni « en cours » à répéter ici. */}
       </div>
 
       {/* allures et semaine en cours : une ligne de tuiles */}
@@ -367,7 +357,7 @@ export function SuiviAthlete({ app, large = false }: { app: App; large?: boolean
    qui en fait l'athlète affiché et ouvre son suivi. Dessous, pour l'admin,
    l'onboarding : l'assistant qui crée un athlète et son compte, une fois. Ce
    qui change tout le temps — son plan, ses starts — est dans ses sections. */
-export function AthletesHub({ app, onSection, large = false }: { app: App; onSection?: (s: Suite) => void; large?: boolean }) {
+export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAthlete?: (o: Onglet) => void; large?: boolean }) {
   const t = T[app.lang];
   const fr = app.lang === 'fr';
   useEffect(() => { void app.chargerApercu(); }, [app.chargerApercu, app.version]);
@@ -379,9 +369,11 @@ export function AthletesHub({ app, onSection, large = false }: { app: App; onSec
   }, [admin]);
   useEffect(() => { relire(); }, [relire, app.version]);
 
+  /* Toucher un athlète, c'est ouvrir SA fiche : on bascule dessus, puis on
+     entre par son suivi — ce qu'il a fait, la première question qu'on pose. */
   const ouvrir = async (id: number) => {
     if (id !== db.athleteId) await app.basculerAthlete(id);
-    onSection?.('suivi');
+    onAthlete?.('suivi');
   };
 
   return (
@@ -439,14 +431,15 @@ export function AthletesHub({ app, onSection, large = false }: { app: App; onSec
                             {a.dernier_rpe ? `${a.dernier_rpe.valeur} · ${a.dernier_rpe.date}` : '—'}
                           </td>
                           <td style={{ ...cellule, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {courant
-                              ? <span style={{ fontSize: 11, color: C.accentDeep, fontWeight: 600 }}>{t.courant}</span>
-                              : (
-                                <button type="button" className="msc-hover-accent" onClick={() => void ouvrir(a.id)} aria-label={`${t.voir} ${affiche}`}
-                                  style={{ padding: '6px 11px', borderRadius: R.full, border: `1px solid ${C.border}`, fontSize: 12, fontWeight: 600, color: C.ink, background: C.surface }}>
-                                  {t.voir}
-                                </button>
-                              )}
+                            <button type="button" className="msc-hover-accent" onClick={() => void ouvrir(a.id)} aria-label={`${t.voir} ${affiche}`}
+                              style={{
+                                padding: '6px 11px', borderRadius: R.full, fontSize: 12, fontWeight: 600,
+                                border: `1px solid ${courant ? C.accent : C.border}`,
+                                background: courant ? C.accentSoft : C.surface,
+                                color: courant ? C.accentDeep : C.ink,
+                              }}>
+                              {t.voir}
+                            </button>
                           </td>
                         </tr>
                       );
@@ -473,19 +466,25 @@ export function AthletesHub({ app, onSection, large = false }: { app: App; onSec
                       <span>{`· ${fr ? 'séances' : 'treningi'} ${a.cette_semaine.faites}/${a.cette_semaine.prevues}`}</span>
                     </div>
                   </div>
-                  {courant
-                    ? <span style={{ fontSize: 11, color: C.accentDeep, fontWeight: 600, whiteSpace: 'nowrap' }}>{t.courant}</span>
-                    : (
-                      <button
-                        type="button"
-                        className="msc-hover-accent"
-                        onClick={() => void ouvrir(a.id)}
-                        aria-label={`${t.voir} ${affiche}`}
-                        style={{ padding: '6px 11px', borderRadius: R.full, border: `1px solid ${C.border}`, fontSize: 12, fontWeight: 600, color: C.ink, background: C.surface, whiteSpace: 'nowrap' }}
-                      >
-                        {t.voir}
-                      </button>
-                    )}
+                  {/* Ouvrir vaut pour tout le monde, l'athlète affiché
+                      compris : c'est sa fiche qu'on ouvre, pas un changement
+                      d'athlète — un « en cours » sans porte laissait croire
+                      qu'il n'y avait rien à voir. */}
+                  <button
+                    type="button"
+                    className="msc-hover-accent"
+                    onClick={() => void ouvrir(a.id)}
+                    aria-label={`${t.voir} ${affiche}`}
+                    style={{
+                      padding: '6px 11px', borderRadius: R.full, fontSize: 12, fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      border: `1px solid ${courant ? C.accent : C.border}`,
+                      background: courant ? C.accentSoft : C.surface,
+                      color: courant ? C.accentDeep : C.ink,
+                    }}
+                  >
+                    {t.voir}
+                  </button>
                 </div>
               );
             })}
@@ -497,7 +496,7 @@ export function AthletesHub({ app, onSection, large = false }: { app: App; onSec
           athletes={listes.athletes}
           lang={app.lang}
           app={app}
-          onSection={onSection}
+          onSection={onAthlete}
           onCree={() => { relire(); void app.chargerApercu(); }}
         />
       )}

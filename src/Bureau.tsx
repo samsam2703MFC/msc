@@ -23,24 +23,18 @@ import { ProfilSheet } from './components/ProfilSheet';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TypeSheet } from './components/TypeSheet';
-import { CONFIGURATION, GROUPES, SECTIONS, SectionAdmin, sectionsDe } from './screens/AdminScreen';
-import type { Section } from './screens/AdminScreen';
+import { GROUPES, ICONES_SECTION, SectionAdmin, sectionsDe, titreSection } from './screens/AdminScreen';
+import type { Vue } from './screens/AdminScreen';
 import type { App } from './state/useApp';
 
-const ICONES: Record<Section, string> = {
-  athletes: 'footprints', classement: 'zap', calendrier: 'calendar-days',
-  suivi: 'heart-pulse', plan: 'wand-sparkles', courses: 'flag', strava: 'link', profil: 'pencil',
-  param: 'settings', comptes: 'user', systeme: 'database',
-};
-
 const T = {
-  fr: { backOffice: 'Back office', vueAthlete: 'Vue athlète', athlete: 'Athlète affiché', entrainement: 'Entraînement', configuration: 'Configuration', reglages: 'Réglages', deconnexion: 'Déconnexion', version: 'version', horsLigne: 'Hors ligne · copie locale', attente: 'en attente d’envoi', roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } },
-  pl: { backOffice: 'Zaplecze', vueAthlete: 'Widok zawodnika', athlete: 'Wyświetlany zawodnik', entrainement: 'Trening', configuration: 'Konfiguracja', reglages: 'Ustawienia', deconnexion: 'Wyloguj', version: 'wersja', horsLigne: 'Offline · kopia lokalna', attente: 'czeka na wysłanie', roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } },
+  fr: { backOffice: 'Back office', vueAthlete: 'Vue athlète', mesEcrans: 'Mon application', deconnexion: 'Déconnexion', version: 'version', horsLigne: 'Hors ligne · copie locale', attente: 'en attente d’envoi', roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } },
+  pl: { backOffice: 'Zaplecze', vueAthlete: 'Widok zawodnika', mesEcrans: 'Moja aplikacja', deconnexion: 'Wyloguj', version: 'wersja', horsLigne: 'Offline · kopia lokalna', attente: 'czeka na wysłanie', roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } },
 } as const;
 
 /* Un état de page à deux faces : une section du back office, ou un écran de
    l'athlète (celui de `app.screen`, comme sur le téléphone). */
-type Page = { type: 'section'; section: Section } | { type: 'ecran' };
+type Page = { type: 'section'; vue: Vue } | { type: 'ecran' };
 
 function Entree({
   icon, label, actif, onClick,
@@ -91,15 +85,17 @@ export function Bureau({
   const ui = db.ui(lang);
   const role = app.identite?.compte.role;
   const sections = sectionsDe(role);
-  const [page, setPage] = useState<Page>({ type: 'section', section: 'athletes' });
+  const [page, setPage] = useState<Page>({ type: 'section', vue: { section: 'athletes' } });
 
-  const titre = page.type === 'section' ? SECTIONS[lang][page.section] : ui.screens[app.screen];
-  /* Ce qui est à l'athlète porte son nom en surtitre ; le reste, « Back office ». */
-  const groupeDe = (s: Section) => GROUPES.find((g) => g.sections.includes(s))?.code;
-  const sur = page.type === 'section'
-    ? groupeDe(page.section) === 'athlete' ? db.athlete.nom : t.backOffice
-    : eyebrow;
-  const athletes = app.identite?.athletes ?? [];
+  /* La fiche d'un athlète porte son nom en titre : c'est de lui qu'il s'agit,
+     et le menu, lui, ne parle que du club et de l'application. */
+  const fiche = page.type === 'section' && page.vue.section === 'athletes' && page.vue.onglet;
+  const titre = page.type !== 'section'
+    ? ui.screens[app.screen]
+    : fiche
+      ? [db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ') || db.athlete.nom
+      : titreSection(page.vue.section, lang, role);
+  const sur = page.type === 'section' ? t.backOffice : eyebrow;
 
   return (
     <div
@@ -130,65 +126,47 @@ export function Bureau({
           </div>
         </div>
 
+        {/* Deux familles, six entrées : ce que le club fait, ce que
+            l'application est. Rien ici ne dépend d'un athlète choisi
+            ailleurs — celui-là a sa fiche, ouverte depuis la liste. */}
         {GROUPES.map((g) => {
-          const siennes = g.sections.filter((s) => sections.includes(s));
+          const siennes = g.sections.filter((x) => sections.includes(x));
           if (siennes.length === 0) return null;
           return (
-            <Groupe key={g.code} titre={g.code === 'athlete' ? db.athlete.nom : g.titre[lang]}>
-              {/* Le groupe de l'athlète commence par le choix de l'athlète,
-                  quand le compte en voit plusieurs : tout ce qui suit est à lui. */}
-              {g.code === 'athlete' && athletes.length > 1 && (
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 12px 8px' }}>
-                  <span style={{ fontSize: 10.5, color: C.inkSecondary }}>{t.athlete}</span>
-                  <select
-                    value={db.athleteId ?? ''}
-                    onChange={(e) => void app.recharger(Number(e.target.value))}
-                    style={{ padding: '6px 8px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.ink, fontSize: 12, fontFamily: F.body }}
-                  >
-                    {athletes.map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}
-                  </select>
-                </label>
-              )}
-              {siennes.map((s, i) => (
-                <div key={s}>
-                  {/* Chez l'athlète : ce qui bouge (suivi, plan, starts), puis
-                      ce qu'on pose une fois (Strava, profil). */}
-                  {g.code === 'athlete' && (i === 0 || (CONFIGURATION.includes(s) && !CONFIGURATION.includes(siennes[i - 1]))) && (
-                    <div style={{ fontSize: 10, color: C.inkQuiet, padding: `${i === 0 ? 2 : 8}px 12px 2px` }}>
-                      {CONFIGURATION.includes(s) ? t.configuration : t.entrainement}
-                    </div>
-                  )}
-                  <Entree
-                    icon={ICONES[s]}
-                    label={SECTIONS[lang][s]}
-                    actif={page.type === 'section' && page.section === s}
-                    onClick={() => setPage({ type: 'section', section: s })}
-                  />
-                </div>
+            <Groupe key={g.code} titre={g.titre[lang]}>
+              {siennes.map((x) => (
+                <Entree
+                  key={x}
+                  icon={ICONES_SECTION[x]}
+                  label={titreSection(x, lang, role)}
+                  actif={page.type === 'section' && page.vue.section === x}
+                  onClick={() => setPage({ type: 'section', vue: { section: x } })}
+                />
               ))}
-              {/* … et ses écrans, tels que le téléphone les montre. */}
-              {g.code === 'athlete' && (
-                <>
-                  <div style={{ fontSize: 10, color: C.inkQuiet, padding: '8px 12px 2px' }}>{t.vueAthlete}</div>
-                  {onglets.map((o) => (
-                    <Entree
-                      key={o.key}
-                      icon={o.icon}
-                      label={o.label}
-                      actif={page.type === 'ecran' && app.screen === o.key}
-                      onClick={() => { app.setScreen(o.key); setPage({ type: 'ecran' }); }}
-                    />
-                  ))}
-                </>
-              )}
             </Groupe>
           );
         })}
 
+        {/* Et l'application telle que l'athlète la voit : les mêmes écrans que
+            son téléphone, à leur largeur. */}
+        <Groupe titre={t.vueAthlete}>
+          {onglets.map((o) => (
+            <Entree
+              key={o.key}
+              icon={o.icon}
+              label={o.label}
+              actif={page.type === 'ecran' && app.screen === o.key}
+              onClick={() => { app.setScreen(o.key); setPage({ type: 'ecran' }); }}
+            />
+          ))}
+        </Groupe>
+
         <div style={{ flex: 1 }} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Entree icon="settings" label={t.reglages} actif={false} onClick={app.openSettings} />
+          {/* Le réglage de MON application (langue, jour du plan, compte) —
+              les paramètres du serveur, eux, sont une section du menu. */}
+          <Entree icon="settings" label={t.mesEcrans} actif={false} onClick={app.openSettings} />
           <Entree icon="log-out" label={t.deconnexion} actif={false} onClick={() => void app.seDeconnecter()} />
           <div style={{ padding: '6px 12px 0', fontSize: 10, fontFamily: F.mono, color: C.inkQuiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {`${t.version} ${__MSC_VERSION__}`}
@@ -230,7 +208,7 @@ export function Bureau({
         <main className="msc-scroll" style={{ flex: 1, padding: '24px 32px 40px' }}>
           {page.type === 'section' ? (
             <div style={{ maxWidth: 1400 }}>
-              <SectionAdmin app={app} section={page.section} large onSection={(s) => setPage({ type: 'section', section: s })} />
+              <SectionAdmin app={app} vue={page.vue} large onVue={(v) => setPage({ type: 'section', vue: v })} />
             </div>
           ) : (
             /* Les écrans de l'athlète, à la largeur pour laquelle ils sont

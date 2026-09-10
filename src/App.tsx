@@ -208,7 +208,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
           type="button"
           className="msc-hover-accent"
           onClick={app.openSettings}
-          aria-label={app.lang === 'fr' ? 'Paramètres' : 'Ustawienia'}
+          aria-label={app.lang === 'fr' ? 'Mon application' : 'Moja aplikacja'}
           style={{
             width: 38,
             height: 38,

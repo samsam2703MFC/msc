@@ -57,7 +57,7 @@ const T = {
     appariee: 'Séance retrouvée sur Strava',
     chercher: 'Chercher sur Strava', chercheEnCours: 'Lecture de Strava…',
     rien: 'Rien d’apparié à cette séance pour l’instant.',
-    pasLie: 'Strava n’est pas relié : Réglages · Strava, ou coche « Je l’ai faite » et donne ton ressenti à la main.',
+    pasLie: 'Strava n’est pas relié : Paramètres · Strava, ou coche « Je l’ai faite » et donne ton ressenti à la main.',
     autresDuJour: 'Ce jour-là, Strava a aussi :',
     cetteLa: 'C’était celle-ci',
     manuelle: 'appariée à la main',

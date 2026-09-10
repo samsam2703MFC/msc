@@ -30,7 +30,7 @@ const T = {
     aucunAthlete: 'ne voit aucun athlète',
     droits: { lecture: 'lecture', ecriture: 'écriture' } as Record<Droit, string>,
     acces: 'Athlètes visibles', aucunAcces: 'aucun',
-    nouveauMdp: 'Nouveau mot de passe', mdpAide: '12 caractères au moins par défaut (Réglages · Sécurité).',
+    nouveauMdp: 'Nouveau mot de passe', mdpAide: '12 caractères au moins par défaut (Paramètres · Sécurité).',
     enregistrer: 'Enregistrer', modifier: 'Modifier', fermer: 'Fermer', enregistre: 'Enregistré',
     activer: 'Réactiver', desactiver: 'Désactiver',
     email: 'Email', nom: 'Nom', role: 'Rôle', mdp: 'Mot de passe',

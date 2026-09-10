@@ -12,7 +12,11 @@ import type { App } from '../state/useApp';
 
 const PHASE_LABEL: Record<Lang, string> = { fr: 'Période d’entraînement', pl: 'Okres treningowy' };
 
-const SETTINGS_TITLE: Record<Lang, string> = { fr: 'Paramètres', pl: 'Ustawienia' };
+/* « Mon application » et non « Paramètres » : cette feuille tient ce qui est
+   à MOI sur CET appareil — la langue, le jour du plan, mon compte, la version.
+   Les paramètres du serveur sont une section du back office, et deux choses
+   qui portent le même nom, c'est une de trop. */
+const SETTINGS_TITLE: Record<Lang, string> = { fr: 'Mon application', pl: 'Moja aplikacja' };
 const LANG_LABEL: Record<Lang, string> = { fr: 'Langue', pl: 'Język' };
 const DATE_LABEL: Record<Lang, string> = { fr: 'Jour du plan', pl: 'Dzień planu' };
 const LANGS: Lang[] = ['fr', 'pl'];

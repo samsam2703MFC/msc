@@ -25,6 +25,35 @@ const check = (nom, ok, detail = '') => {
   console.log(`${ok ? 'ok  ' : 'FAIL'}  ${nom}${detail ? '  — ' + detail : ''}`);
 };
 
+/* Le back office a deux niveaux, et ces deux fonctions sont le chemin : une
+   section du menu (ce qui vaut pour le club ou pour l'application), ou la
+   fiche d'un athlète (tout ce qui lui appartient, sous son nom).
+
+   Le contrôle les emprunte comme un humain, plutôt que de cliquer un onglet
+   qui n'existe qu'ici : si le plan du back office change encore, c'est ici
+   que ça se voit, en deux fonctions et pas en douze clics. */
+async function ouvrirSection(page, nom) {
+  await page.locator('nav button').last().click();
+  await page.waitForTimeout(600);
+  await page.getByRole('tab', { name: nom, ...(typeof nom === 'string' ? { exact: true } : {}) }).first().click();
+  await page.waitForTimeout(900);
+}
+
+async function ouvrirFiche(page, onglet) {
+  /* Le compte qui ne voit que lui n'a pas de liste à traverser : sa section
+     s'appelle « Mon entraînement » et s'ouvre directement sur sa fiche. */
+  await ouvrirSection(page, /^(Athlètes|Mon entraînement)$/);
+  /* Le bouton porte le nom de l'athlète dans son aria-label : « Ouvrir Léa
+     Martin ». On vise le début, pas l'égalité. */
+  const ouvrir = page.getByRole('button', { name: /^Ouvrir\b/ }).first();
+  if (await ouvrir.count()) {
+    await ouvrir.click();
+    await page.waitForTimeout(1200);
+  }
+  await page.getByRole('tab', { name: onglet, exact: true }).click();
+  await page.waitForTimeout(900);
+}
+
 /* Un compte qui voit l'athlète 1 — celui que le seed installe. */
 await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `libre-${EMAIL}`]);
 await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Libre du navigateur']);
@@ -140,7 +169,7 @@ try {
   );
   check('avec son athlète en écriture, aux allures saisies',
     cree?.role === 'athlete' && Number(cree?.ref_actuelle_s) === 330 && cree?.droit === 'ecriture', JSON.stringify(cree));
-  await page.click('[aria-label=Paramètres]');
+  await page.click('[aria-label="Mon application"]');
   await page.waitForTimeout(500);
   await page.click('text=Déconnexion');
   await page.waitForTimeout(900);
@@ -295,8 +324,11 @@ try {
      que les autres sections lisent. Que la route écrive vraiment, `check:api`
      le prouve — sur un second athlète, justement pour ça. */
   console.log('\n=== enregistrer un plan ===');
-  await page.locator('nav button').last().click();
-  await page.waitForTimeout(700);
+  /* Le plan est à un athlète : on passe par sa fiche — Admin, Athlètes,
+     « Ouvrir », onglet Plan. C'est le chemin que le back office impose
+     depuis qu'une entrée de menu ne dépend plus d'un athlète choisi
+     ailleurs. */
+  await ouvrirFiche(page, 'Plan');
   const createur = await page.locator('body').innerText();
   check('l’écran Créer montre le plan généré',
     /Plan généré/i.test(createur) && /semaines/i.test(createur));
@@ -321,10 +353,7 @@ try {
   /* Le back office : encoder une course, la voir apparaître, et voir la courbe
      se tracer une fois qu'il y a deux résultats à comparer. */
   console.log('\n=== le back office ===');
-  await page.locator('nav button').last().click();
-  await page.waitForTimeout(600);
-  await page.getByRole('tab', { name: 'Starts' }).click();
-  await page.waitForTimeout(600);
+  await ouvrirFiche(page, 'Starts');
   /* Les intitulés de section sont mis en majuscules par le CSS, et innerText
      rend le texte affiché. */
   check('la section Starts s’ouvre sur les compétitions de l’athlète',
@@ -395,10 +424,7 @@ try {
   await page.waitForTimeout(800);
   check('l’onglet Créer s’appelle Admin', /Admin/.test(await page.locator('nav').innerText()),
     (await page.locator('nav').innerText()).replace(/\n/g, ' · '));
-  await page.locator('nav button').last().click();
-  await page.waitForTimeout(700);
-  await page.getByRole('tab', { name: 'Comptes' }).click();
-  await page.waitForTimeout(900);
+  await ouvrirSection(page, 'Comptes');
   const comptesTexte = await page.locator('body').innerText();
   check('Comptes liste le compte connecté, avec son athlète et son droit',
     comptesTexte.includes(EMAIL) && /\(écriture\)/.test(comptesTexte),
@@ -408,8 +434,7 @@ try {
 
   /* Le club : la liste des athlètes, et l'assistant qui en crée un avec son
      compte — pas à pas, sans laisser passer une étape invalide. */
-  await page.getByRole('tab', { name: 'Athlètes' }).click();
-  await page.waitForTimeout(900);
+  await ouvrirSection(page, 'Athlètes');
   const hubTexte = await page.locator('body').innerText();
   /* Le nom de l'athlète semé change d'une base à l'autre : on regarde la
      forme de la liste, pas qui elle nomme. */
@@ -430,8 +455,7 @@ try {
   /* Strava est à l'athlète : sa liaison, son historique, son application à
      lui. Les paramètres de l'application — la clé, l'application Strava
      commune — sont réunis dans Réglages. */
-  await page.getByRole('tab', { name: 'Strava' }).click();
-  await page.waitForTimeout(900);
+  await ouvrirFiche(page, 'Strava');
   const stravaTexte = await page.locator('body').innerText();
   check('Strava, pour l’athlète affiché : sa liaison et son application à lui',
     /Strava · non connecté|Strava · connecté/.test(stravaTexte) && /Application Strava de cet athlète/i.test(stravaTexte),
@@ -447,19 +471,18 @@ try {
     (await page.getByLabel('ID client', { exact: true }).count()) >= 1);
   await page.getByRole('tab', { name: 'Profil' }).click();
   await page.waitForTimeout(900);
+  /* On est déjà dans la fiche : Profil en est un onglet. */
   await page.getByRole('button', { name: 'Vérifier la connexion' }).click();
   await page.waitForTimeout(900);
   const profilTexte = await page.locator('body').innerText();
   check('Profil vérifie la connexion Strava d’un bouton',
     /Connexion Strava/i.test(profilTexte) && /non connecté|connecté|non configuré/i.test(profilTexte),
     profilTexte.split('\n').find((l) => /non connecté|connecté|non configuré/i.test(l)) ?? '');
-  await page.getByRole('tab', { name: 'Réglages' }).click();
-  await page.waitForTimeout(900);
+  await ouvrirSection(page, 'Paramètres');
   const reglagesTexte = await page.locator('body').innerText();
-  check('les paramètres de l’application sont réunis dans Réglages : clé Anthropic, application Strava commune',
+  check('les paramètres de l’application sont réunis dans Paramètres : clé Anthropic, application Strava commune',
     /Clé API Anthropic/i.test(reglagesTexte) && /Strava · Client ID/i.test(reglagesTexte));
-  await page.getByRole('tab', { name: 'Système' }).click();
-  await page.waitForTimeout(900);
+  await ouvrirSection(page, 'Système');
   const systemeTexte = await page.locator('body').innerText();
   check('Système montre la version de la page et celle du serveur',
     /cette page/i.test(systemeTexte) && /le serveur/i.test(systemeTexte) && /à jour/i.test(systemeTexte),
@@ -467,9 +490,9 @@ try {
   check('et l’état des services', /Clé Anthropic/i.test(systemeTexte) && /Base de données/i.test(systemeTexte)
     && /Strava/.test(systemeTexte) && /Scellement/i.test(systemeTexte));
   check('et ce que la démonstration a laissé', /Données de démonstration/i.test(systemeTexte));
-  /* Un service se règle dans Réglages, pas deux fois : Système y renvoie. */
-  check('et renvoie vers Réglages plutôt que de dupliquer les champs',
-    (await page.getByRole('button', { name: /→ Réglages/ }).count()) >= 1
+  /* Un service se règle dans Paramètres, pas deux fois : Système y renvoie. */
+  check('et renvoie vers Paramètres plutôt que de dupliquer les champs',
+    (await page.getByRole('button', { name: /→ Paramètres/ }).count()) >= 1
       && (await page.locator('input[type=password]').count()) === 0);
   /* Le bureau : sur un écran large, un coach ou un admin a le menu à gauche
      et la page large ; sur un téléphone, le même compte garde les onglets. */
@@ -480,16 +503,32 @@ try {
   await page.waitForTimeout(800);
   const menu = page.getByRole('navigation', { name: 'Back office' });
   const menuTexte = (await menu.count()) ? await menu.innerText() : '';
-  /* Le groupe du milieu porte le nom de l'athlète affiché — variable d'une
-     base à l'autre —, mais ses deux moitiés, elles, sont fixes. */
-  check('sur un écran large, l’admin a le bureau : un menu en trois groupes — club, l’athlète affiché, paramètres',
-    (await menu.count()) === 1 && /club/i.test(menuTexte) && /paramètres/i.test(menuTexte)
-      && /Entraînement/i.test(menuTexte) && /Configuration/i.test(menuTexte)
-      && /Suivi/.test(menuTexte) && /Starts/.test(menuTexte) && /Strava/.test(menuTexte) && /Profil/.test(menuTexte)
-      && /Comptes/.test(menuTexte) && /Système/.test(menuTexte),
+  /* Le menu ne porte que ce qui ne dépend de personne : deux familles, six
+     entrées, plus les écrans de l'athlète. Ce qui appartient à quelqu'un —
+     son suivi, son plan, son Strava — est dans sa fiche, pas ici. */
+  check('sur un écran large, l’admin a le bureau : deux familles — entraînement, application',
+    (await menu.count()) === 1 && /Entraînement/i.test(menuTexte) && /Application/i.test(menuTexte)
+      && /Athlètes/.test(menuTexte) && /Calendrier/.test(menuTexte) && /Classement/.test(menuTexte)
+      && /Paramètres/.test(menuTexte) && /Comptes/.test(menuTexte) && /Système/.test(menuTexte)
+      && /Vue athlète/i.test(menuTexte),
     menuTexte.replace(/\n+/g, ' · ').slice(0, 200));
+  check('et rien qui dépende d’un athlète choisi ailleurs',
+    !/Suivi/.test(menuTexte) && !/Starts/.test(menuTexte) && !/Strava/.test(menuTexte),
+    menuTexte.replace(/\n+/g, ' · ').slice(0, 120));
   check('et plus de barre d’onglets', (await page.locator('nav button').count()) > 5);
   check('le hub des athlètes est un tableau sur le bureau', (await page.locator('main table').count()) >= 1);
+  /* Et la fiche : tout ce qui est à un athlète, sous son nom, en cinq
+     onglets — le second niveau, et le seul. */
+  await menu.getByRole('button', { name: 'Athlètes' }).click();
+  await page.waitForTimeout(700);
+  await page.getByRole('button', { name: /^Ouvrir\b/ }).first().click();
+  await page.waitForTimeout(1200);
+  const ficheTexte = await page.locator('main').innerText();
+  check('ouvrir un athlète donne sa fiche : suivi, plan, starts, profil, Strava',
+    /Suivi/.test(ficheTexte) && /Plan/.test(ficheTexte) && /Starts/.test(ficheTexte)
+      && /Profil/.test(ficheTexte) && /Strava/.test(ficheTexte)
+      && /Tous les athlètes/.test(ficheTexte),
+    ficheTexte.split('\n').slice(0, 3).join(' · '));
   await menu.getByRole('button', { name: 'Système' }).click();
   await page.waitForTimeout(900);
   check('une section s’ouvre depuis le menu', /cette page/i.test(await page.locator('body').innerText()));
@@ -543,7 +582,7 @@ try {
   check('et la note est bien arrivée en base', journal.length === 1, note);
 
   console.log('\n=== la déconnexion ===');
-  await page.click('[aria-label=Paramètres]');
+  await page.click('[aria-label="Mon application"]');
   await page.waitForTimeout(500);
   check('les paramètres nomment le compte connecté',
     (await page.locator('body').innerText()).includes(EMAIL));

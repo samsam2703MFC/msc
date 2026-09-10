@@ -4,7 +4,7 @@
    MySmartCoach est un service qu'on rejoint : un athlète qui installe
    l'application crée son compte ici même — qui il est, son email, son mot de
    passe, ses deux allures — et son coach est l'IA. L'admin peut fermer les
-   inscriptions ou les garder derrière un code d'invitation (Réglages ·
+   inscriptions ou les garder derrière un code d'invitation (Paramètres ·
    Sécurité). Pas de « mot de passe oublié » encore : c'est l'admin qui le
    remplace. */
 

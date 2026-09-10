@@ -21,7 +21,7 @@ import { useLargeur } from './Courbe';
 const T = {
   fr: {
     titre: 'Historique Strava · km par semaine',
-    vide: 'Aucune activité Strava avec une distance. Relie Strava (Connexions) et importe l’historique : c’est de là qu’un plan part.',
+    vide: 'Aucune activité Strava avec une distance. Relie Strava (onglet Strava de cet athlète) et importe l’historique : c’est de là qu’un plan part.',
     moyenne: 'km / semaine', moyenneSous: 'moyenne 8 sem.',
     seances: 'séances / sem.', seancesSous: '8 dernières',
     longue: 'sortie la plus longue', estime: 'allure 10 km estimée', estimeSous: 'meilleure sortie · 26 sem.',
@@ -31,7 +31,7 @@ const T = {
   },
   pl: {
     titre: 'Historia Strava · km na tydzień',
-    vide: 'Brak aktywności Strava z dystansem. Połącz Stravę (Połączenia) i zaimportuj historię: od niej zaczyna się plan.',
+    vide: 'Brak aktywności Strava z dystansem. Połącz Stravę (zakładka Strava tego zawodnika) i zaimportuj historię: od niej zaczyna się plan.',
     moyenne: 'km / tydzień', moyenneSous: 'średnia 8 tyg.',
     seances: 'treningów / tydz.', seancesSous: 'ostatnie 8',
     longue: 'najdłuższy bieg', estime: 'szacowane tempo 10 km', estimeSous: 'najlepszy bieg · 26 tyg.',
