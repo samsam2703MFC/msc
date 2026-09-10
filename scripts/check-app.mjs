@@ -257,15 +257,17 @@ try {
 
   const tracesAvant = await page.locator('svg[role=img]').count();
 
+  /* Les courses sont un tableau : la dernière ligne est celle à ajouter, on
+     la remplit sur place et ✓ (Enregistrer) l'envoie. */
   const encoder = async (nom, date, distance, temps) => {
     await page.click('text=Encoder une course');
     await page.waitForTimeout(400);
-    await page.fill('input[type=date]', date);
-    const champs = page.locator('input:not([type=date])');
-    await champs.nth(0).fill(String(distance));   // distance
-    await champs.nth(1).fill(nom);                // nom
-    await champs.nth(3).fill(temps);              // temps
-    await page.click('text=Enregistrer');
+    const nouvelle = page.locator('table tbody tr').last();
+    await nouvelle.locator('input[type=date]').fill(date);
+    await nouvelle.getByLabel('Nom', { exact: true }).fill(nom);
+    await nouvelle.getByLabel('Distance (km)', { exact: true }).fill(String(distance));
+    await nouvelle.getByLabel('Temps (h:mm:ss)', { exact: true }).fill(temps);
+    await nouvelle.getByRole('button', { name: 'Enregistrer' }).click();
     await page.waitForTimeout(1400);
   };
 

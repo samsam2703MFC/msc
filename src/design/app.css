@@ -109,3 +109,22 @@ svg.lucide {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Les cases du tableau des courses : du texte tant qu'on ne les touche pas, un
+   champ dès qu'on s'y pose. */
+.msc-cellule {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+}
+.msc-cellule:hover {
+  border-color: #C8D7D4;
+}
+.msc-cellule:focus {
+  outline: none;
+  border-color: #02C9A0;
+  background: #FFFFFF;
+}
+.msc-cellule::placeholder {
+  color: #7E9090;
+}

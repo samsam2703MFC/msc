@@ -986,7 +986,12 @@ instead of squeezing seven labels into 360 px.
 
 ### Competitions
 
-Encoded by hand: date, name, place, distance, time, placing, starters. A race
+A table, edited in place: date, name, place, distance, time, placing,
+starters, and the pace the time implies. Every cell is an input that looks
+like text until you land on it; a row you touched turns emerald and grows a ✓
+(Enregistrer, also Enter) and an undo (Escape); the last row is the next race
+to add, and an empty time means a race still to come. Deleting asks once. On
+a phone the table scrolls sideways rather than squeezing its columns. A race
 belongs to the athlete and not to the plan, which is what lets results outlive
 the plans that aimed at them.
 
