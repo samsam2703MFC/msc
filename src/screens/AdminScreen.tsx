@@ -14,7 +14,7 @@ import type { Methode } from '../data/methode';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { AccentButton, Card, Colonnes, Grid, Mono, SectionLabel } from '../components/primitives';
-import { DEFICITS_DEFAUT, DISCIPLINES, TYPES_COURSE, estMulti, referenceAPied, typeCourse, typesGroupes } from '../data/courses';
+import { DEFICITS_DEFAUT, DISCIPLINES, estMulti, referenceAPied, typeCourse, typesGroupes } from '../data/courses';
 import type { Deficits, TypeCourse } from '../data/courses';
 import type { Lang } from '../data/types';
 import type { App } from '../state/useApp';
@@ -426,6 +426,11 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
       {/* les objectifs */}
       <Card padding="16px 18px" gap={10}>
         <SectionLabel icon="calendar-days">{fr ? 'Objectifs' : 'Cele'}</SectionLabel>
+        <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>
+          {fr
+            ? 'Un objectif, c’est un type de course, une date et un chrono visé. Son nom est celui du type ; le vrai nom d’une course — Rome, l’Alpsman — vit dans Starts, où elle se relie à cet objectif.'
+            : 'Cel to typ zawodów, data i cel czasowy. Nazwę bierze z typu; prawdziwa nazwa zawodów żyje w Startach, gdzie wiąże się z tym celem.'}
+        </div>
         {objectifs.map((o, i) => (
           <div
             key={i}
@@ -446,12 +451,12 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
                 type_course: t.code,
                 distance_km: t.distance_km,
                 discipline: t.discipline,
-                /* Le nom suit le type tant que personne ne l'a écrit à la
-                   main : « Semi-marathon » plutôt qu'un champ vide. */
-                nom: !o.nom || TYPES_COURSE.some((x) => x.nom[app.lang] === o.nom) ? t.nom[app.lang] : o.nom,
+                /* Le nom, c'est le type : « Semi-marathon », « Triathlon M ».
+                   Le vrai nom d'une course — Rome, Alpsman — vit dans Starts,
+                   et s'y relie à cet objectif. */
+                nom: t.nom[app.lang],
               })}
             />
-            <Champ label={fr ? 'Nom' : 'Nazwa'} value={o.nom} onChange={(v) => majObjectif(i, { nom: v })} />
             <Grid cols={3} gap={8}>
               <Champ label="Date" value={o.date} onChange={(v) => majObjectif(i, { date: v })} type="date" mono />
               <Champ label="km" value={String(o.distance_km)} onChange={(v) => majObjectif(i, { distance_km: Number(v) || 10 })} mono />
