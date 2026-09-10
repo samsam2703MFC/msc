@@ -110,6 +110,28 @@ try {
   await page.waitForSelector('nav', { timeout: 20000 });
   check("l'application s'ouvre", await page.locator('nav').isVisible());
 
+  /* La PWA : le manifeste avec ses deux sortes d'icônes, le service worker
+     enregistré — 127.0.0.1 est un contexte sûr, comme HTTPS le sera. */
+  console.log('\n=== la PWA ===');
+  const manifeste = await (await fetch(`${URL}/manifest.webmanifest`)).json().catch(() => null);
+  check('le manifeste est servi', Boolean(manifeste?.name === 'MySmartCoach' && manifeste.display === 'standalone'));
+  check('avec une icône « any » et une « maskable » de 512',
+    ['any', 'maskable'].every((p) => manifeste?.icons?.some((i) => i.purpose === p && i.sizes === '512x512')),
+    JSON.stringify(manifeste?.icons?.map((i) => `${i.sizes} ${i.purpose}`)));
+  for (const f of ['icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'icon.svg', 'sw.js']) {
+    const r = await fetch(`${URL}/${f}`);
+    check(`${f} est servi`, r.ok, String(r.status));
+  }
+  const sw = await page.evaluate(async () => {
+    if (!('serviceWorker' in navigator)) return 'absent';
+    const r = await Promise.race([
+      navigator.serviceWorker.ready.then((x) => (x.active ? 'actif' : 'enregistré')),
+      new Promise((res) => setTimeout(() => res('pas prêt'), 8000)),
+    ]);
+    return r;
+  });
+  check('le service worker est enregistré et actif', sw === 'actif', String(sw));
+
   /* Le matin : la FC de repos et la HRV avant tout le reste. Le panneau bloque,
      le bouton ne part pas sans les deux, et il disparaît une fois la mesure
      rangée — y compris après un rechargement, puisqu'elle est en base. */

@@ -11,6 +11,7 @@ import { ProfilSheet } from './components/ProfilSheet';
 import { SansPlan } from './components/SansPlan';
 import { IOSDevice } from './components/IOSDevice';
 import { MatinSheet } from './components/MatinSheet';
+import { MiseAJour } from './components/MiseAJour';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TypeSheet } from './components/TypeSheet';
@@ -120,6 +121,8 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+          {/* Une nouvelle version qui attend, ou l'application prête hors ligne. */}
+          <MiseAJour lang={app.lang} />
           {/* Hors réseau, l'application lit sa copie locale. Le dire vaut mieux
               que laisser croire que les chiffres viennent d'arriver. */}
           {(!app.enLigne || app.enAttente > 0) && (

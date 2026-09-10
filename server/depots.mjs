@@ -355,8 +355,13 @@ async function lesCompetitions(athleteId) {
    là, plutôt que d'afficher un chiffre inventé. */
 function metriques(base) {
   /* La même charge par jour que les courbes de forme : le RPE ressenti, sinon
-     celui que la séance appariée visait, sinon 5. */
-  const parJour = chargeParJour({ activites: base.msc_activity, journal: base.msc_journal, sessions: base.msc_session });
+     celui que la séance appariée visait, sinon 5. Rien après aujourd'hui. */
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const parJour = chargeParJour({
+    activites: base.msc_activity.filter((a) => a.date <= aujourdhui),
+    journal: base.msc_journal,
+    sessions: base.msc_session,
+  });
 
   const jours = [...parJour.keys()].sort();
   const serieCharge = jours.map((j) => parJour.get(j) ?? 0);
@@ -366,7 +371,7 @@ function metriques(base) {
     ? (moyenne(serieCharge.slice(-7)) * 7) / (moyenne(serieCharge.slice(-28)) * 7)
     : null;
 
-  const fc = base.msc_daily.map((d) => d.fc_repos);
+  const fc = base.msc_daily.filter((d) => d.date <= aujourdhui).map((d) => d.fc_repos);
   const fcMoy7 = fc.length >= 3 ? moyenne(fc.slice(-7)) : null;
 
   return base.msc_metric.map((m) => {

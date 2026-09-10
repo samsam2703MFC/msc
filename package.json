@@ -14,6 +14,7 @@
     "check:db": "npx esbuild scripts/check-db.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-db.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/check-db.mjs",
     "check:api": "npx esbuild scripts/check-api.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/check-api.mjs --log-level=error --external:mysql2 --external:@anthropic-ai/sdk && node --env-file-if-exists=.env node_modules/.tmp/check-api.mjs",
     "check:app": "node --env-file-if-exists=.env scripts/check-app.mjs",
+    "icones": "node scripts/icones.mjs",
     "server": "node --env-file-if-exists=.env server/index.mjs",
     "strava:webhook": "node --env-file-if-exists=.env scripts/strava-webhook.mjs",
     "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
@@ -21,7 +22,8 @@
     "db:seed:paquet": "npx esbuild scripts/db-seed.ts --bundle --platform=node --format=esm --outfile=outils/db-seed.mjs --log-level=error --external:mysql2",
     "db:seed:serveur": "node --env-file-if-exists=.env outils/db-seed.mjs",
     "compte": "node --env-file-if-exists=.env scripts/compte.mjs",
-    "db:importer-plan": "node --env-file-if-exists=.env scripts/db-importer-plan.mjs"
+    "db:importer-plan": "node --env-file-if-exists=.env scripts/db-importer-plan.mjs",
+    "db:demo": "node --env-file-if-exists=.env scripts/db-demo.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

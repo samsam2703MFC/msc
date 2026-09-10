@@ -293,6 +293,12 @@ approbation manuelle devant chaque déploiement.
 
 ```sh
 curl -s http://185.180.206.46/msc/api/sante      # ou https://<domaine>/api/sante
+
+# Pour une vraie PWA (service worker, « Installer l'application » sur Android)
+# il faut HTTPS, donc un nom : le vôtre, ou 185-180-206-46.sslip.io, un nom
+# gratuit qui pointe sur l'adresse par construction et que Let's Encrypt
+# certifie comme un autre.
+sudo bash deploy/publier.sh 185-180-206-46.sslip.io vous@exemple.tld
 # {"ok":true,"cle":true,"strava":true,"scellement":true}
 ```
 

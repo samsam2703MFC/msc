@@ -299,8 +299,12 @@ export function etatDesSeances(): EtatSeances {
     if (j.fait === true) faites.add(j.session_id);
     if (j.fait === false) manquees.add(j.session_id);
   }
+  /* Une activité datée après aujourd'hui n'a pas eu lieu : elle ne fait ni
+     une séance faite, ni une séance faite autrement. */
+  const reel = aujourdhuiISO();
   const joursAvecActivite = new Set<string>();
   for (const a of tables.msc_activity) {
+    if (a.date > reel) continue;
     joursAvecActivite.add(a.date);
     if (a.session_id === undefined) continue;
     const s = parId.get(a.session_id);

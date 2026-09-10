@@ -840,6 +840,43 @@ rather than guessed at.
 Photos are served from `/api/photo/:id`, authenticated and athlete-scoped:
 `check:api` asserts that one does not open without the cookie.
 
+## Installing it on a phone
+
+The build is a PWA: a manifest, a service worker that precaches the shell
+(`vite-plugin-pwa`, Workbox), and an icon set. What each platform needs:
+
+| | |
+|---|---|
+| **iPhone / iPad** | Safari → Partager → *Sur l'écran d'accueil*. Works over plain HTTP too: iOS reads `apple-touch-icon.png` and the `apple-mobile-web-app-*` metas, not the service worker. |
+| **Android** | Chrome → menu → *Installer l'application*. Chrome offers it only when the page is served over **HTTPS** with a registered service worker and a manifest carrying a 512 px icon. Over plain HTTP the menu says *Ajouter à l'écran d'accueil* and creates a shortcut, which takes the largest `<link rel="icon">` — that is why `index.html` declares the 192 and 512 px icons too. |
+| **Desktop Chrome / Edge** | the install icon in the address bar, same HTTPS rule. |
+
+**A service worker does not register on `http://185.180.206.46/msc/`**:
+browsers require a secure context for it (localhost excepted, which is how
+`check:app` exercises it). Two ways to HTTPS on that server, both handled by
+`deploy/publier.sh <nom> [courriel]`: a domain you own pointed at the IP, or
+a free name that resolves to it by construction — `185-180-206-46.sslip.io`
+— which Let's Encrypt certifies like any other (`sudo bash deploy/publier.sh
+185-180-206-46.sslip.io vous@exemple.tld`, then `DEPLOY_URL` in the
+repository variables becomes `https://185-180-206-46.sslip.io/msc`). The same
+name is what Strava's *Authorization Callback Domain* wants.
+
+**The icons** are one drawing — the form gauge on the theme's navy — written
+in SVG in `scripts/icones.mjs` and rendered by Playwright's Chromium into
+every size (`npm run icones`; `MSC_CHROMIUM` points at a browser when
+Playwright's own is not installed). Two purposes in the manifest: `any`, the
+rounded square with transparent corners; `maskable`, a full-bleed image with
+the drawing inside the 80 % safe circle, from which Android cuts its own
+shape. Without the second, Android shows the rounded square shrunk inside a
+white disc. `apple-touch-icon.png` is full-bleed too; iOS rounds it.
+
+**Updates** are offered, not imposed: the service worker is in `prompt` mode,
+checks for a new build every hour, and when one is waiting the header shows
+*Nouvelle version disponible — Recharger* (`MiseAJour.tsx`). A half-typed note
+is never lost to a surprise reload. The first install says *Prête hors ligne*
+for four seconds. `check:app` asserts the manifest, both icon purposes, the
+served files and an active registration.
+
 ## Offline
 
 The app is an installed PWA, so it has to be readable in a tunnel and it has to
@@ -996,6 +1033,25 @@ series, a legend from two series up with the name in ink next to a stroke of
 the colour, a direct label at each line's end, a crosshair under the finger.
 Emerald and amber are the only pair of the theme that passes the
 colour-vision separation check in one frame, which is why fatigue is amber.
+
+### What the demo seed leaves behind, and `npm run db:demo`
+
+`db:seed` lays a small invented past next to the workbook so the screens have
+something to show: two Strava activities dated **October 2026**, a journal
+entry, seven resting heart rates, two coach analyses with their proposals —
+and the thirty-week demo plan with its four races. On a database where the
+athlete lives a real season those rows mislead: the form curves used to run
+to October, and a 10 km nobody is running sits in the calendar.
+
+Two answers. The curves, the metrics and the week's states now **ignore
+anything dated after today** — an activity in the future has not happened,
+whether it is a demo row or a watch with the wrong clock. And
+`npm run db:demo` says what the seed left (nothing is touched);
+`npm run db:demo -- retirer` removes the invented past; `-- retirer --plan`
+also removes the demo plan when it is no longer the active one, with the
+races only it names and that have no result. Rows are recognised by what the
+seed writes (its Strava ids, its October dates, its model names), never by
+age — nothing the athlete typed looks like them.
 
 ### Athlètes, Calendrier, and what the coach was asked
 

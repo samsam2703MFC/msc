@@ -57,14 +57,17 @@ export function courbesDeForme(
   { activites, journal, mesures, sessions = [] },
   { tauBase = 42, tauFatigue = 7, jours = 84, hrvBaseJours = 30, hrvChute = 0.1, aujourdhui = iso(new Date()) } = {},
 ) {
-  const parJour = chargeParJour({ activites, journal, sessions });
+  /* Rien après aujourd'hui : une activité datée dans le futur n'a pas eu
+     lieu — c'est un jeu de démonstration, ou une montre à l'heure fausse — et
+     la courbe s'arrête au jour où l'on est. */
+  const parJour = chargeParJour({ activites: activites.filter((a) => a.date <= aujourdhui), journal, sessions });
   const dates = [...parJour.keys()].sort();
 
   /* La charge, lissée depuis la première activité — pas depuis le bord de la
      fenêtre, sinon la courbe démarre de zéro sous les yeux de l'athlète. */
   const charge = [];
   if (dates.length > 0) {
-    const fin = dates[dates.length - 1] > aujourdhui ? dates[dates.length - 1] : aujourdhui;
+    const fin = aujourdhui;
     const debutFenetre = plusJours(fin, -(jours - 1));
     let base = 0;
     let fatigue = 0;
@@ -80,12 +83,11 @@ export function courbesDeForme(
 
   /* La HRV : chaque matin mesuré, contre la moyenne des trente jours d'avant. */
   const avecHrv = mesures
-    .filter((m) => m.hrv_ms != null && m.etat !== 'rejete' && m.etat !== 'propose')
+    .filter((m) => m.hrv_ms != null && m.etat !== 'rejete' && m.etat !== 'propose' && m.date <= aujourdhui)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const hrv = [];
   if (avecHrv.length > 0) {
-    const derniere = avecHrv[avecHrv.length - 1].date;
-    const fin = derniere > aujourdhui ? derniere : aujourdhui;
+    const fin = aujourdhui;
     const debutFenetre = plusJours(fin, -(jours / 2 - 1));
     for (let i = 0; i < avecHrv.length; i += 1) {
       const m = avecHrv[i];

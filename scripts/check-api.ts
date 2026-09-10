@@ -141,6 +141,13 @@ try {
     !JSON.stringify(ok.corps).includes('scrypt'));
 
   console.log('\n=== l’instantané ===');
+  /* Une activité d'il y a trois jours, à la main : les activités du seed sont
+     datées dans le futur (octobre 2026) et n'ont pas eu lieu — les courbes de
+     forme doivent les ignorer, pas s'arrêter dessus. */
+  await bd().execute(
+    `INSERT INTO msc_activity (athlete_id, id_strava, session_id, date, nom, sport, duree_min, manuelle, statut)
+     VALUES (1, NULL, NULL, DATE_SUB(CURDATE(), INTERVAL 3 DAY), 'contrôle', 'run', 40, 1, 'fait')`,
+  );
   const inst = await c.appel('/api/db/instantane');
   check('il répond une fois connecté', inst.statut === 200, String(inst.statut));
   const base = inst.corps;
@@ -158,10 +165,14 @@ try {
     Array.isArray(courbes?.charge) && Array.isArray(courbes?.hrv) && courbes?.tau?.base === 42
       && courbes?.tau?.fatigue === 7 && courbes?.tau?.hrv_base === 30,
     JSON.stringify(courbes?.tau));
-  check('la base endurance se construit sur les activités',
-    courbes?.charge.length > 0 && courbes.charge[courbes.charge.length - 1].base > 0
+  const aujourdhuiIso = new Date().toISOString().slice(0, 10);
+  check('la base endurance se construit sur les activités, jusqu’à aujourd’hui',
+    courbes?.charge.length >= 4 && courbes.charge[courbes.charge.length - 1].base > 0
+      && courbes.charge.at(-1)?.date === aujourdhuiIso
       && courbes.charge.every((d: any) => d.fatigue >= 0 && typeof d.date === 'string'),
-    `${courbes?.charge.length} jours · base ${courbes?.charge.at(-1)?.base} · fatigue ${courbes?.charge.at(-1)?.fatigue}`);
+    `${courbes?.charge.length} jours · dernier ${courbes?.charge.at(-1)?.date} · base ${courbes?.charge.at(-1)?.base}`);
+  check('et les activités datées dans le futur n’y sont pas',
+    courbes?.charge.every((d: any) => d.date <= aujourdhuiIso));
 
   const apercu = await c.appel('/api/apercu');
   check('la vue coach porte les mêmes courbes',
@@ -544,6 +555,7 @@ try {
   await bd().execute('DELETE FROM msc_journal WHERE date IN (?, ?)', ['2026-10-20', '2026-10-21']);
   await bd().execute('DELETE FROM msc_journal WHERE athlete_id = 1 AND session_id = ?',
     [msc_session.find((s) => s.type !== 'repos')!.id]);
+  await bd().execute("DELETE FROM msc_activity WHERE athlete_id = 1 AND manuelle = 1 AND nom = 'contrôle'");
   await bd().execute('DELETE FROM msc_mesure WHERE date = ?', ['2030-02-02']);
   /* Les photos que ce contrôle a envoyées, et rien d'autre : celles auxquelles
      plus aucune mesure ne renvoie. */
