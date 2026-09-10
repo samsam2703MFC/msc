@@ -1,5 +1,6 @@
 /* Paramètres — the Strava source, the language, and what the database holds. */
 
+import { useEffect } from 'react';
 import * as db from '../data/db';
 import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
@@ -268,6 +269,12 @@ function StravaCard({ app }: { app: App }) {
   const etat = app.strava;
   const lie = app.stravaOn;
   const occupe = app.stravaJob !== 'idle';
+  const fr = lang === 'fr';
+
+  /* L'état a pu changer depuis l'ouverture de la page — Strava configuré
+     depuis le bureau, par exemple : on le relit quand la carte s'ouvre. */
+  const { verifierStrava } = app;
+  useEffect(() => { void verifierStrava(); }, [verifierStrava]);
 
   const vue = (() => {
     if (!etat) {
@@ -329,12 +336,15 @@ function StravaCard({ app }: { app: App }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 8 }}>
       <button
         type="button"
         onClick={vue.action}
         disabled={!vue.action}
         aria-pressed={lie}
         style={{
+          flex: 1,
+          minWidth: 0,
           borderRadius: 12,
           background: lie ? C.accentSoft : C.surface,
           border: `1px solid ${lie ? C.accent : C.border}`,
@@ -375,6 +385,30 @@ function StravaCard({ app }: { app: App }) {
         </div>
         {vue.action ? <Icon name={vue.icone} size={18} color={teinte} /> : null}
       </button>
+      {/* Relire l'état, et les activités si Strava est relié — sans recharger
+          la page. */}
+      <button
+        type="button"
+        onClick={() => void app.rafraichirStrava()}
+        disabled={occupe}
+        aria-label={fr ? 'Rafraîchir Strava' : 'Odśwież Stravę'}
+        title={fr ? 'Rafraîchir' : 'Odśwież'}
+        style={{
+          width: 44, borderRadius: 12, border: `1px solid ${C.border}`, background: C.surface,
+          color: occupe ? C.inkQuiet : C.inkSecondary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}
+      >
+        <Icon name="refresh-cw" size={17} />
+      </button>
+      </div>
+      <div style={{ fontSize: 10.5, color: C.inkQuiet, paddingLeft: 2 }}>
+        {app.stravaVerifie
+          ? `${fr ? 'État vérifié' : 'Stan sprawdzony'} ${ilYA(app.stravaVerifie, lang)}`
+          : fr ? 'État pas encore vérifié' : 'Stan jeszcze niesprawdzony'}
+        {etat?.lie && etat.derniere_synchro
+          ? ` · ${src.sous_on[lang].toLowerCase()} ${ilYA(etat.derniere_synchro, lang)}`
+          : ''}
+      </div>
 
       {/* An error the card itself could not carry — the sync failed, the quota
           ran out — rather than a state the card is in. */}
