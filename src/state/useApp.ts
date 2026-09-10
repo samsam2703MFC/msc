@@ -72,8 +72,10 @@ export function useApp() {
 
   const [lang, setLangState] = useState<Lang>(storedLang);
 
-  /* Today */
-  const [done, setDone] = useState(true);
+  /* Today. La coche « faite » est ce que l'athlète a dit (vrai, faux) ou rien
+     (null) : relue du journal à chaque instantané, écrite dès qu'on la touche.
+     Elle n'est plus un interrupteur local allumé par défaut. */
+  const [fait, setFait] = useState<boolean | null>(null);
   const [rpe, setRpe] = useState(8);
   const [note, setNote] = useState('');
   /* Ce qui a bloqué sur la séance du jour. Relu depuis le journal à chaque
@@ -115,8 +117,19 @@ export function useApp() {
     const session = db.sessionDuJour(date);
     const j = session ? db.one('msc_journal', (r) => r.session_id === session.id) : undefined;
     setLimites(j?.limites ?? []);
+    setFait(j?.fait ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, version]);
+
+  /* Ce que le bouton montre : la coche si l'athlète a parlé, sinon ce que les
+     activités disent de la séance du jour. */
+  const done = useMemo(() => {
+    if (fait !== null) return fait;
+    if (!db.chargee) return false;
+    const session = db.sessionDuJour(date);
+    return Boolean(session && db.etatDesSeances().faites.has(session.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fait, date, version]);
 
   /* Le matin : rien ne s'ouvre tant que la FC de repos et la HRV du jour ne
      sont pas rangées. Seulement pour son propre athlète (le premier que le
@@ -560,7 +573,7 @@ export function useApp() {
   /* Le RPE et la note. Écrits quand l'athlète quitte le champ, et de nouveau
      juste avant une analyse — c'est le moment où ils comptent, puisque c'est ce
      que le coach lit. */
-  const enregistrerJournal = useCallback(async (surcharge: { limites?: string[] } = {}) => {
+  const enregistrerJournal = useCallback(async (surcharge: { limites?: string[]; fait?: boolean | null } = {}) => {
     if (!db.chargee || db.droit !== 'ecriture') return;
     const session = db.sessionDuJour(date);
     try {
@@ -570,12 +583,45 @@ export function useApp() {
         rpe,
         note: note.trim() || undefined,
         limites: surcharge.limites ?? limites,
+        fait: surcharge.fait === undefined ? fait : surcharge.fait,
       });
       if (api.estDiffere(r) && monte.current) setEnAttente((n) => n + 1);
     } catch (e) {
       if (monte.current) setAnaErreur(message(e));
     }
-  }, [date, limites, note, rpe]);
+  }, [date, fait, limites, note, rpe]);
+
+  /* La coche du jour : un toucher, et c'est écrit. */
+  const toggleDone = useCallback(() => {
+    const v = !done;
+    setFait(v);
+    void enregistrerJournal({ fait: v });
+  }, [done, enregistrerJournal]);
+
+  /* La coche d'une autre séance — hier, ouverte depuis la semaine. Le reste
+     du journal de cette séance repart tel quel : la coche ne l'efface pas. */
+  const marquerSeance = useCallback(async (sessionId: number, valeur: boolean | null) => {
+    if (!db.chargee || db.droit !== 'ecriture') return;
+    const session = db.one('msc_session', (s) => s.id === sessionId);
+    if (!session) return;
+    const j = db.one('msc_journal', (r) => r.session_id === sessionId);
+    try {
+      const r = await api.ecrireJournal({
+        date: session.date,
+        session_id: sessionId,
+        rpe: j?.rpe_ressenti || undefined,
+        sommeil: j?.sommeil || undefined,
+        note: j?.note,
+        limites: j?.limites,
+        fait: valeur,
+      });
+      if (api.estDiffere(r) && monte.current) setEnAttente((n) => n + 1);
+      if (session.date === date) setFait(valeur);
+      await recharger(db.athleteId);
+    } catch (e) {
+      if (monte.current) setAnaErreur(message(e));
+    }
+  }, [date, recharger]);
 
   /* Un toucher par réponse ; « rien » exclut les autres, et une réponse part
      tout de suite — pas de bouton « enregistrer » pour une question à choix. */
@@ -862,7 +908,8 @@ export function useApp() {
     version,
 
     done,
-    toggleDone: useCallback(() => setDone((v) => !v), []),
+    toggleDone,
+    marquerSeance,
     rpe,
     setRpe,
     limites,

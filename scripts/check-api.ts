@@ -240,6 +240,24 @@ try {
   check('et le rejeu n’a rien écrasé', entree?.note === 'jambes lourdes', entree?.note);
   check('les douleurs remontent', JSON.stringify(entree?.douleurs) === JSON.stringify(['mollet']));
 
+  /* La coche « faite » : sur une séance, écrite seule ; puis une écriture sans
+     elle (le RPE du soir) ne la défait pas ; puis null l'efface. */
+  const seanceCochee = msc_session.find((s) => s.type !== 'repos')!;
+  const ecrireCoche = (corps: Record<string, unknown>) => c.appel('/api/journal', {
+    method: 'POST', body: JSON.stringify({ date: seanceCochee.date, session_id: seanceCochee.id, ...corps }),
+  });
+  const coche = await ecrireCoche({ rpe: 6, fait: true });
+  check('la coche « faite » s’écrit sur une séance', coche.statut === 200, JSON.stringify(coche.corps));
+  await ecrireCoche({ rpe: 7, note: 'sans la coche' });
+  const relu = (await c.appel('/api/db/instantane')).corps.msc_journal.find((j: any) => j.session_id === seanceCochee.id);
+  check('et une écriture sans coche la laisse en place', relu?.fait === true && relu?.rpe_ressenti === 7, JSON.stringify(relu));
+  await ecrireCoche({ rpe: 7, fait: false });
+  const relu2 = (await c.appel('/api/db/instantane')).corps.msc_journal.find((j: any) => j.session_id === seanceCochee.id);
+  check('« pas faite » s’écrit aussi', relu2?.fait === false, JSON.stringify(relu2?.fait));
+  await ecrireCoche({ rpe: 7, fait: null });
+  const relu3 = (await c.appel('/api/db/instantane')).corps.msc_journal.find((j: any) => j.session_id === seanceCochee.id);
+  check('et null l’efface', relu3 !== undefined && relu3.fait === undefined, JSON.stringify(relu3?.fait));
+
   const mesure = await c.appel('/api/mesure', {
     method: 'POST',
     body: JSON.stringify({ date: jour, poids_kg: 74.5, fc_repos: 46, source: 'saisie' }),
@@ -506,6 +524,8 @@ try {
 } finally {
   serveur.kill('SIGTERM');
   await bd().execute('DELETE FROM msc_journal WHERE date IN (?, ?)', ['2026-10-20', '2026-10-21']);
+  await bd().execute('DELETE FROM msc_journal WHERE athlete_id = 1 AND session_id = ?',
+    [msc_session.find((s) => s.type !== 'repos')!.id]);
   await bd().execute('DELETE FROM msc_mesure WHERE date = ?', ['2030-02-02']);
   /* Les photos que ce contrôle a envoyées, et rien d'autre : celles auxquelles
      plus aucune mesure ne renvoie. */

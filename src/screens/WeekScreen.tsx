@@ -1,14 +1,35 @@
-/* La semaine — planned versus done, the days of this week, the block's pace
-   grid, and the type legend.
+/* La semaine — planned versus done, the days of this week, and the block's
+   pace grid. Each past session wears one of three colours: done (green), done
+   otherwise (orange — too short, or another sport that day), missed (red).
 
-   The totals are computed by the engine from the plan and the activities; the
-   pace grid is the "Allures" sheet, derived rather than stored. */
+   The totals are computed by the engine from the plan, the activities and the
+   journal; the pace grid is the "Allures" sheet, derived rather than stored.
+   The type legend lives on the Coach screen; a type opens from any session. */
 
 import * as db from '../data/db';
-import { C, F } from '../design/theme';
+import type { Lang, StatutCode } from '../data/types';
+import { C } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { Card, Grid, Mono, SectionLabel, TypeSquare } from '../components/primitives';
 import type { App } from '../state/useApp';
+
+/* Les trois couleurs, dites par un mot à côté de l'icône : jamais la couleur
+   seule. Les lignes msc_statut portent l'icône et la teinte ; ces replis
+   servent à un instantané en cache d'avant les deux nouveaux statuts. */
+const LEGENDE: Record<Lang, Record<'fait' | 'partiel' | 'manque', string>> = {
+  fr: { fait: 'faite', partiel: 'autrement', manque: 'manquée' },
+  pl: { fait: 'zrobiony', partiel: 'inaczej', manque: 'pominięty' },
+};
+const REPLI: Partial<Record<StatutCode, { icon: string; couleur: string }>> = {
+  partiel: { icon: 'circle-minus', couleur: C.warning },
+  manque: { icon: 'circle-x', couleur: C.negative },
+};
+
+export function visuelDuStatut(code: StatutCode): { icon: string; couleur: string } {
+  return db.one('msc_statut', (r) => r.code === code)
+    ?? REPLI[code]
+    ?? db.mustOne('msc_statut', (r) => r.code === 'prevu');
+}
 
 function heures(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -18,17 +39,12 @@ function heures(minutes: number): string {
 
 export function WeekScreen({ app }: { app: App }) {
   const lang = app.lang;
-  const ui = db.ui(lang);
   const fr = lang === 'fr';
 
-  /* An activity that matched no session — a ride on a rest day — is not a
-     session done, so it is not in here. */
-  const faites = new Set(
-    db
-      .select('msc_activity')
-      .map((a) => a.session_id)
-      .filter((id): id is number => id !== undefined),
-  );
+  /* Faite : une activité appariée d'une durée raisonnable, ou la coche de
+     l'athlète. Une sortie sur un jour de repos n'est la séance de personne. */
+  const etat = db.etatDesSeances();
+  const faites = etat.faites;
   const bilan = db.bilanSemaine(app.semaine);
   const jours = db.sessionsDeSemaine(app.semaine);
   const bloc = db.blocDeSemaine(app.semaine);
@@ -86,7 +102,7 @@ export function WeekScreen({ app }: { app: App }) {
 
       <Card padding={0} gap={0} style={{ overflow: 'hidden' }}>
         {jours.map((d) => {
-          const statut = db.mustOne('msc_statut', (r) => r.code === db.statutDe(d, app.date, faites));
+          const statut = visuelDuStatut(db.statutDe(d, app.date, etat));
           const type = db.type(d.type);
           return (
             <button
@@ -129,6 +145,23 @@ export function WeekScreen({ app }: { app: App }) {
             </button>
           );
         })}
+        {/* ce que les couleurs veulent dire — un mot avec chaque icône */}
+        <div
+          style={{
+            display: 'flex', flexWrap: 'wrap', gap: '4px 14px', padding: '8px 16px 10px',
+            borderTop: `1px solid ${C.borderSoft}`, fontSize: 11, color: C.inkSecondary,
+          }}
+        >
+          {(['fait', 'partiel', 'manque'] as const).map((code) => {
+            const v = visuelDuStatut(code);
+            return (
+              <span key={code} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Icon name={v.icon} size={13} color={v.couleur} />
+                {LEGENDE[lang][code]}
+              </span>
+            );
+          })}
+        </div>
       </Card>
 
       {/* the pace grid for this block — computed from the two references */}
@@ -156,34 +189,6 @@ export function WeekScreen({ app }: { app: App }) {
             </Mono>
           </div>
         ))}
-      </Card>
-
-      <Card padding="16px 18px">
-        <SectionLabel icon="tags">{ui.legendLabel}</SectionLabel>
-        <Grid cols={2} gap={8}>
-          {db.select('msc_type').map((t) => (
-            <button
-              key={t.code}
-              type="button"
-              className="msc-hover-accent"
-              onClick={() => app.openType(t.code)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 10px',
-                borderRadius: 10,
-                border: `1px solid ${C.border}`,
-                fontFamily: F.body,
-              }}
-            >
-              <Icon name={t.icon} size={16} color={t.color} />
-              <div style={{ fontSize: 12, color: C.inkBody, textAlign: 'left' }}>
-                {t.label[lang]}
-              </div>
-            </button>
-          ))}
-        </Grid>
       </Card>
     </div>
   );

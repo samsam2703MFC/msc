@@ -308,6 +308,36 @@ export function CoachScreen({ app }: { app: App }) {
           )
         }
       />
+
+      {/* Les types d'entraînement : la même fiche que celle qu'ouvre chaque
+          séance au toucher, listée ici comme référence. */}
+      <Card padding="16px 18px">
+        <SectionLabel icon="tags">{ui.legendLabel}</SectionLabel>
+        <Grid cols={2} gap={8}>
+          {db.select('msc_type').map((t) => (
+            <button
+              key={t.code}
+              type="button"
+              className="msc-hover-accent"
+              onClick={() => app.openType(t.code)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 10px',
+                borderRadius: 10,
+                border: `1px solid ${C.border}`,
+                fontFamily: F.body,
+              }}
+            >
+              <Icon name={t.icon} size={16} color={t.color} />
+              <div style={{ fontSize: 12, color: C.inkBody, textAlign: 'left' }}>
+                {t.label[lang]}
+              </div>
+            </button>
+          ))}
+        </Grid>
+      </Card>
     </div>
   );
 }

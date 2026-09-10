@@ -5,10 +5,11 @@ Implementation of the Claude Design handoff (`Formulaire application`), built as
 an installable PWA.
 
 Four screens, entirely driven by the MSC database: **Aujourd'hui** (the day's
-session, the journal, and Claude's read of it), **La semaine** (planned vs done,
-the seven days, the type legend), **État de forme** (the four load metrics), and
-**Coach** (the five real-life reasons a day goes sideways, the detected gap, the
-weekly verdict, the adjustments). Full FR / PL.
+session, the journal, and Claude's read of it), **La semaine** (planned vs done
+in three colours, the seven days, the block's paces), **État de forme** (the
+load metrics), and **Coach** (the five real-life reasons a day goes sideways,
+the detected gap, the weekly verdict, the adjustments, the type legend). Full
+FR / PL.
 
 ## Running it
 
@@ -277,6 +278,26 @@ a wide gap in pace, so the widest gap in the sorted lap paces is the split.
 Requiring that gap to be real (15 s/km) is what stops a steady run from
 reporting its faster half as intervals. A session run without pressing lap
 gives nothing back — which is the honest answer rather than a fabricated one.
+
+### Done, done otherwise, missed
+
+Every past session on the Semaine screen wears one of three colours, and a
+word sits next to each icon so the colour is never alone:
+
+| | |
+|---|---|
+| **green — faite** | an activity Strava matched, at least 60 % of the planned duration; or the athlete's own tick |
+| **orange — autrement** | matched but far shorter, or another activity that day — another sport, a ride nothing matched |
+| **red — manquée** | the day passed with neither; or the athlete said « Pas faite », which overrides everything |
+
+Today's session shows « Séance faite » on Aujourd'hui; any past session opened
+from the week has « Faite ? » with the two answers. The tick is
+`msc_journal.fait` — `1`, `0`, or `NULL` for nothing said — and a journal write
+that does not carry the field leaves it alone, so typing the evening's RPE never
+undoes yesterday's tick. Strava keeps counting on its own, in `msc_activity`;
+the tick is what the athlete says, and it wins. The back office counts done
+sessions and the past seven days' load by the same rule
+(`etatDesSeances()` on the client, the same two `EXISTS` on the server).
 
 ### Setting it up
 

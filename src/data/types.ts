@@ -97,6 +97,9 @@ export interface MscJournal {
       sa réponse et que rien n'a bloqué ; vide tant qu'elle n'a pas été posée. */
   limites?: string[];
   note?: string;
+  /** La coche de l'athlète : vrai « faite », faux « pas faite », absent tant
+      qu'il n'a rien dit — Strava compte à part, dans msc_activity. */
+  fait?: boolean;
 }
 
 /** Un réglage tel que le navigateur le reçoit : la valeur qui s'applique, et
@@ -329,7 +332,10 @@ export interface MscEcart {
   recalcul: MscEcartRecalcul[];
 }
 
-export type StatutCode = 'repos' | 'fait' | 'aujourdhui' | 'adapte' | 'prevu';
+/** L'état d'une séance, dérivé — jamais stocké : faite (vert), faite autrement
+    (orange : trop courte, ou un autre sport ce jour-là), manquée (rouge),
+    aujourd'hui, adaptée, à venir, repos. */
+export type StatutCode = 'repos' | 'fait' | 'partiel' | 'manque' | 'aujourdhui' | 'adapte' | 'prevu';
 
 export interface MscStatut {
   code: StatutCode;

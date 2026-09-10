@@ -141,6 +141,7 @@ try {
      tourne sur des données venues du serveur. */
   check('et des allures que le moteur a calculées', /\d+:\d\d\/km/.test(semaine),
     semaine.match(/\d+:\d\d\/km/g)?.slice(0, 3).join(' ') ?? '');
+  check('et dit ce que veulent dire ses trois couleurs', /faite/.test(semaine) && /autrement/.test(semaine) && /manquée/.test(semaine));
 
   await page.click('text=Forme');
   await page.waitForTimeout(500);

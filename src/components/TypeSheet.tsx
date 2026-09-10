@@ -16,7 +16,7 @@ export function TypeSheet({ app, code }: { app: App; code: TypeCode }) {
   const t = db.type(code);
 
   return (
-    <Sheet onClose={app.closeType} zIndex={80} label={t.label[lang]}>
+    <Sheet onClose={app.closeType} zIndex={90} label={t.label[lang]}>
       <SheetHeading
         icon={t.icon}
         color={t.color}

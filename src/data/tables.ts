@@ -176,6 +176,10 @@ export const msc_ecart: MscEcart[] = [
 export const msc_statut: MscStatut[] = [
   { code: 'repos', icon: 'moon', couleur: '#7E9090' },
   { code: 'fait', icon: 'circle-check', couleur: '#038870' },
+  /* faite, mais pas comme prévu : trop courte, ou un autre sport ce jour-là */
+  { code: 'partiel', icon: 'circle-minus', couleur: '#BA7517' },
+  /* passée sans rien : ni activité, ni coche — ou « pas faite », dit tel quel */
+  { code: 'manque', icon: 'circle-x', couleur: '#D85A30' },
   { code: 'aujourdhui', icon: 'play', couleur: '#029CD0' },
   { code: 'adapte', icon: 'wand-sparkles', couleur: '#BA7517' },
   { code: 'prevu', icon: 'circle-dashed', couleur: '#7E9090' },

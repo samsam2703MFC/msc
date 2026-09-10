@@ -271,14 +271,68 @@ export function consigne(session: MscPlanSession, lang: 'fr' | 'pl'): string | u
     .join(' · ');
 }
 
+/** Ce que les activités et le journal disent de chaque séance : faite, faite
+    autrement, ou dite « pas faite ». Le reste — manquée, aujourd'hui, à venir —
+    se lit sur la date. */
+export interface EtatSeances {
+  /** Une activité appariée d'une durée raisonnable, ou la coche de l'athlète. */
+  faites: ReadonlySet<number>;
+  /** Une activité appariée mais bien trop courte, ou une autre activité ce
+      jour-là (un autre sport, une sortie que rien n'a appariée). */
+  partiels: ReadonlySet<number>;
+  /** L'athlète a dit « pas faite » : ça prime sur tout. */
+  manquees: ReadonlySet<number>;
+}
+
+/* En dessous de cette part de la durée prévue, une activité appariée ne vaut
+   pas la séance : trente minutes sur les quatre-vingt-dix d'une sortie longue,
+   c'est « autrement », pas « faite ». */
+const PART_MINIMALE = 0.6;
+
+export function etatDesSeances(): EtatSeances {
+  const faites = new Set<number>();
+  const partiels = new Set<number>();
+  const manquees = new Set<number>();
+  const parId = new Map(tables.msc_session.map((s) => [s.id, s]));
+
+  for (const j of tables.msc_journal) {
+    if (j.fait === true) faites.add(j.session_id);
+    if (j.fait === false) manquees.add(j.session_id);
+  }
+  const joursAvecActivite = new Set<string>();
+  for (const a of tables.msc_activity) {
+    joursAvecActivite.add(a.date);
+    if (a.session_id === undefined) continue;
+    const s = parId.get(a.session_id);
+    if (!s) continue;
+    if (a.duree_min >= s.duree_min * PART_MINIMALE) faites.add(a.session_id);
+    else partiels.add(a.session_id);
+  }
+  /* Une activité ce jour-là qui n'est pas la séance : c'est « autrement ». */
+  for (const s of tables.msc_session) {
+    if (s.type === 'repos' || faites.has(s.id)) continue;
+    if (joursAvecActivite.has(s.date)) partiels.add(s.id);
+  }
+  for (const id of manquees) { faites.delete(id); partiels.delete(id); }
+  for (const id of faites) partiels.delete(id);
+  return { faites, partiels, manquees };
+}
+
+const AUCUNE: EtatSeances = { faites: new Set(), partiels: new Set(), manquees: new Set() };
+
 export function statutDe(
   session: MscPlanSession,
   aujourdhui: string,
-  faites: ReadonlySet<number>,
-): 'repos' | 'fait' | 'aujourdhui' | 'prevu' {
-  if (faites.has(session.id)) return 'fait';
+  etat: EtatSeances = AUCUNE,
+): 'repos' | 'fait' | 'partiel' | 'manque' | 'aujourdhui' | 'prevu' {
+  if (etat.manquees.has(session.id)) return 'manque';
+  if (etat.faites.has(session.id)) return 'fait';
+  if (etat.partiels.has(session.id)) return 'partiel';
   if (session.type === 'repos') return 'repos';
   if (session.date === aujourdhui) return 'aujourdhui';
+  /* Passée sans rien : ni activité, ni coche. Le dire en rouge plutôt que de
+     la laisser en pointillé comme une séance à venir. */
+  if (session.date < aujourdhui) return 'manque';
   return 'prevu';
 }
 

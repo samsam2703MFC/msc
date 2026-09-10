@@ -233,6 +233,7 @@ async function leVecu(athleteId) {
       douleurs: parJournal.get(j.id) ?? [],
       limites: limitesPar.get(j.id) ?? [],
       note: j.note ?? undefined,
+      fait: j.fait == null ? undefined : Boolean(j.fait),
     })),
     /* msc_daily n'existe plus comme table : la FC de repos vit dans les
        mesures, à côté du poids qui vient de la même photo. La forme que les
@@ -506,10 +507,14 @@ async function apercuDe({ id, droit }) {
          WHERE plan_id = :p AND semaine = :s`,
         { p: plan.id, s: semaine },
       ),
+      /* Faite : une activité appariée, ou la coche de l'athlète — la même
+         règle que la semaine à l'écran. Un RPE saisi n'est pas une séance
+         faite. */
       ligne(
-        `SELECT COUNT(DISTINCT j.session_id) AS n FROM msc_journal j
-         JOIN msc_session s ON s.id = j.session_id
-         WHERE s.plan_id = :p AND s.semaine = :s`,
+        `SELECT COUNT(*) AS n FROM msc_session s
+         WHERE s.plan_id = :p AND s.semaine = :s
+           AND (EXISTS (SELECT 1 FROM msc_activity a WHERE a.session_id = s.id)
+             OR EXISTS (SELECT 1 FROM msc_journal j WHERE j.session_id = s.id AND j.fait = 1))`,
         { p: plan.id, s: semaine },
       ),
       ligne(
@@ -543,9 +548,10 @@ async function apercuDe({ id, droit }) {
     ? await Promise.all([
         ligne(
           `SELECT COALESCE(SUM(s.charge), 0) AS c FROM msc_session s
-           JOIN msc_journal j ON j.session_id = s.id
            WHERE s.plan_id = :p
-             AND s.date BETWEEN DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND CURDATE()`,
+             AND s.date BETWEEN DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND CURDATE()
+             AND (EXISTS (SELECT 1 FROM msc_activity a WHERE a.session_id = s.id)
+               OR EXISTS (SELECT 1 FROM msc_journal j WHERE j.session_id = s.id AND j.fait = 1))`,
           { p: plan.id },
         ),
         ligne(
@@ -710,14 +716,20 @@ export async function mutation(athleteId, id, operation, travail) {
    codes, et un mot libre irait dans la note. */
 export const LIMITES = ['rien', 'jambes', 'souffle', 'technique', 'mental', 'sommeil', 'nutrition', 'douleur', 'chaleur'];
 
-export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil, note, douleurs, limites }, cnx) {
+export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil, note, douleurs, limites, fait }, cnx) {
   const q = cnx ?? { execute: (...a) => import('./bd.mjs').then((m) => m.bd().execute(...a)) };
+  /* La coche « faite » : vrai, faux, null pour l'effacer — et absente du
+     corps pour ne pas y toucher. Une écriture du RPE ne doit pas défaire ce
+     que l'athlète a coché la veille. */
+  const faitDefini = fait !== undefined;
+  const faitValeur = fait == null ? null : fait ? 1 : 0;
   const [r] = await q.execute(
-    `INSERT INTO msc_journal (athlete_id, session_id, date, rpe_ressenti, sommeil_h, note)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO msc_journal (athlete_id, session_id, date, rpe_ressenti, sommeil_h, note, fait)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE rpe_ressenti = VALUES(rpe_ressenti),
-       sommeil_h = VALUES(sommeil_h), note = VALUES(note)`,
-    [athleteId, session_id ?? null, date, rpe ?? null, sommeil ?? null, note ?? null],
+       sommeil_h = VALUES(sommeil_h), note = VALUES(note),
+       fait = IF(?, VALUES(fait), fait)`,
+    [athleteId, session_id ?? null, date, rpe ?? null, sommeil ?? null, note ?? null, faitValeur, faitDefini ? 1 : 0],
   );
   const journalId = r.insertId || (await ligne(
     'SELECT id FROM msc_journal WHERE athlete_id = :a AND date = :d AND session_id <=> :s',

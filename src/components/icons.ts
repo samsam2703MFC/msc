@@ -26,7 +26,9 @@ import {
   Circle,
   CircleCheck,
   CircleDashed,
+  CircleMinus,
   CircleQuestionMark,
+  CircleX,
   Clock,
   ClockAlert,
   Cookie,
@@ -96,6 +98,8 @@ export const ICONS: Record<string, LucideIcon> = {
   'circle': Circle,
   'circle-check': CircleCheck,
   'circle-dashed': CircleDashed,
+  'circle-minus': CircleMinus,
+  'circle-x': CircleX,
   // lucide renamed circle-help; the database still uses the old name.
   'circle-help': CircleQuestionMark,
   'clock': Clock,

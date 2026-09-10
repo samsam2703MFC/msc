@@ -567,6 +567,7 @@ CREATE TABLE IF NOT EXISTS msc_journal (
   date         DATE NOT NULL,
   rpe_ressenti TINYINT UNSIGNED NULL,
   sommeil_h    DECIMAL(3,1) NULL,
+  fait         TINYINT(1) NULL COMMENT '1 : l''athlète l''a dite faite ; 0 : pas faite ; NULL : rien dit — Strava compte à part',
   note         TEXT NULL,
   maj_le       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),

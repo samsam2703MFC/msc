@@ -72,6 +72,9 @@ try {
        office montre le ton avec le texte. */
     ['msc_chat', 'ton', "ADD COLUMN ton VARCHAR(16) NULL AFTER cout_eur"],
     ['msc_analyse', 'ton', "ADD COLUMN ton VARCHAR(16) NULL AFTER strava_lu"],
+    /* La coche « séance faite » de l'athlète, à côté de ce que Strava dit. */
+    ['msc_journal', 'fait',
+      "ADD COLUMN fait TINYINT(1) NULL COMMENT '1 : l''athlète l''a dite faite ; 0 : pas faite ; NULL : rien dit — Strava compte à part' AFTER sommeil_h"],
   ];
   for (const [table, colonne, ddl] of AJOUTS) {
     const [[{ n }]] = await cnx.query(
@@ -104,6 +107,12 @@ try {
          'Récup 25 min · 6:30/km, deux heures après le repas',
          'Regeneracja 25 min · 6:30/km, dwie godziny po posiłku')`,
       "SELECT 1 FROM msc_type WHERE code = 'recup'"],
+    /* Les deux statuts qui manquaient à la semaine : faite autrement (orange)
+       et manquée (rouge). Sans parent : pas de condition. */
+    ['msc_statut', 'code', 'partiel',
+      "INSERT INTO msc_statut (code, icon, couleur) VALUES ('partiel', 'circle-minus', '#BA7517')"],
+    ['msc_statut', 'code', 'manque',
+      "INSERT INTO msc_statut (code, icon, couleur) VALUES ('manque', 'circle-x', '#D85A30')"],
   ];
   for (const [table, cle, valeur, sql, condition] of LIGNES) {
     const [[{ n }]] = await cnx.query(`SELECT COUNT(*) AS n FROM \`${table}\` WHERE \`${cle}\` = ?`, [valeur]);

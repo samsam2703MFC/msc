@@ -212,6 +212,8 @@ export interface EcritureJournal {
   douleurs?: string[];
   /** Ce qui a bloqué — codes de `LIMITES` ; `['rien']` quand rien n'a bloqué. */
   limites?: string[];
+  /** La coche « faite » : vrai, faux, ou null pour ne pas y toucher. */
+  fait?: boolean | null;
 }
 
 export function ecrireJournal(corps: EcritureJournal) {
