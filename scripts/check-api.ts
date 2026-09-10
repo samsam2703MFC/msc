@@ -443,31 +443,6 @@ try {
   check('les références du plan deviennent celles de l’athlète',
     Number(refs?.ref_actuelle_s) === 336 && Number(refs?.ref_cible_s) === 300, JSON.stringify(refs));
 
-  /* Un enchaînement se vise partie par partie, et les parties se relisent. */
-  const multi = await c2c.appel('/api/plan', {
-    method: 'POST',
-    body: JSON.stringify({
-      nom: 'Plan multi du contrôle',
-      blocs: genere.blocs, semaines: genere.semaines, sessions: genere.sessions,
-      objectifs: [{
-        date: '2031-04-13', nom: 'Triathlon du contrôle', cible_s: 9000, distance_km: 51.5,
-        principal: true, type_course: 'tri_olympique',
-        parties: [
-          { discipline: 'natation', cible_s: 1560 },
-          { discipline: 'velo', cible_s: 4080 },
-          { discipline: 'cap', cible_s: 2700 },
-        ],
-      }],
-    }),
-  });
-  const vuMulti = await c2c.appel('/api/db/instantane');
-  const objMulti = vuMulti.corps.msc_objectif?.[0];
-  check('un objectif d’enchaînement garde le chrono de chaque partie',
-    multi.statut === 200 && objMulti?.type_course === 'tri_olympique'
-      && objMulti?.parties?.length === 3 && objMulti.parties[2].cible_s === 2700
-      && objMulti.parties[2].discipline === 'cap',
-    JSON.stringify(objMulti?.parties));
-
   /* Un refus de forme est une réponse, pas une panne : il doit se lire. */
   const vide = await c2c.appel('/api/plan', {
     method: 'POST', body: JSON.stringify({ blocs: [], sessions: [] }),
@@ -532,6 +507,34 @@ try {
     retiree.statut === 200
       && rendue.corps.msc_session.find((x: any) => x.id === cible.id).duree_min === cible.duree_min,
     String(rendue.corps.msc_session.find((x: any) => x.id === cible.id).duree_min));
+
+  /* Un enchaînement se vise partie par partie, et les parties se relisent.
+     En dernier : enregistrer un plan remplace l'actif, et tout ce qui précède
+     lit les séances du premier. */
+  const multi = await c2c.appel('/api/plan', {
+    method: 'POST',
+    body: JSON.stringify({
+      nom: 'Plan multi du contrôle',
+      blocs: genere.blocs, semaines: genere.semaines, sessions: genere.sessions,
+      objectifs: [{
+        date: '2031-04-13', nom: 'Triathlon du contrôle', cible_s: 9000, distance_km: 51.5,
+        principal: true, type_course: 'tri_olympique',
+        parties: [
+          { discipline: 'natation', cible_s: 1560 },
+          { discipline: 'velo', cible_s: 4080 },
+          { discipline: 'cap', cible_s: 2700 },
+        ],
+      }],
+    }),
+  });
+  const vuMulti = await c2c.appel('/api/db/instantane');
+  const objMulti = vuMulti.corps.msc_objectif?.[0];
+  check('un objectif d’enchaînement garde le chrono de chaque partie',
+    multi.statut === 200 && objMulti?.type_course === 'tri_olympique'
+      && objMulti?.parties?.length === 3 && objMulti.parties[2].cible_s === 2700
+      && objMulti.parties[2].discipline === 'cap',
+    JSON.stringify(objMulti?.parties));
+
 
   /* Le back office de l'admin — ce que `npm run compte` fait en ligne de
      commande, par l'API. Le rôle se lit en base à chaque requête : on promeut
