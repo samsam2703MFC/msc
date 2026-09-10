@@ -9,8 +9,10 @@
    (faite) et celle des sept à venir (prévue), dans la même unité pour se
    comparer. Et les deux mesures, avec leur écart à la ligne de base. */
 
+import { useState } from 'react';
 import type { ApercuAthlete, Lang, NiveauForme } from '../data/types';
 import { C, F, R } from '../design/theme';
+import { FormeCourbes } from './FormeCourbes';
 import { Icon } from './Icon';
 
 const ETAT: Record<NiveauForme, { icon: string; fr: string; pl: string }> = {
@@ -90,8 +92,31 @@ function Ecart({ actuel, base, unite, hausseBonne }: {
   );
 }
 
+/* Les deux courbes, repliées sous la jauge : la carte d'un athlète reste
+   courte tant qu'on ne les demande pas. */
+function CourbesRepliees({ a, lang }: { a: Pick<ApercuAthlete, 'courbes'>; lang: Lang }) {
+  const [ouvert, setOuvert] = useState(false);
+  if (!a.courbes) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button
+        type="button"
+        className="msc-hover-accent"
+        aria-expanded={ouvert}
+        onClick={() => setOuvert((v) => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: C.inkSecondary, alignSelf: 'flex-start' }}
+      >
+        <Icon name="trending-up" size={14} />
+        {lang === 'fr' ? 'Base endurance et récupération HRV' : 'Baza wytrzymałościowa i regeneracja HRV'}
+        <Icon name="chevron-right" size={13} style={{ transform: ouvert ? 'rotate(90deg)' : undefined }} />
+      </button>
+      {ouvert && <FormeCourbes courbes={a.courbes} lang={lang} compact />}
+    </div>
+  );
+}
+
 export function FormeJauge({ a, lang, compact = false }: {
-  a: Pick<ApercuAthlete, 'forme' | 'mesure' | 'base' | 'charge'>;
+  a: Pick<ApercuAthlete, 'forme' | 'mesure' | 'base' | 'charge' | 'courbes'>;
   lang: Lang;
   compact?: boolean;
 }) {
@@ -101,10 +126,13 @@ export function FormeJauge({ a, lang, compact = false }: {
 
   if (!forme) {
     return (
-      <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.4 }}>
-        {fr
-          ? 'Pas encore de forme lisible : il faut une FC de repos ou une HRV du matin, et de quoi les comparer.'
-          : 'Brak danych o formie: potrzebne tętno spoczynkowe lub HRV i punkt odniesienia.'}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.4 }}>
+          {fr
+            ? 'Pas encore de forme lisible : il faut une FC de repos ou une HRV du matin, et de quoi les comparer.'
+            : 'Brak danych o formie: potrzebne tętno spoczynkowe lub HRV i punkt odniesienia.'}
+        </div>
+        <CourbesRepliees a={a} lang={lang} />
       </div>
     );
   }

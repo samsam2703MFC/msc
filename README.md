@@ -928,8 +928,10 @@ says where its value comes from, because a setting that looks active without
 being so is worse than no setting.
 
 What is there today: the engine's tolerances (drift, pace gap, overload), the
-form thresholds (resting HR delta, HRV drop), the coach model, the Anthropic
-key, the Strava application, the password floor. The browser gets the
+form thresholds (resting HR delta, HRV drop, the HRV baseline window) and the
+form curves' constants (the base's 42 days, fatigue's 7, the window shown),
+the coach model, the Anthropic key, the Strava application, the password
+floor. The browser gets the
 non-secret subset in the snapshot (`msc_param`) and reads it through
 `db.param(cle, defaut)`; the server reads through `param(cle)` with a
 fifteen-second cache that a write invalidates.
@@ -954,6 +956,30 @@ can be behind it, and the server now names which:
 `cle_illisible`. `journalctl -u msc` carries the same line at startup and on
 every refused call. A key with no credit left (`credit balance is too low`)
 and an unknown model (`coach.modele`) get their own messages too.
+
+### The form curves — base endurance and HRV recovery
+
+The gauge reads one morning; two curves on the État de forme screen (and,
+folded under the gauge, on each athlete's card in the back office) read
+weeks. **Base endurance** is the session load (duration × RPE, the workbook's
+own unit) smoothed the Banister way — an exponential moving average with a
+42-day constant — and, in the same frame because it is the same unit,
+**fatigue**: the same load with a 7-day constant. A day without activity
+counts zero and pulls both down. The RPE is the one felt that day when the
+journal has it, else the matched session's target, else 5 — the same rule
+the ACWR metric uses now. **Récupération** is each morning's HRV against the
+mean of the thirty mornings before it (the gauge's own baseline), with a
+filled dot on the mornings that fell under the alert threshold.
+
+`server/forme.mjs` computes both; nothing is stored. The snapshot carries
+them as `courbes`, the coach view as `courbes` on each athlete, and the four
+constants are settings (`forme.base_jours`, `forme.fatigue_jours`,
+`forme.courbe_jours`, `forme.hrv_base_jours`). The chart (`Courbes.tsx`) is
+the multi-series sibling of `Courbe`: one axis, one unit, a 2 px line per
+series, a legend from two series up with the name in ink next to a stroke of
+the colour, a direct label at each line's end, a crosshair under the finger.
+Emerald and amber are the only pair of the theme that passes the
+colour-vision separation check in one frame, which is why fatigue is amber.
 
 ### Athlètes, Calendrier, and what the coach was asked
 

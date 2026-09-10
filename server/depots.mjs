@@ -22,6 +22,7 @@
    même RPE. */
 
 import { lignes, ligne, transaction } from './bd.mjs';
+import { chargeParJour, courbesDeForme } from './forme.mjs';
 import { palierDeAthlete } from './niveau.mjs';
 import { param, publics as paramsPublics } from './params.mjs';
 
@@ -353,12 +354,9 @@ async function lesCompetitions(athleteId) {
    vraiment ; les deux autres restent sans valeur tant que la donnée n'est pas
    là, plutôt que d'afficher un chiffre inventé. */
 function metriques(base) {
-  const parJour = new Map();
-  const rpe = new Map(base.msc_journal.map((j) => [j.date, j.rpe_ressenti]));
-  for (const a of base.msc_activity) {
-    const charge = a.duree_min * (rpe.get(a.date) || 5);
-    parJour.set(a.date, (parJour.get(a.date) ?? 0) + charge);
-  }
+  /* La même charge par jour que les courbes de forme : le RPE ressenti, sinon
+     celui que la séance appariée visait, sinon 5. */
+  const parJour = chargeParJour({ activites: base.msc_activity, journal: base.msc_journal, sessions: base.msc_session });
 
   const jours = [...parJour.keys()].sort();
   const serieCharge = jours.map((j) => parJour.get(j) ?? 0);
@@ -420,7 +418,27 @@ export async function instantane(athleteId) {
     plan: plan ? { id: plan.id, nom: plan.nom, origine: plan.origine, debut: plan.debut, fin: plan.fin } : null,
   };
 
-  return { ...base, msc_metric: metriques(base), servi_le: new Date().toISOString() };
+  return {
+    ...base,
+    msc_metric: metriques(base),
+    courbes: courbesDeForme(
+      { activites: base.msc_activity, journal: base.msc_journal, mesures: base.msc_mesure, sessions: base.msc_session },
+      await reglagesDesCourbes(),
+    ),
+    servi_le: new Date().toISOString(),
+  };
+}
+
+/** Les constantes des courbes de forme, telles que le back office les règle. */
+async function reglagesDesCourbes() {
+  const n = async (cle, defaut) => Number(await param(cle)) || defaut;
+  return {
+    tauBase: await n('forme.base_jours', 42),
+    tauFatigue: await n('forme.fatigue_jours', 7),
+    jours: await n('forme.courbe_jours', 84),
+    hrvBaseJours: await n('forme.hrv_base_jours', 30),
+    hrvChute: (await n('forme.hrv_chute_pct', 10)) / 100,
+  };
 }
 
 /* ============================================================ la vue coach */
@@ -465,12 +483,13 @@ async function apercuDe({ id, droit }) {
   /* La HRV n'a pas de ligne de base sur l'athlète comme la FC de repos : elle
      se lit sur les trente jours qui précèdent la dernière mesure, celle-ci
      exclue — sinon la mesure se comparerait à elle-même. */
+  const reglages = await reglagesDesCourbes();
   const hrvBase = mesure
     ? (await ligne(
         `SELECT AVG(hrv_ms) AS h FROM msc_mesure
          WHERE athlete_id = :a AND etat = 'confirme' AND hrv_ms IS NOT NULL
-           AND date < :d1 AND date >= DATE_SUB(:d2, INTERVAL 30 DAY)`,
-        { a: id, d1: mesure.date, d2: mesure.date },
+           AND date < :d1 AND date >= DATE_SUB(:d2, INTERVAL :n DAY)`,
+        { a: id, d1: mesure.date, d2: mesure.date, n: reglages.hrvBaseJours },
       ))?.h
     : null;
   const base = {
@@ -591,7 +610,21 @@ async function apercuDe({ id, droit }) {
     base,
     forme: forme(mesure, base, await seuilsForme()),
     charge: { passee_7j: Number(passee?.c ?? 0), a_venir_7j: Number(aVenir?.c ?? 0) },
+    /* Les deux courbes, pour la carte du back office — lues de la même
+       façon que pour l'athlète lui-même. */
+    courbes: courbesDeForme(await vecuPourLesCourbes(id, plan?.id), reglages),
   };
+}
+
+/** Ce que les courbes lisent, sans passer par tout l'instantané. */
+async function vecuPourLesCourbes(athleteId, planId) {
+  const [activites, journal, mesures, sessions] = await Promise.all([
+    lignes('SELECT date, session_id, duree_min FROM msc_activity WHERE athlete_id = :a', { a: athleteId }),
+    lignes('SELECT date, rpe_ressenti FROM msc_journal WHERE athlete_id = :a', { a: athleteId }),
+    lignes("SELECT date, hrv_ms, etat FROM msc_mesure WHERE athlete_id = :a AND etat = 'confirme'", { a: athleteId }),
+    planId ? lignes('SELECT id, rpe_cible FROM msc_session WHERE plan_id = :p', { p: planId }) : Promise.resolve([]),
+  ]);
+  return { activites, journal, mesures, sessions };
 }
 
 /**

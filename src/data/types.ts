@@ -202,6 +202,32 @@ export interface MscDaily {
 /** La définition d'une métrique. `valeur` et `serie` se calculent depuis les
     activités et les mesures : elles manquent tant qu'il n'y a pas de quoi les
     calculer, et l'écran le dit plutôt que de peindre un chiffre inventé. */
+/** Un jour de la base endurance : la charge du jour (durée × RPE), et les
+    deux lissages — long (la base) et court (la fatigue). */
+export interface CourbeCharge {
+  date: string;
+  charge: number;
+  base: number;
+  fatigue: number;
+}
+
+/** Un matin de HRV, contre la moyenne des jours d'avant ; `sous` quand la
+    chute dépasse le seuil réglé. */
+export interface CourbeHrv {
+  date: string;
+  hrv: number;
+  base: number | null;
+  sous: boolean;
+}
+
+/** Les courbes de forme, calculées par le serveur — pour l'écran État de
+    forme et la carte du back office. */
+export interface MscCourbes {
+  charge: CourbeCharge[];
+  hrv: CourbeHrv[];
+  tau: { base: number; fatigue: number; hrv_base: number };
+}
+
 export interface MscMetric {
   code: string;
   icon: IconName;
@@ -668,4 +694,5 @@ export interface ApercuAthlete {
   /** Absent quand rien ne permet de la lire — jamais un 10 par défaut. */
   forme: { score: number; niveau: NiveauForme; alertes: string[] } | null;
   charge: { passee_7j: number; a_venir_7j: number };
+  courbes?: MscCourbes;
 }

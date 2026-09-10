@@ -150,6 +150,24 @@ try {
     base.msc_zone[0].code === 'recup' && base.msc_zone[7].code === 'vma');
   check('les libellés sont en deux langues',
     Boolean(base.msc_ui?.fr?.anaIdle && base.msc_ui?.pl?.anaIdle));
+  /* Les courbes de forme : calculées par le serveur sur les activités du
+     seed, jamais stockées. La base d'une activité lissée sur 42 jours vaut
+     durée × RPE / 42 le premier jour — strictement plus que zéro. */
+  const courbes = base.courbes;
+  check('les courbes de forme voyagent avec l’instantané',
+    Array.isArray(courbes?.charge) && Array.isArray(courbes?.hrv) && courbes?.tau?.base === 42
+      && courbes?.tau?.fatigue === 7 && courbes?.tau?.hrv_base === 30,
+    JSON.stringify(courbes?.tau));
+  check('la base endurance se construit sur les activités',
+    courbes?.charge.length > 0 && courbes.charge[courbes.charge.length - 1].base > 0
+      && courbes.charge.every((d: any) => d.fatigue >= 0 && typeof d.date === 'string'),
+    `${courbes?.charge.length} jours · base ${courbes?.charge.at(-1)?.base} · fatigue ${courbes?.charge.at(-1)?.fatigue}`);
+
+  const apercu = await c.appel('/api/apercu');
+  check('la vue coach porte les mêmes courbes',
+    apercu.statut === 200 && Array.isArray(apercu.corps.athletes?.[0]?.courbes?.charge)
+      && apercu.corps.athletes[0].courbes.charge.length === courbes?.charge.length,
+    `${apercu.statut} · ${apercu.corps.athletes?.[0]?.courbes?.charge?.length}`);
 
   const seuil = base.msc_session.find((s: any) => s.id === 1052);
   check('la séance du classeur ressort entière',

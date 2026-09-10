@@ -145,8 +145,11 @@ try {
 
   await page.click('text=Forme');
   await page.waitForTimeout(500);
+  const ecranForme = await page.locator('body').innerText();
   check('une métrique sans données le dit au lieu d’inventer un chiffre',
-    /Pas encore assez de données|—/.test(await page.locator('body').innerText()));
+    /Pas encore assez de données|—/.test(ecranForme));
+  check('les deux courbes de forme sont là : base endurance et récupération HRV',
+    /Base endurance/.test(ecranForme) && /Récupération · HRV/.test(ecranForme));
 
   /* La photo, de bout en bout, dans le navigateur : l'entrée fichier est
      cachée derrière un bouton, la carte de proposition apparaît, l'athlète

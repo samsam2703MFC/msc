@@ -1,8 +1,9 @@
-/* État de forme — les quatre métriques calculées sur les activités et le
-   journal, et la mesure du jour : le poids et la FC de repos, lus sur une photo
-   de la balance.
+/* État de forme — la mesure du jour (le poids et la FC de repos, lus sur une
+   photo de la balance), les deux courbes de forme (la base endurance, la
+   récupération HRV), puis les quatre métriques calculées sur les activités et
+   le journal.
 
-   Chaque carte est une valeur, sa série de 28 jours, et la formule derrière. */
+   Chaque carte est une valeur, sa série, et la formule derrière. */
 
 import { useRef, useState } from 'react';
 
@@ -10,6 +11,7 @@ import * as api from '../data/api';
 import * as db from '../data/db';
 import type { Lang, MesureAttente } from '../data/types';
 import { C, F, R } from '../design/theme';
+import { FormeCourbes } from '../components/FormeCourbes';
 import { Icon } from '../components/Icon';
 import { BarChart, Card, Mono, bars } from '../components/primitives';
 import type { App } from '../state/useApp';
@@ -21,6 +23,8 @@ export function FormScreen({ app }: { app: App }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <MesureCard app={app} />
+
+      <FormeCourbes courbes={db.courbes} lang={lang} />
 
       {metrics.map((m) => (
         <Card key={m.code} padding="16px 18px">

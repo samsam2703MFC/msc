@@ -13,7 +13,7 @@
 
 import type {
   Lang, MscActivity, MscAdaptation, MscAjustement, MscAnalyse, MscAthlete, MscBloc,
-  MscCompetition, MscDaily, MscEcart, MscExcuse, MscJournal, MscMetric, MscObjectif,
+  MscCompetition, MscCourbes, MscDaily, MscEcart, MscExcuse, MscJournal, MscMetric, MscObjectif,
   MesureAttente, MscMesure, MscParamPublic, MscPlanSession, MscPlanWeek, MscRegle, MscRpe,
   MscSource, MscStatut, MscType, MscUiStrings, MscZoneDef,
 } from './types';
@@ -69,12 +69,15 @@ export let derniereSemaine = 0;
 export let chargee = false;
 export let athleteId: number | null = null;
 export let droit: 'lecture' | 'ecriture' = 'lecture';
+/** Les courbes de forme : calculées par le serveur, pas une table. */
+export let courbes: MscCourbes | null = null;
 
 /** Ce que `/api/db/instantane` rend, tel quel. */
 export type Instantane = Partial<typeof tables> & {
   msc_ui?: Record<Lang, MscUiStrings>;
   athlete_id?: number;
   droit?: 'lecture' | 'ecriture';
+  courbes?: MscCourbes;
 };
 
 /** Remplit les tables. Chaque table est remplacée en place, jamais réaffectée :
@@ -97,6 +100,7 @@ export function charger(instantane: Instantane): void {
   derniereSemaine = tables.msc_week[tables.msc_week.length - 1]?.semaine ?? 0;
   athleteId = instantane.athlete_id ?? null;
   droit = instantane.droit ?? 'lecture';
+  courbes = instantane.courbes ?? null;
   chargee = tables.msc_athlete.length > 0;
 }
 
@@ -112,5 +116,6 @@ export function vider(): void {
   derniereSemaine = 0;
   athleteId = null;
   droit = 'lecture';
+  courbes = null;
   chargee = false;
 }

@@ -16,7 +16,7 @@ import type { Lang, MscType, MscUiStrings, TypeCode } from './types';
 export * from './engine';
 /* `chargee`, pas `charge` : le moteur exporte déjà `charge(durée, RPE)`,
    la charge de Foster, et deux noms identiques en masqueraient un. */
-export { charger, vider, chargee, athleteId, droit } from './vives';
+export { charger, vider, chargee, athleteId, droit, courbes } from './vives';
 export type { Instantane } from './vives';
 
 const arrayTables = tables;

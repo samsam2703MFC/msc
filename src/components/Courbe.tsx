@@ -37,7 +37,7 @@ const RAYON = 4.5;
    Cette largeur sert avant la première mesure, le temps d'un rendu. */
 const LARGEUR_DEFAUT = 320;
 
-function useLargeur() {
+export function useLargeur() {
   const cadre = useRef<HTMLDivElement>(null);
   const [largeur, setLargeur] = useState(LARGEUR_DEFAUT);
 
