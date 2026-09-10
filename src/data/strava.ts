@@ -65,6 +65,8 @@ export interface Quotas {
 }
 
 export interface EtatStrava {
+  /** Les identifiants qui valent pour cet athlète sont les siens, pas ceux du serveur. */
+  app_propre?: boolean;
   /** The server has a client id and secret. Without it nothing else is true. */
   configure: boolean;
   /** A verify token is set, so a push subscription is possible. */
@@ -97,17 +99,60 @@ async function appeler<T>(chemin: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export function etat(): Promise<EtatStrava> {
-  return appeler<EtatStrava>('/etat');
+/* Sans athlète nommé, le serveur prend le premier visible du compte — le sien
+   pour un athlète. Le back office en nomme un : c'est msc_acces qui tranche. */
+function chez(chemin: string, athleteId?: number | null, params?: Record<string, string>): string {
+  const q = new URLSearchParams(params);
+  if (athleteId) q.set('athlete', String(athleteId));
+  const t = q.toString();
+  return `${chemin}${t ? `?${t}` : ''}`;
 }
 
-/** Where to send the athlete to say yes. The secret never leaves the server. */
-export function lienAutorisation(): Promise<{ url: string }> {
-  return appeler<{ url: string }>('/lien');
+export function etat(athleteId?: number | null): Promise<EtatStrava> {
+  return appeler<EtatStrava>(chez('/etat', athleteId));
 }
 
-export function delier(): Promise<{ lie: boolean }> {
-  return appeler<{ lie: boolean }>('/delier', { method: 'POST' });
+/** Where to send the athlete to say yes. The secret never leaves the server.
+    `longue` : un lien à envoyer, valable un jour plutôt que dix minutes. */
+export function lienAutorisation(
+  athleteId?: number | null,
+  longue = false,
+): Promise<{ url: string; expire_le: string | null }> {
+  return appeler(chez('/lien', athleteId, longue ? { duree: 'longue' } : undefined));
+}
+
+export function delier(athleteId?: number | null): Promise<{ lie: boolean }> {
+  return appeler<{ lie: boolean }>(chez('/delier', athleteId), { method: 'POST' });
+}
+
+/** L'application Strava propre à un athlète — l'ID se lit, le secret jamais. */
+export interface AppStrava {
+  propre: boolean;
+  client_id: string | null;
+  secret: boolean;
+  illisible: boolean;
+  maj_le: string | null;
+  commune: boolean;
+  commune_client_id: string | null;
+}
+
+export function app(athleteId?: number | null): Promise<AppStrava> {
+  return appeler<AppStrava>(chez('/app', athleteId));
+}
+
+export function ecrireApp(
+  athleteId: number | null | undefined,
+  corps: { client_id: string; client_secret?: string },
+): Promise<AppStrava> {
+  return appeler<AppStrava>(chez('/app', athleteId), {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(corps),
+  });
+}
+
+export function effacerApp(athleteId?: number | null): Promise<AppStrava> {
+  return appeler<AppStrava>(chez('/app', athleteId), { method: 'DELETE' });
 }
 
 export async function activites(

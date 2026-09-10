@@ -979,8 +979,8 @@ plan, and keeping the register of races. A switch rather than a sixth tab — th
 bar already has five, and a back office is not a screen you open every day.
 
 For a `coach` or `admin` account the same tab reads **Admin** and the bar
-grows: Réglages for both roles, **Comptes** and **Système** for the admin
-alone — the passwords of other people and the state of the server are not a
+grows: **Connexions** and Réglages for both roles, **Comptes** and **Système**
+for the admin alone — the passwords of other people and the state of the server are not a
 coach's business. Beyond five sections the segmented control scrolls sideways
 instead of squeezing seven labels into 360 px.
 
@@ -1075,6 +1075,38 @@ can be behind it, and the server now names which:
 `cle_illisible`. `journalctl -u msc` carries the same line at startup and on
 every refused call. A key with no credit left (`credit balance is too low`)
 and an unknown model (`coach.modele`) get their own messages too.
+
+### Connexions — the key, and Strava athlete by athlete
+
+One section, for a `coach` or `admin`, for everything that ties the server to
+the outside: the Anthropic key (the same sealed `msc_param` row as Réglages,
+never read back), the common Strava application (client ID, secret, verify
+token), and then one block per athlete the account can see (every athlete for
+an admin). Each block shows whether Strava is linked — the Strava athlete,
+when it was linked, the last sync — and how many activities have arrived and
+when the last one did; activities sync when the athlete opens the app, not
+from here.
+
+Linking is the athlete's gesture, because it is *their* Strava account that
+answers. So the block offers two ways: **Lien à envoyer** builds an
+authorisation link that stays valid for a day (`/api/strava/lien?duree=longue`)
+to send to the athlete, who opens it on their phone and says yes; **Ouvrir
+ici** opens the same round-trip in a popup, for when the athlete is in front
+of you with their own Strava session. **Délier** revokes and forgets the
+token, after a confirmation.
+
+Then the athlete's own Strava application. A freshly created Strava
+application authorises only the account that created it until Strava has
+reviewed it — a club therefore either gets the common application reviewed,
+or lets each athlete create their own on strava.com/settings/api (callback
+domain: the server's) and paste its ID and secret under their name. The pair
+lives in `msc_strava_app`, the secret sealed like the tokens, and for that
+athlete it replaces the common pair everywhere it matters: the authorisation
+link, the code exchange, the token refresh (`configPour` in
+`server/strava.mjs`). Without one, the common application applies, and the
+block says which of the two is in force. `/api/strava/app` (GET, PUT, DELETE)
+returns the ID and whether a secret is set, never the secret; `check:api`
+walks the round trip and asserts the link carries the athlete's own client ID.
 
 ### Comptes and Système — the admin's back office
 

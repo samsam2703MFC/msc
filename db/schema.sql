@@ -489,6 +489,21 @@ CREATE TABLE IF NOT EXISTS msc_strava_compte (
   CONSTRAINT fk_strava_athlete FOREIGN KEY (athlete_id) REFERENCES msc_athlete (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- L'application Strava propre à un athlète, quand il ne passe pas par celle du
+-- serveur (strava.client_id / client_secret dans msc_param). Strava limite une
+-- application neuve au seul compte qui l'a créée tant qu'elle n'a pas été
+-- revue : chaque athlète peut donc créer la sienne et la poser ici. Le secret
+-- est scellé comme les jetons.
+CREATE TABLE IF NOT EXISTS msc_strava_app (
+  athlete_id     INT UNSIGNED NOT NULL,
+  client_id      VARCHAR(40) NOT NULL,
+  client_secret  VARBINARY(512) NOT NULL COMMENT 'scellé : iv || tag || chiffré',
+  cree_le        DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  maj_le         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (athlete_id),
+  CONSTRAINT fk_strava_app_athlete FOREIGN KEY (athlete_id) REFERENCES msc_athlete (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Les événements poussés par le webhook. Strava ne les signe pas, alors on
 -- garde qui les a envoyés : un événement qui ne nomme pas l'athlète dont on
 -- détient le jeton n'est pas le nôtre.

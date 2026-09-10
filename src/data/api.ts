@@ -451,6 +451,36 @@ export function majAcces(corps: {
   return appeler('/admin/acces', { method: 'PUT', body: JSON.stringify(corps) });
 }
 
+/* Strava, athlète par athlète — la vue du coach ou de l'admin. */
+export interface StravaAthlete {
+  id: number;
+  nom: string;
+  droit: AthleteVisible['droit'];
+  strava: {
+    configure: boolean;
+    app_propre: boolean;
+    lie: boolean;
+    athlete: { id: number; prenom: string; nom: string } | null;
+    portee: string | null;
+    lie_le: string | null;
+    derniere_synchro: string | null;
+  };
+  app: {
+    propre: boolean;
+    client_id: string | null;
+    secret: boolean;
+    illisible: boolean;
+    maj_le: string | null;
+    commune: boolean;
+    commune_client_id: string | null;
+  };
+  activites: { n: number; derniere: string | null };
+}
+
+export function stravaParAthlete(): Promise<{ athletes: StravaAthlete[] }> {
+  return appeler<{ athletes: StravaAthlete[] }>('/admin/strava');
+}
+
 export interface LotDemo {
   code: string;
   quoi: Record<'fr' | 'pl', string>;

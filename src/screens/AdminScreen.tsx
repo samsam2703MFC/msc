@@ -21,6 +21,7 @@ import { CalendrierScreen } from './CalendrierScreen';
 import { ParamScreen } from './ParamScreen';
 import { ComptesScreen } from './ComptesScreen';
 import { SystemeScreen } from './SystemeScreen';
+import { ConnexionsScreen } from './ConnexionsScreen';
 
 /** mm:ss → seconds. */
 function versSecondes(texte: string): number {
@@ -118,8 +119,8 @@ const OBJECTIF_VIDE: Objectif = {
 };
 
 const SECTIONS = {
-  fr: { plan: 'Plan', courses: 'Courses', calendrier: 'Calendrier', athletes: 'Athlètes', param: 'Réglages', comptes: 'Comptes', systeme: 'Système' },
-  pl: { plan: 'Plan', courses: 'Zawody', calendrier: 'Kalendarz', athletes: 'Zawodnicy', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
+  fr: { plan: 'Plan', courses: 'Courses', calendrier: 'Calendrier', athletes: 'Athlètes', connexions: 'Connexions', param: 'Réglages', comptes: 'Comptes', systeme: 'Système' },
+  pl: { plan: 'Plan', courses: 'Zawody', calendrier: 'Kalendarz', athletes: 'Zawodnicy', connexions: 'Połączenia', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
 } as const;
 
 type Section = keyof typeof SECTIONS.fr;
@@ -143,7 +144,7 @@ export function AdminScreen({ app }: { app: App }) {
      du compte : un seul pour un athlète, tous pour un coach. */
   const sections: Section[] = [
     'plan', 'courses', 'calendrier', 'athletes',
-    ...(admin ? (['param'] as Section[]) : []),
+    ...(admin ? (['connexions', 'param'] as Section[]) : []),
     ...(role === 'admin' ? (['comptes', 'systeme'] as Section[]) : []),
   ];
   /* Jusqu'à cinq, les sections se partagent la largeur. Au-delà — l'admin —
@@ -199,6 +200,8 @@ export function AdminScreen({ app }: { app: App }) {
           ? <AthletesScreen app={app} />
           : section === 'param'
             ? <ParamScreen app={app} />
+            : section === 'connexions'
+              ? <ConnexionsScreen app={app} />
             : section === 'comptes'
               ? <ComptesScreen app={app} />
               : section === 'systeme'

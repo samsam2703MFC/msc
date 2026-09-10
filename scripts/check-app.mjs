@@ -320,6 +320,17 @@ try {
     comptesTexte.split('\n').find((l) => l.includes(EMAIL)) ?? '');
   check('et propose d’en créer un, et un athlète',
     /Nouveau compte/i.test(comptesTexte) && /Nouvel athlète/i.test(comptesTexte));
+  await page.getByRole('tab', { name: 'Connexions' }).click();
+  await page.waitForTimeout(900);
+  const connexionsTexte = await page.locator('body').innerText();
+  check('Connexions porte la clé Anthropic, l’application Strava et chaque athlète',
+    /Clé Anthropic/i.test(connexionsTexte) && /Application Strava commune/i.test(connexionsTexte)
+      && /Strava · non connecté|Strava · connecté/.test(connexionsTexte),
+    connexionsTexte.split('\n').find((l) => /Strava · /.test(l)) ?? '');
+  await page.getByRole('button', { name: /Renseigner une application propre/ }).first().click();
+  await page.waitForTimeout(400);
+  check('et l’application propre d’un athlète se saisit là',
+    (await page.getByLabel('ID client', { exact: true }).count()) >= 1);
   await page.getByRole('tab', { name: 'Système' }).click();
   await page.waitForTimeout(900);
   const systemeTexte = await page.locator('body').innerText();

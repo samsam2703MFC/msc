@@ -41,6 +41,9 @@ const MARGE_S = 120;
 
 /* An OAuth round-trip that takes longer than this was abandoned. */
 const ETAT_TTL_MS = 10 * 60 * 1000;
+/* Un lien fabriqué par le coach pour l'envoyer à l'athlète vit plus longtemps :
+   il sera ouvert plus tard, sur un autre appareil. */
+export const ETAT_TTL_LONG_MS = 24 * 60 * 60 * 1000;
 
 const PAGE = 100;
 const PAGES_MAX = 10;
@@ -72,6 +75,79 @@ export function config() {
 export function configure() {
   const c = config();
   return Boolean(c.clientId && c.clientSecret);
+}
+
+/* --------------------------------------------- l'application d'un athlète */
+
+/* Strava limite une application neuve au seul compte qui l'a créée tant
+   qu'elle n'a pas été revue. Un club a donc deux voies : faire revoir
+   l'application du serveur, ou laisser chaque athlète créer la sienne sur son
+   propre compte Strava et la poser ici. Les identifiants d'un athlète valent
+   alors pour lui seul — l'autorisation, l'échange du code, le rafraîchissement
+   des jetons — et le reste passe par l'application commune. */
+
+async function appDe(athleteId) {
+  const r = await ligne(
+    'SELECT client_id, client_secret, maj_le FROM msc_strava_app WHERE athlete_id = :a',
+    { a: athleteId },
+  );
+  if (!r) return null;
+  let secret = null;
+  try {
+    secret = desceller(r.client_secret);
+  } catch {
+    /* Scellé avec une autre MSC_SECRET_KEY : on le dit, on ne s'en sert pas. */
+    secret = null;
+  }
+  return { client_id: r.client_id, client_secret: secret, illisible: secret === null, maj_le: r.maj_le };
+}
+
+/** Ce que l'écran peut savoir de l'application d'un athlète : l'ID, jamais le
+    secret — et si, faute d'application propre, c'est la commune qui vaut. */
+export async function appPublique(athleteId) {
+  const a = await appDe(athleteId);
+  const c = config();
+  return {
+    propre: Boolean(a),
+    client_id: a?.client_id ?? null,
+    secret: Boolean(a?.client_secret),
+    illisible: Boolean(a?.illisible),
+    maj_le: a?.maj_le ?? null,
+    commune: Boolean(c.clientId && c.clientSecret),
+    commune_client_id: c.clientId || null,
+  };
+}
+
+export async function ecrireApp(athleteId, { client_id, client_secret } = {}) {
+  const id = String(client_id ?? '').trim();
+  if (!/^\d{1,40}$/.test(id)) throw new StravaError('L’ID client Strava est un nombre (celui de strava.com/settings/api).', 400);
+  const secret = String(client_secret ?? '').trim();
+  if (secret) {
+    await bd().execute(
+      `INSERT INTO msc_strava_app (athlete_id, client_id, client_secret) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE client_id = VALUES(client_id), client_secret = VALUES(client_secret)`,
+      [athleteId, id, sceller(secret)],
+    );
+  } else {
+    /* Sans nouveau secret on garde l'ancien — encore faut-il qu'il y en ait un. */
+    const [r] = await bd().execute('UPDATE msc_strava_app SET client_id = ? WHERE athlete_id = ?', [id, athleteId]);
+    if (r.affectedRows === 0) throw new StravaError('Le secret client Strava est obligatoire la première fois.', 400);
+  }
+  return appPublique(athleteId);
+}
+
+export async function effacerApp(athleteId) {
+  await bd().execute('DELETE FROM msc_strava_app WHERE athlete_id = ?', [athleteId]);
+  return appPublique(athleteId);
+}
+
+/** Les identifiants qui valent pour cet athlète : les siens s'il en a, sinon
+    ceux du serveur. */
+export async function configPour(athleteId) {
+  const c = config();
+  const a = athleteId ? await appDe(athleteId) : null;
+  if (a?.client_secret) return { ...c, clientId: a.client_id, clientSecret: a.client_secret, propre: true };
+  return { ...c, propre: false };
 }
 
 /* -------------------------------------------------------------- le magasin */
@@ -139,24 +215,25 @@ async function athleteDeStrava(stravaAthleteId) {
 const etats = new Map();
 
 function purgerEtats() {
-  const limite = Date.now() - ETAT_TTL_MS;
-  for (const [cle, v] of etats) if (v.ne < limite) etats.delete(cle);
+  const maintenant = Date.now();
+  for (const [cle, v] of etats) if (v.ne + (v.ttl ?? ETAT_TTL_MS) < maintenant) etats.delete(cle);
 }
 
 /** The URL to send the athlete to. The `state` comes back with them — et il
     porte de quel athlète il s'agit, parce que le retour de Strava est une
     navigation neuve, sans rien de la requête qui l'a demandée. */
-export function lienAutorisation(athleteId) {
-  const c = config();
-  if (!configure()) {
+export async function lienAutorisation(athleteId, { duree } = {}) {
+  const c = await configPour(athleteId);
+  if (!(c.clientId && c.clientSecret)) {
     throw new StravaError(
-      "Strava n'est pas configuré sur le serveur. Renseigne STRAVA_CLIENT_ID et STRAVA_CLIENT_SECRET (voir .env.example).",
+      "Strava n'est pas configuré : ni application propre à cet athlète, ni application commune (Réglages · Strava, ou STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET).",
       501,
     );
   }
   purgerEtats();
   const etat = randomBytes(16).toString('hex');
-  etats.set(etat, { athleteId, ne: Date.now() });
+  const ttl = duree ?? ETAT_TTL_MS;
+  etats.set(etat, { athleteId, ne: Date.now(), ttl });
 
   const params = new URLSearchParams({
     client_id: c.clientId,
@@ -167,7 +244,7 @@ export function lienAutorisation(athleteId) {
     scope: PORTEE,
     state: etat,
   });
-  return { url: `${AUTORISATION}?${params}`, etat };
+  return { url: `${AUTORISATION}?${params}`, etat, expire_le: new Date(Date.now() + ttl).toISOString() };
 }
 
 function consommerEtat(etat) {
@@ -206,7 +283,7 @@ async function postJeton(corps) {
 export async function echangerCode(code, etat) {
   const athleteId = consommerEtat(etat);
   if (!code) throw new StravaError('Code d’autorisation absent.', 400);
-  const c = config();
+  const c = await configPour(athleteId);
 
   const data = await postJeton({
     client_id: c.clientId,
@@ -239,7 +316,7 @@ async function jeton(athleteId) {
   const dans = (etat.expires_at ?? 0) - Math.floor(Date.now() / 1000);
   if (dans > MARGE_S) return etat.access_token;
 
-  const c = config();
+  const c = await configPour(athleteId);
   const data = await postJeton({
     client_id: c.clientId,
     client_secret: c.clientSecret,
@@ -532,10 +609,11 @@ export function evenementsDepuis(athleteId, iso) {
 
 /** Everything the app is allowed to know. No token ever appears here. */
 export async function etat(athleteId) {
-  const c = config();
+  const c = await configPour(athleteId);
   const s = await lire(athleteId);
   return {
-    configure: configure(),
+    configure: Boolean(c.clientId && c.clientSecret),
+    app_propre: c.propre,
     webhook: Boolean(c.verifyToken),
     lie: Boolean(s),
     athlete: s ? { id: s.strava_athlete_id, prenom: s.prenom, nom: s.nom } : null,

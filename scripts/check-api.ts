@@ -499,6 +499,33 @@ try {
   /* Le back office de l'admin — ce que `npm run compte` fait en ligne de
      commande, par l'API. Le rôle se lit en base à chaque requête : on promeut
      le compte de contrôle par SQL, sans se reconnecter. */
+  /* L'application Strava propre à un athlète : l'ID se lit, le secret jamais,
+     et sans elle c'est l'application commune qui vaut. */
+  console.log('\n=== l’application Strava d’un athlète ===');
+  const appAvant = await c.appel('/api/strava/app');
+  check('sans application propre, l’athlète passe par la commune', appAvant.statut === 200 && appAvant.corps.propre === false,
+    JSON.stringify(appAvant.corps));
+  const appIllisible = await c.appel('/api/strava/app', { method: 'PUT', body: JSON.stringify({ client_id: 'abc', client_secret: 'x' }) });
+  check('un ID client qui n’est pas un nombre est refusé', appIllisible.statut === 400, appIllisible.corps.erreur);
+  const appSansSecret = await c.appel('/api/strava/app', { method: 'PUT', body: JSON.stringify({ client_id: '424242' }) });
+  check('et la première fois, le secret est obligatoire', appSansSecret.statut === 400, appSansSecret.corps.erreur);
+  const appPosee = await c.appel('/api/strava/app', { method: 'PUT', body: JSON.stringify({ client_id: '424242', client_secret: 'secret-de-controle' }) });
+  check('une application propre se pose : l’ID revient, le secret non',
+    appPosee.statut === 200 && appPosee.corps.propre === true && appPosee.corps.client_id === '424242'
+      && appPosee.corps.secret === true && !JSON.stringify(appPosee.corps).includes('secret-de-controle'),
+    JSON.stringify(appPosee.corps));
+  const etatPropre = await c.appel('/api/strava/etat');
+  check('l’état Strava dit alors « configuré », par l’application propre',
+    etatPropre.statut === 200 && etatPropre.corps.configure === true && etatPropre.corps.app_propre === true,
+    JSON.stringify({ configure: etatPropre.corps.configure, propre: etatPropre.corps.app_propre }));
+  const lienPropre = await c.appel('/api/strava/lien?duree=longue');
+  check('et le lien d’autorisation porte cet ID, valable un jour',
+    lienPropre.statut === 200 && /client_id=424242/.test(lienPropre.corps.url ?? '') && typeof lienPropre.corps.expire_le === 'string'
+      && Date.parse(lienPropre.corps.expire_le) - Date.now() > 20 * 3600 * 1000,
+    `${lienPropre.statut} ${lienPropre.corps.expire_le ?? lienPropre.corps.erreur ?? ''}`);
+  const appEffacee = await c.appel('/api/strava/app', { method: 'DELETE' });
+  check('l’effacer ramène à l’application commune', appEffacee.statut === 200 && appEffacee.corps.propre === false);
+
   console.log('\n=== le back office ===');
   const refuseAdmin = await c.appel('/api/admin/comptes');
   check('les comptes sont refusés à un athlète', refuseAdmin.statut === 403, String(refuseAdmin.statut));
@@ -581,6 +608,14 @@ try {
       && typeof systeme.corps.cle_illisible === 'boolean' && systeme.corps.base?.ok === true
       && Array.isArray(systeme.corps.demo?.athletes) && typeof systeme.corps.demo?.scannes === 'number',
     JSON.stringify({ version: systeme.corps.version, base: systeme.corps.base?.version }));
+  /* Strava, athlète par athlète : l'admin voit tout le monde, un jeton nulle part. */
+  const parAthlete = await c.appel('/api/admin/strava');
+  const moiStrava = parAthlete.corps.athletes?.find((x: any) => x.id === 1);
+  check('Strava se lit athlète par athlète : liaison, application, activités reçues',
+    parAthlete.statut === 200 && typeof moiStrava?.strava?.lie === 'boolean'
+      && typeof moiStrava.app?.propre === 'boolean' && typeof moiStrava.activites?.n === 'number'
+      && !JSON.stringify(parAthlete.corps).includes('token'),
+    JSON.stringify(moiStrava?.strava));
   const sansAthlete = await c.appel('/api/admin/demo', { method: 'POST', body: JSON.stringify({ plan: false }) });
   check('retirer la démonstration exige de nommer l’athlète', sansAthlete.statut === 400, sansAthlete.corps.erreur);
   await bd().execute("UPDATE compte SET role = 'athlete' WHERE email = ?", [EMAIL]);

@@ -266,6 +266,43 @@ export async function ecrireAcces({ compte_id, athlete_id, droit }) {
   return { compte_id: c.id, athlete_id: a.id, droit };
 }
 
+/* ---------------------------------------------------- Strava, par athlète */
+
+export async function tousLesAthletes() {
+  return lignes("SELECT id, nom, 'ecriture' AS droit FROM msc_athlete ORDER BY nom");
+}
+
+/** Pour chaque athlète : la liaison, l'application qui vaut pour lui, et ce
+    qui est déjà arrivé de Strava. Rien qui ressemble à un jeton. */
+export async function stravaParAthlete(athletes) {
+  const sortie = [];
+  for (const a of athletes) {
+    const e = await strava.etat(a.id);
+    const app = await strava.appPublique(a.id);
+    const recu = await ligne(
+      'SELECT COUNT(*) AS n, MAX(date) AS derniere FROM msc_activity WHERE athlete_id = :a AND manuelle = 0',
+      { a: a.id },
+    );
+    sortie.push({
+      id: a.id,
+      nom: a.nom,
+      droit: a.droit,
+      strava: {
+        configure: e.configure,
+        app_propre: e.app_propre,
+        lie: e.lie,
+        athlete: e.athlete,
+        portee: e.portee,
+        lie_le: e.lie_le,
+        derniere_synchro: e.derniere_synchro,
+      },
+      app,
+      activites: { n: Number(recu?.n ?? 0), derniere: recu?.derniere ?? null },
+    });
+  }
+  return sortie;
+}
+
 /* -------------------------------------------------------------- le système */
 
 /** La version que le serveur sert (dist/version.txt), ou null avant un build. */

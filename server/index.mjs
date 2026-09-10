@@ -239,13 +239,25 @@ async function routesStrava(req, res, url, chemin) {
   const publique = await routesPubliquesStrava(req, res, url, chemin);
   if (publique !== null) return publique;
 
-  const { athlete_id } = await athleteDe(req, url, chemin === '/etat' ? 'lecture' : 'ecriture');
+  const lecture = req.method === 'GET' && (chemin === '/etat' || chemin === '/app');
+  const { athlete_id } = await athleteDe(req, url, lecture ? 'lecture' : 'ecriture');
 
   if (chemin === '/etat' && req.method === 'GET') {
     return json(res, 200, await strava.etat(athlete_id));
   }
+  /* `duree=longue` : un lien que le coach envoie à l'athlète, valable un jour
+     plutôt que dix minutes — il sera ouvert plus tard, ailleurs. */
   if (chemin === '/lien' && req.method === 'GET') {
-    return json(res, 200, { url: strava.lienAutorisation(athlete_id).url });
+    const longue = url.searchParams.get('duree') === 'longue';
+    const lien = await strava.lienAutorisation(athlete_id, { duree: longue ? strava.ETAT_TTL_LONG_MS : undefined });
+    return json(res, 200, { url: lien.url, expire_le: lien.expire_le });
+  }
+  /* L'application Strava propre à l'athlète — l'ID se lit, le secret jamais. */
+  if (chemin === '/app') {
+    if (req.method === 'GET') return json(res, 200, await strava.appPublique(athlete_id));
+    if (req.method === 'PUT') return json(res, 200, await strava.ecrireApp(athlete_id, await lireCorps(req, 4_000)));
+    if (req.method === 'DELETE') return json(res, 200, await strava.effacerApp(athlete_id));
+    return json(res, 405, { erreur: 'méthode non autorisée' });
   }
   if (chemin === '/activites' && req.method === 'GET') {
     return json(res, 200, {
@@ -358,6 +370,23 @@ async function router(req, res, url) {
     const corps = await lireCorps(req, 8_000);
     if (!corps.cle) return json(res, 400, { erreur: 'champ manquant : cle' });
     return json(res, 200, { param: await params.ecrire(String(corps.cle), corps.valeur ?? null) });
+  }
+
+  /* Strava, athlète par athlète : pour un coach ses athlètes, pour un admin
+     tous. L'état de la liaison, l'application propre, les activités reçues —
+     jamais un jeton ni un secret. */
+  if (chemin === '/api/admin/strava' && req.method === 'GET') {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    if (!identite.bypass && !['coach', 'admin'].includes(identite.compte.role)) {
+      return json(res, 403, { erreur: 'Réservé à un compte coach ou admin.' });
+    }
+    const athletes = identite.bypass
+      ? [{ id: identite.athlete_id, nom: identite.compte.nom, droit: 'ecriture' }]
+      : identite.compte.role === 'admin'
+        ? await admin.tousLesAthletes()
+        : await athletesVisibles(identite.compte.id);
+    return json(res, 200, { athletes: await admin.stravaParAthlete(athletes) });
   }
 
   /* Le back office : les comptes, les athlètes, les accès, l'état du serveur.
