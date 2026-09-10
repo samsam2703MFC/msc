@@ -130,6 +130,12 @@ try {
   const aujourdhui = await page.locator('body').innerText();
   check('le plan vient de la base', /S\d+/.test(aujourdhui),
     aujourdhui.split('\n').slice(0, 2).join(' · '));
+  /* Hier n'existe pas avant le deuxième jour d'un plan : sur une base où le
+     plan commence aujourd'hui (ou plus tard — la date se cale sur son
+     premier jour), la carte n'a rien à montrer et c'est juste. */
+  check('et la séance d’hier est là, avec son état — ou le plan commence',
+    (/\bhier\b/i.test(aujourdhui) && /(faite|autrement|manquée|repos|adaptée)/i.test(aujourdhui)) || /S1\b/.test(aujourdhui),
+    aujourdhui.split('\n').find((l) => /hier/i.test(l)) ?? 'S1');
 
   console.log('\n=== les écrans ===');
   await page.click('text=Semaine');
@@ -137,6 +143,7 @@ try {
   const semaine = await page.locator('body').innerText();
   check('la semaine montre des séances',
     /Natation|Course|Hyrox|Vélo|Repos/.test(semaine));
+  check('et le plan sur l’année, en tête', /le plan sur l’année · \d+ semaines/i.test(semaine));
   /* Les allures ne sont pas en base : si elles s'affichent, c'est que le moteur
      tourne sur des données venues du serveur. */
   check('et des allures que le moteur a calculées', /\d+:\d\d\/km/.test(semaine),

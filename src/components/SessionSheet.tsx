@@ -5,7 +5,7 @@ import * as db from '../data/db';
 import type { Lang } from '../data/types';
 import { C, R } from '../design/theme';
 import { ChatBar, Conversation } from '../screens/CoachScreen';
-import { visuelDuStatut } from '../screens/WeekScreen';
+import { visuelDuStatut } from '../data/statut';
 import { Icon } from './Icon';
 import { GainPill, SheetHeading } from './SheetHeading';
 import { Card, Grid, IconLine, Mono } from './primitives';

@@ -320,10 +320,18 @@ export function etatDesSeances(): EtatSeances {
 
 const AUCUNE: EtatSeances = { faites: new Set(), partiels: new Set(), manquees: new Set() };
 
+/**
+ * @param aujourdhui  le jour où l'application se tient — la vraie date, ou
+ *                    celle où l'athlète a fait glisser le plan
+ * @param reel        le vrai aujourd'hui : une séance n'est manquée que si
+ *                    ce jour-là est passé pour de bon. Regarder la semaine 20
+ *                    depuis la semaine 1 ne rougit pas les dix-neuf autres.
+ */
 export function statutDe(
   session: MscPlanSession,
   aujourdhui: string,
   etat: EtatSeances = AUCUNE,
+  reel: string = aujourdhuiISO(),
 ): 'repos' | 'fait' | 'partiel' | 'manque' | 'aujourdhui' | 'prevu' {
   if (etat.manquees.has(session.id)) return 'manque';
   if (etat.faites.has(session.id)) return 'fait';
@@ -332,7 +340,7 @@ export function statutDe(
   if (session.date === aujourdhui) return 'aujourdhui';
   /* Passée sans rien : ni activité, ni coche. Le dire en rouge plutôt que de
      la laisser en pointillé comme une séance à venir. */
-  if (session.date < aujourdhui) return 'manque';
+  if (session.date < reel) return 'manque';
   return 'prevu';
 }
 

@@ -6,6 +6,7 @@
 
 import * as db from '../data/db';
 import { appliquerAdaptation } from '../data/analyse';
+import { motDuStatut, visuelDuStatut } from '../data/statut';
 import type { Lang, MscPlanSession } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { CoachAvatar } from '../components/CoachAvatar';
@@ -90,6 +91,8 @@ export function TodayScreen({ app }: { app: App }) {
           </IconLine>
         )}
       </Card>
+
+      <Hier app={app} />
 
       {/* the paces the engine derives for this block */}
       {allures.length > 0 && (
@@ -400,5 +403,63 @@ function Analyse({
         </div>
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ hier */
+
+/* La séance d'hier, et ce qu'elle est devenue : une ligne par séance, l'état
+   dit par une icône et un mot, et la fiche au toucher — c'est là que se dit
+   « faite » ou « pas faite ». Rien avant le premier jour du plan. */
+function Hier({ app }: { app: App }) {
+  const lang = app.lang;
+  const fr = lang === 'fr';
+  const d = new Date(`${app.date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  const hier = d.toISOString().slice(0, 10);
+  const sessions = db
+    .select('msc_session', (s) => s.date === hier)
+    .sort((a, b) => b.duree_min - a.duree_min);
+  if (sessions.length === 0) return null;
+
+  const etat = db.etatDesSeances();
+  const aDire = sessions.some((s) => s.type !== 'repos' && db.statutDe(s, app.date, etat) === 'manque');
+
+  return (
+    <Card padding="12px 16px" gap={6}>
+      <SectionLabel icon="rotate-ccw">{fr ? 'Hier' : 'Wczoraj'}</SectionLabel>
+      {sessions.map((s) => {
+        const code = db.statutDe(s, app.date, etat);
+        const v = visuelDuStatut(code);
+        const type = db.type(s.type);
+        return (
+          <button
+            key={s.id}
+            type="button"
+            className="msc-hover-surface"
+            onClick={() => app.openSession(s.id)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '4px 0', textAlign: 'left', fontFamily: F.body }}
+          >
+            <Icon name={type.icon} size={16} color={type.color} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {(s.titre_court ?? s.titre)[lang]}
+              </div>
+              <div style={{ fontSize: 11, color: C.inkQuiet }}>{s.meta[lang]}</div>
+            </div>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: C.inkSecondary, flexShrink: 0 }}>
+              <Icon name={v.icon} size={14} color={v.couleur} />
+              {motDuStatut(code, lang)}
+            </span>
+            <Icon name="chevron-right" size={13} color={C.inkQuiet} />
+          </button>
+        );
+      })}
+      {aDire && db.droit === 'ecriture' && (
+        <div style={{ fontSize: 11, color: C.inkQuiet }}>
+          {fr ? 'Touche la séance pour dire si tu l’as faite.' : 'Dotknij treningu, by powiedzieć, czy go zrobiłeś.'}
+        </div>
+      )}
+    </Card>
   );
 }

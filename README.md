@@ -279,6 +279,22 @@ Requiring that gap to be real (15 s/km) is what stops a steady run from
 reporting its faster half as intervals. A session run without pressing lap
 gives nothing back — which is the honest answer rather than a fabricated one.
 
+### Yesterday, and the whole year
+
+Aujourd'hui carries a **Hier** card: yesterday's session(s), each with its
+state as icon + word, and a tap opens the session sheet where « Faite ? »
+lives — the shortest path from "I trained yesterday" to a green square.
+
+La semaine opens with **Le plan sur l'année**: one column per week of the
+plan, one square per day from Monday down to Sunday, coloured by what the
+session became (done, done otherwise, missed, today, ahead, rest); under it
+the week's load — planned in light, done in emerald over it, same unit — so
+the periodisation reads at a glance; then the blocks as alternating bands
+with their letter, and a flag over each competition week. The current week
+is outlined; a tap on any column moves the app to that week (the same
+`allerA` the settings date picker uses). Everything is derived from what the
+screens already hold; nothing is stored for it.
+
 ### Done, done otherwise, missed
 
 Every past session on the Semaine screen wears one of three colours, and a

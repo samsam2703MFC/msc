@@ -7,29 +7,12 @@
    The type legend lives on the Coach screen; a type opens from any session. */
 
 import * as db from '../data/db';
-import type { Lang, StatutCode } from '../data/types';
+import { motDuStatut, visuelDuStatut } from '../data/statut';
 import { C } from '../design/theme';
+import { Annee } from '../components/Annee';
 import { Icon } from '../components/Icon';
 import { Card, Grid, Mono, SectionLabel, TypeSquare } from '../components/primitives';
 import type { App } from '../state/useApp';
-
-/* Les trois couleurs, dites par un mot à côté de l'icône : jamais la couleur
-   seule. Les lignes msc_statut portent l'icône et la teinte ; ces replis
-   servent à un instantané en cache d'avant les deux nouveaux statuts. */
-const LEGENDE: Record<Lang, Record<'fait' | 'partiel' | 'manque', string>> = {
-  fr: { fait: 'faite', partiel: 'autrement', manque: 'manquée' },
-  pl: { fait: 'zrobiony', partiel: 'inaczej', manque: 'pominięty' },
-};
-const REPLI: Partial<Record<StatutCode, { icon: string; couleur: string }>> = {
-  partiel: { icon: 'circle-minus', couleur: C.warning },
-  manque: { icon: 'circle-x', couleur: C.negative },
-};
-
-export function visuelDuStatut(code: StatutCode): { icon: string; couleur: string } {
-  return db.one('msc_statut', (r) => r.code === code)
-    ?? REPLI[code]
-    ?? db.mustOne('msc_statut', (r) => r.code === 'prevu');
-}
 
 function heures(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -68,6 +51,9 @@ export function WeekScreen({ app }: { app: App }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* the whole plan at a glance — a tap on a week goes there */}
+      <Annee app={app} />
+
       {/* where the week sits in the plan */}
       <Card padding="14px 18px" gap={8}>
         <SectionLabel icon="calendar-days">
@@ -157,7 +143,7 @@ export function WeekScreen({ app }: { app: App }) {
             return (
               <span key={code} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <Icon name={v.icon} size={13} color={v.couleur} />
-                {LEGENDE[lang][code]}
+                {motDuStatut(code, lang)}
               </span>
             );
           })}
