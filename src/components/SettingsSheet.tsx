@@ -226,6 +226,10 @@ export function SettingsSheet({ app }: { app: App }) {
             {app.identite?.compte.email ?? ''}
             {db.droit === 'lecture' ? ` · ${lang === 'fr' ? 'lecture seule' : 'tylko odczyt'}` : ''}
           </div>
+          {/* la version chargée : pour savoir si c'est la dernière */}
+          <div style={{ fontSize: 10, fontFamily: F.mono, color: C.inkQuiet }}>
+            {`${lang === 'fr' ? 'version' : 'wersja'} ${__MSC_VERSION__}`}
+          </div>
         </div>
         <button
           type="button"

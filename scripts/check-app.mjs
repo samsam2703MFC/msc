@@ -118,6 +118,8 @@ try {
   check('avec une icône « any » et une « maskable » de 512',
     ['any', 'maskable'].every((p) => manifeste?.icons?.some((i) => i.purpose === p && i.sizes === '512x512')),
     JSON.stringify(manifeste?.icons?.map((i) => `${i.sizes} ${i.purpose}`)));
+  const version = await (await fetch(`${URL}/version.txt`)).text().catch(() => '');
+  check('la version du build est servie (commit · heure)', /^[0-9a-f]{7}|^dev/.test(version.trim()), version.trim());
   for (const f of ['icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'icon.svg', 'sw.js']) {
     const r = await fetch(`${URL}/${f}`);
     check(`${f} est servi`, r.ok, String(r.status));

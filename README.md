@@ -908,6 +908,14 @@ the drawing inside the 80 % safe circle, from which Android cuts its own
 shape. Without the second, Android shows the rounded square shrunk inside a
 white disc. `apple-touch-icon.png` is full-bleed too; iOS rounds it.
 
+**Which version am I on?** The build stamps its commit and time into the
+bundle (`__MSC_VERSION__`, from `vite.config.ts`) and into `dist/version.txt`:
+the settings sheet shows it under the account, and
+`curl http://185.180.206.46/msc/version.txt` says what the server serves.
+When a screen "does not show" something that was deployed, compare the two
+before anything else — a home-screen app keeps the page it opened with until
+it is closed and reopened.
+
 **Updates** are offered, not imposed: the service worker is in `prompt` mode,
 checks for a new build every hour, and when one is waiting the header shows
 *Nouvelle version disponible — Recharger* (`MiseAJour.tsx`). A half-typed note

@@ -1,6 +1,22 @@
+import { execSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+
+/* La version : le commit et l'heure du build, cousus dans le bundle et écrits
+   dans dist/version.txt. « Est-ce que je suis sur la dernière ? » se répond
+   dans les réglages de l'application, ou avec un curl sur /version.txt —
+   plutôt qu'en devinant d'après ce qu'on voit à l'écran. */
+const VERSION = (() => {
+  let sha = process.env.GITHUB_SHA?.slice(0, 7);
+  if (!sha) {
+    try { sha = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { sha = 'dev'; }
+  }
+  const quand = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  return `${sha} · ${quand} UTC`;
+})();
 
 /* Où l'application est montée. « /msc/ » parce qu'elle est publiée sous un
    chemin, derrière un serveur web qui héberge déjà d'autres sites ; « / » le
@@ -14,6 +30,7 @@ const BASE = (() => {
 
 export default defineConfig({
   base: BASE,
+  define: { __MSC_VERSION__: JSON.stringify(VERSION) },
   /* The plan server holds the Anthropic key; the browser never sees it. */
   server: {
     proxy: {
@@ -29,6 +46,12 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    {
+      name: 'msc-version',
+      closeBundle() {
+        writeFileSync(join('dist', 'version.txt'), `${VERSION}\n`);
+      },
+    },
     VitePWA({
       /* « prompt » plutôt que « autoUpdate » : une nouvelle version ne prend
          pas la page en cours par surprise — un RPE à moitié tapé, une note.
