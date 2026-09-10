@@ -24,6 +24,7 @@
    Claude's part is the session *content* (see ./methode); it never sets a pace
    or a volume. */
 
+import { comparableAuDixKm } from './courses';
 import { formatAllure } from './engine';
 import type {
   Localized,
@@ -65,6 +66,10 @@ export function equivalent10k(cible_s: number, distance_km: number): number {
 export interface Objectif {
   date: string;
   nom: string;
+  /** Le type du catalogue (`courses.ts`) : il donne la distance, et dit si le
+      chrono se ramène à une allure 10 km. */
+  type_course?: string;
+  discipline?: string;
   /** The fast end of the target range, in seconds. */
   cible_s: number;
   /** The slow end. Optional — without it the fast end is used on its own. */
@@ -187,14 +192,26 @@ export function periodiser(
       avertissements.push(`« ${o.nom} » tombe pendant le réamorçage : bloc ignoré.`);
       return;
     }
-    const allureCible = equivalent10k(tempsDeReference(o), o.distance_km);
+    /* Un triathlon, une cyclo, une nage : le chrono ne se ramène pas à une
+       allure de course à pied. Le bloc vise alors la date, et garde la
+       progression du bloc précédent plutôt que d'inventer une allure. */
+    const comparable = comparableAuDixKm(o.type_course);
+    const allureCible = comparable ? equivalent10k(tempsDeReference(o), o.distance_km) : null;
+    const partPrecedente = blocs.length > 0 ? blocs[blocs.length - 1].part : 0;
+    if (!comparable) {
+      avertissements.push(`« ${o.nom} » n’est pas une course à pied : le bloc vise la date, pas une allure.`);
+    }
     blocs.push({
       code: codes[blocs.length] ?? `B${i}`,
       de: curseur,
       a: fin,
-      part: Math.min(Math.max(partDe(allureCible), 0), 1),
+      part: allureCible === null
+        ? Math.min(Math.max(partPrecedente, 0), 1)
+        : Math.min(Math.max(partDe(allureCible), 0), 1),
       nom: l(o.principal ? 'Bloc final' : `Vers ${o.nom}`),
-      quoi: l(`${o.nom} le ${o.date} — référence ${formatAllure(allureCible)}.`),
+      quoi: l(allureCible === null
+        ? `${o.nom} le ${o.date} — préparation spécifique, sans allure de référence.`
+        : `${o.nom} le ${o.date} — référence ${formatAllure(allureCible)}.`),
     });
     curseur = fin + 1;
   });

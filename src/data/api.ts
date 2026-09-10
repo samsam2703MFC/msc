@@ -362,6 +362,11 @@ export function ecrireCompetition(c: Partial<MscCompetition>): Promise<{ id: num
   return appeler('/competitions', { method: 'POST', body: JSON.stringify(c) });
 }
 
+/** Relier un start à un objectif du plan : cet objectif vise cette course. */
+export function relierObjectif(objectif_id: number, competition_id: number): Promise<{ objectif_id: number; competition_id: number; semaine: number }> {
+  return appeler('/objectif/lien', { method: 'PUT', body: JSON.stringify({ objectif_id, competition_id }) });
+}
+
 export function supprimerCompetition(id: number): Promise<{ id: number }> {
   return appeler(`/competitions?id=${id}`, { method: 'DELETE' });
 }

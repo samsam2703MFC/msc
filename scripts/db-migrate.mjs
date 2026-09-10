@@ -59,6 +59,10 @@ try {
      C'est le début du journal que le commentaire en tête promet : une ligne par
      colonne ajoutée depuis, appliquée seulement si elle manque. */
   const AJOUTS = [
+    /* Le type de course : le catalogue de src/data/courses.ts, partagé par un
+       objectif et le start qui le réalise. */
+    ['msc_competition', 'type_course', "ADD COLUMN type_course VARCHAR(24) NULL AFTER discipline"],
+    ['msc_objectif', 'type_course', "ADD COLUMN type_course VARCHAR(24) NULL AFTER cible_haute_s"],
     ['msc_adaptation', 'avant', "ADD COLUMN avant JSON NULL AFTER applique_le"],
     ['msc_ajustement', 'avant', "ADD COLUMN avant JSON NULL AFTER applique_le"],
     /* Le profil et la forme. Le poids vit déjà dans les mesures ; la HRV les

@@ -130,7 +130,7 @@ async function lePlan(planId) {
     lignes('SELECT s.*, b.code AS bloc_code FROM msc_session s JOIN msc_bloc b ON b.id = s.bloc_id WHERE s.plan_id = :p ORDER BY s.date, s.ordre', { p: planId }),
     lignes('SELECT z.* FROM msc_session_zone z JOIN msc_session s ON s.id = z.session_id WHERE s.plan_id = :p ORDER BY z.ordre', { p: planId }),
     lignes(
-      `SELECT o.*, c.date, c.nom, c.distance_km
+      `SELECT o.*, c.date, c.nom, c.distance_km, COALESCE(o.type_course, c.type_course) AS type_course
        FROM msc_objectif o JOIN msc_competition c ON c.id = o.competition_id
        WHERE o.plan_id = :p ORDER BY c.date`, { p: planId }),
   ]);
@@ -172,6 +172,7 @@ async function lePlan(planId) {
     msc_objectif: objectifs.map((o) => ({
       id: o.id, date: o.date, semaine: o.semaine, principal: Boolean(o.principal),
       distance_km: Number(o.distance_km), cible_s: o.cible_s, cible_haute_s: o.cible_haute_s,
+      type_course: o.type_course ?? undefined, competition_id: o.competition_id,
       nom: { fr: o.nom, pl: o.nom }, cible: L(o, 'cible'),
       role: Lnul(o, 'role') ?? { fr: '', pl: '' },
     })),
@@ -335,7 +336,7 @@ async function lesCompetitions(athleteId) {
   );
   return rows.map((c) => ({
     id: c.id, date: c.date, nom: c.nom, lieu: c.lieu ?? undefined, pays: c.pays ?? undefined,
-    discipline: c.discipline, distance_km: Number(c.distance_km),
+    discipline: c.discipline, type_course: c.type_course ?? undefined, distance_km: Number(c.distance_km),
     denivele_m: nombre(c.denivele_m), officielle: Boolean(c.officielle),
     note: c.note ?? undefined,
     resultat: c.temps_s === null || c.temps_s === undefined ? undefined : {
@@ -1628,12 +1629,20 @@ async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessi
         /* Une cyclosportive est une compétition comme une autre : la discipline
            vient de l'objectif quand il la donne, la course à pied sinon. */
         const [rc] = await cnx.execute(
-          `INSERT INTO msc_competition (athlete_id, date, nom, discipline, distance_km, officielle)
-           VALUES (?, ?, ?, ?, ?, 1)`,
+          `INSERT INTO msc_competition (athlete_id, date, nom, discipline, type_course, distance_km, officielle)
+           VALUES (?, ?, ?, ?, ?, ?, 1)`,
           [athleteId, o.date, texte(o.nom, 160), texte(o.discipline || 'Course à pied', 32),
-           Number(o.distance_km) || 10],
+           o.type_course ? texte(o.type_course, 24) : null, Number(o.distance_km) || 10],
         );
         c = { id: rc.insertId };
+      }
+      /* Une course encodée avant que les types existent, ou dont le type
+         change dans le formulaire : l'objectif le pose sur la course. */
+      if (o.type_course) {
+        await cnx.execute(
+          'UPDATE msc_competition SET type_course = ?, distance_km = ? WHERE id = ? AND athlete_id = ?',
+          [texte(o.type_course, 24), Number(o.distance_km) || 10, c.id, athleteId],
+        );
       }
       const basse = entier(o.cible_s, 1, 86400, 3600);
       const haute = Math.max(basse, entier(o.cible_haute_s ?? o.cible_s, 1, 86400, basse));
@@ -1644,14 +1653,15 @@ async function ecrirePlan(cnx, athleteId, { nom, methode, blocs, semaines, sessi
         : `${Math.floor(basse / 60)}:${String(basse % 60).padStart(2, '0')}`;
       await cnx.execute(
         `INSERT INTO msc_objectif (plan_id, competition_id, semaine, principal,
-           cible_s, cible_haute_s, cible_fr, cible_pl)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE semaine = VALUES(semaine)`,
+           cible_s, cible_haute_s, type_course, cible_fr, cible_pl)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE semaine = VALUES(semaine), type_course = VALUES(type_course)`,
         /* La semaine de l'objectif est celle de la séance qui tombe ce jour-là.
            Elle se déduit du plan qu'on vient d'écrire ; la demander au
            formulaire serait demander un nombre qu'on connaît déjà. */
         [planId, c.id, semaineDe.get(o.date) ?? 0, o.principal ? 1 : 0,
-         basse, haute, libelle, o.cible?.pl ? texte(o.cible.pl, 80) : libelle],
+         basse, haute, o.type_course ? texte(o.type_course, 24) : null,
+         libelle, o.cible?.pl ? texte(o.cible.pl, 80) : libelle],
       );
       vises += 1;
     }
@@ -1704,20 +1714,20 @@ export async function ecrireCompetition(athleteId, c) {
     if (id) {
       const [r] = await cnx.execute(
         `UPDATE msc_competition SET date = ?, nom = ?, lieu = ?, pays = ?, discipline = ?,
-           distance_km = ?, denivele_m = ?, officielle = ?, note = ?
+           type_course = ?, distance_km = ?, denivele_m = ?, officielle = ?, note = ?
          WHERE id = ? AND athlete_id = ?`,
         [c.date, c.nom, c.lieu ?? null, c.pays ?? null, c.discipline ?? 'Course à pied',
-         c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null,
+         c.type_course ?? null, c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null,
          id, athleteId],
       );
       if (r.affectedRows === 0) throw new DepotError('Compétition inconnue.', 404);
     } else {
       const [r] = await cnx.execute(
-        `INSERT INTO msc_competition (athlete_id, date, nom, lieu, pays, discipline,
+        `INSERT INTO msc_competition (athlete_id, date, nom, lieu, pays, discipline, type_course,
            distance_km, denivele_m, officielle, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [athleteId, c.date, c.nom, c.lieu ?? null, c.pays ?? null, c.discipline ?? 'Course à pied',
-         c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null],
+         c.type_course ?? null, c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null],
       );
       id = r.insertId;
     }
@@ -1740,6 +1750,41 @@ export async function ecrireCompetition(athleteId, c) {
       await cnx.execute('DELETE FROM msc_resultat WHERE competition_id = ?', [id]);
     }
     return { id };
+  });
+}
+
+/**
+ * Relier un start à un objectif du plan : cet objectif vise désormais cette
+ * course. La semaine se recalcule depuis le début du plan — un objectif dont
+ * la date change n'est plus dans la même semaine, et personne d'autre ne le
+ * sait.
+ */
+export async function relierObjectif(athleteId, { objectif_id, competition_id }) {
+  return transaction(async (cnx) => {
+    const [[o]] = await cnx.execute(
+      `SELECT o.id, o.plan_id, p.debut, p.athlete_id
+       FROM msc_objectif o JOIN msc_plan p ON p.id = o.plan_id
+       WHERE o.id = ? AND p.athlete_id = ?`,
+      [Number(objectif_id), athleteId],
+    );
+    if (!o) throw new DepotError('Objectif inconnu.', 404);
+    const [[c]] = await cnx.execute(
+      'SELECT id, date FROM msc_competition WHERE id = ? AND athlete_id = ?',
+      [Number(competition_id), athleteId],
+    );
+    if (!c) throw new DepotError('Course inconnue.', 404);
+    const jours = Math.floor((Date.parse(`${c.date}T00:00:00Z`) - Date.parse(`${o.debut}T00:00:00Z`)) / 86400000);
+    const semaine = Math.max(1, Math.floor(jours / 7) + 1);
+    try {
+      await cnx.execute(
+        'UPDATE msc_objectif SET competition_id = ?, semaine = ? WHERE id = ?',
+        [c.id, semaine, o.id],
+      );
+    } catch (e) {
+      if (e?.code === 'ER_DUP_ENTRY') throw new DepotError('Un autre objectif de ce plan vise déjà cette course.', 409);
+      throw e;
+    }
+    return { objectif_id: o.id, competition_id: c.id, semaine };
   });
 }
 

@@ -498,6 +498,8 @@ export interface MscCompetition {
   lieu?: string;
   pays?: string;
   discipline: string;
+  /** Le type du catalogue (`src/data/courses.ts`) : cap_semi, tri_70_3… */
+  type_course?: string;
   distance_km: number;
   denivele_m?: number;
   officielle: boolean;
@@ -601,6 +603,9 @@ export interface MscObjectif {
   /** Race distance in km — a target is only comparable to the plan's 10 km
       reference once converted, which needs the distance it was run over. */
   distance_km: number;
+  /** Le type du catalogue, et la course que l'objectif vise. */
+  type_course?: string;
+  competition_id?: number;
   /** The fast end of the target range, in seconds. */
   cible_s: number;
   /** The slow end. Intermediate races are checkpoints, so the generator takes

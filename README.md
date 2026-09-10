@@ -1016,10 +1016,33 @@ tab keeps Classement, Calendrier, Plan, Starts, Strava and Profil. For a
 segmented control scrolls sideways instead of squeezing eleven labels into
 360 px.
 
+### Race types, objectives and starts
+
+One catalogue, `src/data/courses.ts`, names every race an athlete can aim at
+or run: running (5 km to 100 km, track, cross), trail (short, long, ultra,
+vertical kilometre), swimming (750 m to 10 km open water), cycling
+(cyclosportive, granfondo, time trial, gravel, MTB), triathlon and its
+relatives (S, olympic, 70.3, Ironman, duathlon, swimrun, aquathlon), and
+Hyrox, OCR and DekaFit. Each type carries its official distance, an example
+target, and one flag that matters: `comparable`, whether its time can be
+turned into a 10 km pace. Running types can; a 70.3 cannot, and the generator
+says so — such an objective's block aims at the date and keeps the previous
+block's progression instead of inventing a reference pace.
+
+The **Objectifs** of the Plan section therefore open with a **Type de course**
+dropdown, grouped by discipline. Picking one fills the distance, names the
+race, and sets a plausible target time (all three only while the fields have
+not been typed over), and the target accepts `h:mm:ss` for a marathon as
+readily as `mm:ss` for a 10 km. Each **start** carries the same type, in its
+own column, and a last column links it to an objective of the active plan:
+"this race is that objective" (`PUT /api/objectif/lien`, which also
+recomputes the objective's week from the plan's start). Both columns live in
+`msc_competition.type_course` and `msc_objectif.type_course`.
+
 ### Competitions
 
-A table, edited in place: date, name, place, distance, time, placing,
-starters, and the pace the time implies. Every cell is an input that looks
+A table, edited in place: date, name, type, place, distance, time, placing,
+starters, the pace the time implies, and the objective it realises. Every cell is an input that looks
 like text until you land on it; a row you touched turns emerald and grows a ✓
 (Enregistrer, also Enter) and an undo (Escape); the last row is the next race
 to add, and an empty time means a race still to come. Deleting asks once. On

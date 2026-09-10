@@ -628,6 +628,13 @@ async function router(req, res, url) {
     return json(res, 200, await depots.appliquer(athlete_id, table, id, applique));
   }
 
+  /* Relier un start à un objectif du plan : « cette course, c'est celle-là ». */
+  if (chemin === '/api/objectif/lien' && req.method === 'PUT') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const corps = await lireCorps(req, 2_000);
+    return json(res, 200, await depots.relierObjectif(athlete_id, corps));
+  }
+
   if (chemin === '/api/competitions') {
     const { athlete_id } = await athleteDe(req, url, req.method === 'GET' ? 'lecture' : 'ecriture');
     if (req.method === 'GET') {

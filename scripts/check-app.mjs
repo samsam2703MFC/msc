@@ -317,6 +317,16 @@ try {
     await page.waitForTimeout(1400);
   };
 
+  /* Le type de course pose la distance : un semi fait 21,097 km sans qu'on
+     le retape. */
+  const nouvelle = page.locator('table tbody tr').last();
+  await nouvelle.getByLabel('Type', { exact: true }).selectOption('cap_semi');
+  await page.waitForTimeout(300);
+  check('le type de course pose la distance officielle',
+    (await nouvelle.getByLabel('Distance (km)', { exact: true }).inputValue()) === '21.097',
+    await nouvelle.getByLabel('Distance (km)', { exact: true }).inputValue());
+  await nouvelle.getByLabel('Type', { exact: true }).selectOption('');
+
   await encoder('Corrida de contrôle', '2026-03-01', 10, '0:44:00');
   check('la course encodée apparaît',
     (await page.locator('body').innerText()).includes('Corrida de contrôle'));

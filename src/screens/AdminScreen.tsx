@@ -14,6 +14,8 @@ import type { Methode } from '../data/methode';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { AccentButton, Card, Colonnes, Grid, Mono, SectionLabel } from '../components/primitives';
+import { TYPES_COURSE, typeCourse, typesGroupes } from '../data/courses';
+import type { TypeCourse } from '../data/courses';
 import type { Lang } from '../data/types';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
@@ -26,14 +28,23 @@ import { SystemeScreen } from './SystemeScreen';
 import { StravaScreen } from './StravaScreen';
 import { Historique } from '../components/Historique';
 
-/** mm:ss → seconds. */
+/** « 3:20:00 », « 41:40 » ou « 2500 » → secondes. Un marathon se vise en
+    heures, une référence 10 km en minutes : les deux passent par ici. */
 function versSecondes(texte: string): number {
-  const [m, s] = texte.split(':');
-  return Number(m ?? 0) * 60 + Number(s ?? 0);
+  const parts = texte.trim().split(':').map((x) => Number(x) || 0);
+  if (parts.length >= 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0] ?? 0;
 }
 
 function versTexte(secondes: number): string {
-  return `${Math.floor(secondes / 60)}:${String(Math.round(secondes % 60)).padStart(2, '0')}`;
+  const t = Math.round(secondes);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  return h
+    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`;
 }
 
 const CHAMP: React.CSSProperties = {
@@ -116,10 +127,44 @@ function Bascule({
 const OBJECTIF_VIDE: Objectif = {
   date: '',
   nom: '',
+  type_course: 'cap_10',
   cible_s: 2400,
   distance_km: 10,
   principal: false,
 };
+
+/* Une liste déroulante de tous les types de course, groupés par discipline.
+   Choisir un type pose la distance officielle et, si le nom n'a pas été
+   touché, le nom de la course. */
+function ChoixType({
+  valeur, lang, onChange,
+}: {
+  valeur: string | undefined; lang: Lang; onChange: (t: TypeCourse) => void;
+}) {
+  const groupes = typesGroupes(lang);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={{ fontSize: 11, color: C.inkSecondary }}>{lang === 'fr' ? 'Type de course' : 'Typ zawodów'}</span>
+        <select
+          value={valeur ?? ''}
+          onChange={(e) => {
+            const t = typeCourse(e.target.value);
+            if (t) onChange(t);
+          }}
+          style={CHAMP}
+        >
+          <option value="">{lang === 'fr' ? '— choisir —' : '— wybierz —'}</option>
+          {groupes.map((g) => (
+            <optgroup key={g.discipline} label={g.discipline}>
+              {g.types.map((t) => <option key={t.code} value={t.code}>{t.nom}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
 
 export const SECTIONS = {
   fr: { athletes: 'Athlètes', classement: 'Classement', calendrier: 'Calendrier', suivi: 'Suivi', plan: 'Plan', courses: 'Starts', strava: 'Strava', profil: 'Profil', param: 'Réglages', comptes: 'Comptes', systeme: 'Système' },
@@ -382,11 +427,29 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
               background: o.principal ? C.accentSoft : 'transparent',
             }}
           >
+            <ChoixType
+              valeur={o.type_course}
+              lang={app.lang}
+              onChange={(t) => majObjectif(i, {
+                type_course: t.code,
+                distance_km: t.distance_km,
+                discipline: t.discipline,
+                /* Le nom suit le type tant que personne ne l'a écrit à la
+                   main : « Semi-marathon » plutôt qu'un champ vide. */
+                nom: !o.nom || TYPES_COURSE.some((x) => x.nom[app.lang] === o.nom) ? t.nom[app.lang] : o.nom,
+              })}
+            />
             <Champ label={fr ? 'Nom' : 'Nazwa'} value={o.nom} onChange={(v) => majObjectif(i, { nom: v })} />
             <Grid cols={3} gap={8}>
               <Champ label="Date" value={o.date} onChange={(v) => majObjectif(i, { date: v })} type="date" mono />
               <Champ label="km" value={String(o.distance_km)} onChange={(v) => majObjectif(i, { distance_km: Number(v) || 10 })} mono />
-              <Champ label={fr ? 'Cible' : 'Cel'} value={versTexte(o.cible_s)} onChange={(v) => majObjectif(i, { cible_s: versSecondes(v) })} mono />
+              <Champ
+                label={fr ? 'Temps visé' : 'Cel czasowy'}
+                value={versTexte(o.cible_s)}
+                onChange={(v) => majObjectif(i, { cible_s: versSecondes(v) })}
+                mono
+                aide={typeCourse(o.type_course)?.exemple}
+              />
             </Grid>
             <div style={{ display: 'flex', gap: 8 }}>
               <Bascule

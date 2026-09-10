@@ -506,6 +506,29 @@ try {
      et sans elle c'est l'application commune qui vaut. */
   /* La synchro de l'application ne touche qu'à sa fenêtre : l'historique plus
      ancien que le plan, tiré par le coach, lui survit. */
+  /* Le type de course : un start le porte, un objectif aussi, et l'un se
+     relie à l'autre. */
+  console.log('\n=== les types de course, et le lien start ↔ objectif ===');
+  const start = await c.appel('/api/competitions', {
+    method: 'POST',
+    body: JSON.stringify({ date: '2027-05-02', nom: 'Half de contrôle', type_course: 'tri_70_3', distance_km: 113, discipline: 'Triathlon & enchaînements' }),
+  });
+  const apresStart = await c.appel('/api/competitions');
+  const encodee = apresStart.corps.competitions?.find((x: any) => x.nom === 'Half de contrôle');
+  check('un start s’encode avec son type de course', start.statut === 200 && encodee?.type_course === 'tri_70_3'
+    && Number(encodee?.distance_km) === 113, JSON.stringify(encodee ?? {}).slice(0, 120));
+  const instantTypes = await c.appel('/api/db/instantane');
+  const objectif = instantTypes.corps.msc_objectif?.[0];
+  const lien = objectif
+    ? await c.appel('/api/objectif/lien', { method: 'PUT', body: JSON.stringify({ objectif_id: objectif.id, competition_id: encodee?.id }) })
+    : { statut: 0, corps: {} as any };
+  check('et se relie à un objectif du plan, qui change de semaine',
+    Boolean(objectif) && lien.statut === 200 && lien.corps.competition_id === encodee?.id && lien.corps.semaine > 0,
+    JSON.stringify(lien.corps));
+  const lienFaux = await c.appel('/api/objectif/lien', { method: 'PUT', body: JSON.stringify({ objectif_id: 999999, competition_id: encodee?.id }) });
+  check('un objectif qui n’est pas au plan de cet athlète est refusé', lienFaux.statut === 404, String(lienFaux.statut));
+  if (encodee?.id) await c.appel(`/api/competitions?id=${encodee.id}`, { method: 'DELETE' });
+
   console.log('\n=== l’historique et la fenêtre de synchro ===');
   await bd().execute('DELETE FROM msc_activity WHERE athlete_id = 1 AND id_strava IN (777001, 777002)');
   await bd().execute(

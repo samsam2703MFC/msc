@@ -746,6 +746,21 @@ export function useApp() {
     [recharger],
   );
 
+  const relierObjectif = useCallback(
+    async (objectifId: number, competitionId: number) => {
+      setCoursesErreur(null);
+      try {
+        await api.relierObjectif(objectifId, competitionId);
+        await recharger(db.athleteId);
+        return true;
+      } catch (e) {
+        if (monte.current) setCoursesErreur(message(e));
+        return false;
+      }
+    },
+    [recharger],
+  );
+
   const supprimerCompetition = useCallback(
     async (id: number) => {
       setCoursesErreur(null);
@@ -1028,6 +1043,7 @@ export function useApp() {
 
     coursesErreur,
     enregistrerCompetition,
+    relierObjectif,
     supprimerCompetition,
 
     photoJob,
