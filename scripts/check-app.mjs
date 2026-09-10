@@ -210,6 +210,9 @@ try {
 
   await page.click('text=Coach');
   await page.waitForTimeout(600);
+  check('les sept prochains jours attendent le signal du matin',
+    /7 prochains jours/i.test(await page.locator('body').innerText())
+      && (await page.getByRole('button', { name: /Replanifier/ }).count()) === 1);
   check("l'écart de la semaine est calculé",
     /réalisation|Semaine tenue|Écart détecté/i.test(await page.locator('body').innerText()));
 

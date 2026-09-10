@@ -287,6 +287,23 @@ try {
   const relu3 = (await c.appel('/api/db/instantane')).corps.msc_journal.find((j: any) => j.session_id === seanceCochee.id);
   check('et null l’efface', relu3 !== undefined && relu3.fait === undefined, JSON.stringify(relu3?.fait));
 
+  /* Les sept prochains jours : la route vérifie sa forme, puis demande au
+     coach — sans clé Anthropic ici, c'est le 401 qui dit lequel des trois cas
+     on est ; avec une clé, une replanification rangée. */
+  const glissantVide = await c.appel('/api/glissant', { method: 'POST', body: JSON.stringify({}) });
+  check('la replanification refuse un corps vide', glissantVide.statut === 400, String(glissantVide.statut));
+  const glissant = await c.appel('/api/glissant', {
+    method: 'POST',
+    body: JSON.stringify({
+      langue: 'fr', aujourdhui: new Date().toISOString().slice(0, 10), jour: 'Jeudi', semaine: 1, bloc: 'A',
+      athlete: { nom: 'Contrôle', ref_actuelle: '52:00', ref_cible: '38:00' },
+      passees: [], prochains: [], regles: [],
+    }),
+  });
+  check('et sans clé Anthropic elle dit laquelle des trois pannes (ou replanifie, avec une clé)',
+    (glissant.statut === 401 && /Anthropic/.test(String(glissant.corps.erreur))) || glissant.statut === 200,
+    `${glissant.statut} · ${String(glissant.corps.erreur ?? 'ok').slice(0, 80)}`);
+
   const mesure = await c.appel('/api/mesure', {
     method: 'POST',
     body: JSON.stringify({ date: jour, poids_kg: 74.5, fc_repos: 46, source: 'saisie' }),

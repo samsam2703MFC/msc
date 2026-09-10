@@ -274,18 +274,45 @@ export interface MscObservation {
   lignes: string[];
 }
 
+/** Une ligne des sept prochains jours, telle que le coach l'a écrite : ce que
+    devient la séance (une action que le moteur sait appliquer), son format
+    avec les allures fournies, et le mot du coach pour ce jour. */
+export interface GlissantJour {
+  date: string;
+  session_id: number | null;
+  action: 'garder' | 'reduire' | 'allonger' | 'deplacer' | 'sauter' | 'repos';
+  part: number | null;
+  vers_date: string | null;
+  titre: string;
+  format: string;
+  note: string;
+}
+
+/** L'adaptation à jours glissants : le signal du matin, ce qu'il implique,
+    les sept jours ligne par ligne, et la décision à trancher plus tard. */
+export interface GlissantContenu {
+  signal: { titre: string; lignes: string[]; verdict: 'journee_dure_ok' | 'qualite_ok' | 'facile' | 'repos' };
+  implication: string;
+  jours: GlissantJour[];
+  decision: { quand: string; regle: string } | null;
+}
+
 /** Output of the Anthropic API, timestamped and kept. */
 export interface MscAnalyse {
   id: number;
   date: string;
-  type: 'seance' | 'hebdo';
+  type: 'seance' | 'hebdo' | 'glissant';
   modele: string;
   cout_eur: number;
   verdict: Localized;
   session_id?: number;
   semaine?: number;
+  /** Le coach qui parlait. */
+  ton?: string;
   stats?: MscAnalyseStat[];
   blocs?: Array<MscAnalyseBloc | MscObservation>;
+  /** Pour une analyse « glissant » : les sept jours. */
+  glissant?: GlissantContenu;
 }
 
 /** Comes out of a session analysis: a proposal, never a direct write.
@@ -320,6 +347,9 @@ export interface SeanceAvant {
   natation_m: number | null;
   charge: number;
   zones: ZoneCode[];
+  /** Le jour d'avant, quand la proposition acceptée l'a déplacée. */
+  date?: string;
+  jour_long?: string;
 }
 
 /** Un ajustement du réétalonnage hebdomadaire, accepté un par un. Soit une
@@ -333,6 +363,8 @@ export interface MscAjustement {
   session_id?: number;
   semaine?: number;
   part?: number;
+  /** Un déplacement : le jour où la séance atterrit à l'acceptation. */
+  vers_date?: string;
   texte?: Localized;
   applique: boolean;
   avant?: SeanceAvant;

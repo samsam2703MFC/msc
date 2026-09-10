@@ -75,6 +75,12 @@ try {
     /* La coche « séance faite » de l'athlète, à côté de ce que Strava dit. */
     ['msc_journal', 'fait',
       "ADD COLUMN fait TINYINT(1) NULL COMMENT '1 : l''athlète l''a dite faite ; 0 : pas faite ; NULL : rien dit — Strava compte à part' AFTER sommeil_h"],
+    /* L'adaptation à jours glissants : les sept jours proposés, et un
+       déplacement de séance qui atterrit un autre jour. */
+    ['msc_analyse', 'glissant',
+      "ADD COLUMN glissant JSON NULL COMMENT 'type glissant : le signal du matin, l’implication, les sept prochains jours ligne par ligne, la décision à valider' AFTER sources"],
+    ['msc_ajustement', 'vers_date',
+      "ADD COLUMN vers_date DATE NULL COMMENT 'un déplacement : le jour où la séance atterrit à l’acceptation' AFTER part"],
   ];
   for (const [table, colonne, ddl] of AJOUTS) {
     const [[{ n }]] = await cnx.query(
@@ -91,6 +97,34 @@ try {
   /* Même journal pour le vocabulaire ajouté après coup. Le seed ne repasse
      jamais sur une base vivante, alors un motif de plus s'insère ici, s'il
      manque — le même texte que src/data/tables.ts, à garder identique. */
+  /* msc_analyse.type gagne « glissant », et la contrainte de portée le connaît.
+     Lus dans information_schema avant d'y toucher : une base créée depuis
+     schema.sql les a déjà. */
+  const [[colType]] = await cnx.query(
+    `SELECT COLUMN_TYPE AS t FROM information_schema.columns
+     WHERE table_schema = ? AND table_name = 'msc_analyse' AND column_name = 'type'`,
+    [nom],
+  );
+  if (colType && !/glissant/.test(String(colType.t))) {
+    await cnx.query(`ALTER TABLE msc_analyse MODIFY type ENUM('seance','hebdo','glissant') NOT NULL`);
+    console.log('+ msc_analyse.type : glissant');
+  }
+  const [[ck]] = await cnx.query(
+    `SELECT CHECK_CLAUSE AS c FROM information_schema.check_constraints
+     WHERE constraint_schema = ? AND constraint_name = 'ck_analyse_portee'`,
+    [nom],
+  );
+  if (!ck || !/glissant/.test(String(ck.c))) {
+    if (ck) await cnx.query('ALTER TABLE msc_analyse DROP CONSTRAINT ck_analyse_portee');
+    await cnx.query(
+      `ALTER TABLE msc_analyse ADD CONSTRAINT ck_analyse_portee CHECK (
+         (type = 'seance' AND session_id IS NOT NULL) OR
+         (type = 'hebdo'  AND semaine IS NOT NULL AND plan_id IS NOT NULL) OR
+         (type = 'glissant' AND plan_id IS NOT NULL))`,
+    );
+    console.log('+ ck_analyse_portee : glissant');
+  }
+
   const LIGNES = [
     /* [table, colonne clé, valeur, INSERT, condition] — la condition dit si les
        parents existent : sur une base vierge (les contrôles, un premier

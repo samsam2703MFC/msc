@@ -161,6 +161,10 @@ export function useApp() {
   const anaRef = useRef(false);
   const [recalcErreur, setRecalcErreur] = useState<string | null>(null);
   const recalcRef = useRef(false);
+  /* Les sept prochains jours : une replanification à la fois. */
+  const [glissant, setGlissant] = useState<Job>('idle');
+  const [glissantErreur, setGlissantErreur] = useState<string | null>(null);
+  const glissantRef = useRef(false);
 
   /* The chat bars. Two of them — the Coach screen's and the one on each session
      sheet — so the threads are keyed and each keeps its own history. */
@@ -865,6 +869,32 @@ export function useApp() {
     })();
   }, [date, lang, recalc, semaine]);
 
+  /* Replanifier les sept prochains jours à partir du signal du matin. Le
+     journal du jour part d'abord : ce que l'athlète vient de dire compte. */
+  const runGlissant = useCallback(() => {
+    if (glissantRef.current) return;
+    glissantRef.current = true;
+    setGlissant('running');
+    setGlissantErreur(null);
+    void (async () => {
+      try {
+        await enregistrerJournal();
+        await coach.demanderGlissant(date, lang);
+        if (!monte.current) return;
+        await recharger(db.athleteId);
+        if (!monte.current) return;
+        setGlissant('done');
+      } catch (e) {
+        if (monte.current) {
+          setGlissantErreur(message(e));
+          setGlissant('idle');
+        }
+      } finally {
+        glissantRef.current = false;
+      }
+    })();
+  }, [date, enregistrerJournal, lang, recharger]);
+
   const pickExcuse = useCallback((code: string) => {
     setExcuse((current) => (current === code ? null : code));
     setExcuseApplied(false);
@@ -930,6 +960,9 @@ export function useApp() {
     recalc,
     recalcErreur,
     runRecalc,
+    glissant,
+    glissantErreur,
+    runGlissant,
     excuse,
     pickExcuse,
     excuseApplied,

@@ -691,7 +691,7 @@ CREATE TABLE IF NOT EXISTS msc_mesure (
 CREATE TABLE IF NOT EXISTS msc_analyse (
   id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   athlete_id  INT UNSIGNED NOT NULL,
-  type        ENUM('seance','hebdo') NOT NULL,
+  type        ENUM('seance','hebdo','glissant') NOT NULL,
   session_id  INT UNSIGNED NULL COMMENT 'renseigné pour une analyse de séance',
   plan_id     INT UNSIGNED NULL,
   semaine     SMALLINT UNSIGNED NULL COMMENT 'renseigné pour un verdict hebdomadaire',
@@ -704,6 +704,7 @@ CREATE TABLE IF NOT EXISTS msc_analyse (
   stats       JSON NULL COMMENT 'les chiffres calculés par le moteur, figés tels qu''affichés',
   blocs       JSON NULL COMMENT 'les observations « bon » / « attention »',
   sources     JSON NULL COMMENT 'ce que Claude est allé lire dans Strava au-delà du contexte fourni',
+  glissant    JSON NULL COMMENT 'type glissant : le signal du matin, l''implication, les sept prochains jours ligne par ligne, la décision à valider',
   cree_le     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),
   UNIQUE KEY uq_analyse_seance (session_id),
@@ -714,7 +715,8 @@ CREATE TABLE IF NOT EXISTS msc_analyse (
   CONSTRAINT fk_analyse_plan FOREIGN KEY (plan_id) REFERENCES msc_plan (id) ON DELETE CASCADE,
   CONSTRAINT ck_analyse_portee CHECK (
     (type = 'seance' AND session_id IS NOT NULL) OR
-    (type = 'hebdo'  AND semaine IS NOT NULL AND plan_id IS NOT NULL))
+    (type = 'hebdo'  AND semaine IS NOT NULL AND plan_id IS NOT NULL) OR
+    (type = 'glissant' AND plan_id IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- L'adaptation de la séance suivante, après une séance. Une proposition, jamais
@@ -752,6 +754,7 @@ CREATE TABLE IF NOT EXISTS msc_ajustement (
   semaine      SMALLINT UNSIGNED NULL,
   type_code    VARCHAR(16) NOT NULL,
   part         DECIMAL(4,3) NULL COMMENT 'la quantité de la séance — sa durée, ou ses mètres pour une nage — en fraction du prévu',
+  vers_date    DATE NULL COMMENT 'un déplacement : le jour où la séance atterrit à l''acceptation',
   texte_fr     VARCHAR(190) NULL, texte_pl VARCHAR(190) NULL COMMENT 'pour un ajustement de semaine : ce qui bouge, sans chiffre',
   applique_le  DATETIME(3) NULL,
   avant        JSON NULL COMMENT 'la séance telle qu''elle était juste avant l''acceptation — voir msc_adaptation.avant',

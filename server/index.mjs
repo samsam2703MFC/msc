@@ -32,7 +32,7 @@ import { BdError, scellementPret } from './bd.mjs';
 import * as depots from './depots.mjs';
 import { construireMethode } from './methode.mjs';
 import * as photo from './photo.mjs';
-import { analyserSeance, recalculerPlan, repondre } from './coach.mjs';
+import { analyserSeance, planifierGlissant, recalculerPlan, repondre } from './coach.mjs';
 import { classement } from './niveau.mjs';
 import * as params from './params.mjs';
 import * as strava from './strava.mjs';
@@ -442,6 +442,43 @@ async function router(req, res, url) {
     const corps = await lireCorps(req, 4_000_000);
     return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'plan', (cnx) =>
       depots.enregistrerPlan(athlete_id, corps, cnx)));
+  }
+
+  /* Les sept prochains jours, replanifiés à partir du signal du matin. Le
+     navigateur envoie la semaine jusqu'ici et les sept jours du plan (avec
+     les allures que le moteur a calculées) ; le serveur y joint la mesure
+     du matin et sa lecture, et range ce que le coach propose. */
+  if (chemin === '/api/glissant' && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const { jeton_strava: _g, ...corps } = await lireCorps(req, 200_000);
+    for (const champ of ['athlete', 'aujourdhui', 'prochains']) {
+      if (corps[champ] === undefined) return json(res, 400, { erreur: `champ manquant : ${champ}` });
+    }
+    const plan = await depots.planActif(athlete_id);
+    if (!plan) return json(res, 409, { erreur: 'Pas de plan actif : rien à replanifier.' });
+    const coach = await depots.coachDe(athlete_id);
+    const reponse = await planifierGlissant({
+      ...corps, coach,
+      matin: await depots.signalDuMatin(athlete_id),
+      jeton_strava: await strava.jetonCourant(athlete_id),
+    });
+    const jours = Array.isArray(reponse.jours) ? reponse.jours : [];
+    const range = await depots.enregistrerGlissant(athlete_id, {
+      plan_id: plan.id, date: String(corps.aujourdhui).slice(0, 10),
+      modele: reponse.modele, cout_eur: reponse.cout_eur, strava: reponse.strava, ton: coach,
+      implication: reponse.implication, observations: reponse.observations,
+      glissant: { signal: reponse.signal, implication: reponse.implication, jours, decision: reponse.decision ?? null },
+      ajustements: jours
+        .filter((j) => j.session_id && j.action !== 'garder' && j.action !== 'repos')
+        .map((j) => ({
+          session_id: j.session_id,
+          part: j.action === 'reduire' || j.action === 'allonger' ? j.part : null,
+          vers_date: j.action === 'deplacer' ? j.vers_date : null,
+          texte: j.note,
+        })),
+      langue: corps.langue,
+    });
+    return json(res, 200, { ...reponse, range });
   }
 
   if (chemin === '/api/proposition' && req.method === 'POST') {

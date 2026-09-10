@@ -498,3 +498,192 @@ quantité, ou une semaine et ce qui s'y déplace.`,
     usage: reponse.usage,
   };
 }
+
+/* ------------------------------------------- les sept prochains jours */
+
+/* L'adaptation à jours glissants : le matin dit ce que le corps autorise, la
+   semaine jusqu'ici dit ce qui a été fait, sauté ou déplacé, et le coach
+   replanifie les sept jours qui viennent — pas la semaine du calendrier, les
+   sept jours à partir d'aujourd'hui. Chaque ligne est une action que le
+   moteur sait appliquer (une part de la quantité, un autre jour) ou une
+   décision notée (garder, sauter) ; jamais une allure ou des minutes que le
+   modèle aurait posées lui-même. */
+
+const JourGlissant = z.object({
+  date: z.string().describe('Le jour, en ISO AAAA-MM-JJ — un des sept jours annoncés.'),
+  session_id: z
+    .number()
+    .nullable()
+    .describe("L'id de la séance prévue ce jour-là, pris dans la liste fournie. null pour un jour sans séance."),
+  action: z
+    .enum(['garder', 'reduire', 'allonger', 'deplacer', 'sauter', 'repos'])
+    .describe(
+      "Ce que devient la séance : garder telle quelle ; réduire ou allonger sa quantité ; la déplacer à un autre des sept jours ; la sauter ; « repos » pour un jour sans séance.",
+    ),
+  part: z
+    .number()
+    .nullable()
+    .describe('Pour réduire ou allonger seulement : la quantité en fraction du prévu, entre 0,5 et 1,25. null sinon.'),
+  vers_date: z
+    .string()
+    .nullable()
+    .describe('Pour déplacer seulement : le jour où la séance atterrit, un des sept jours, en ISO. null sinon.'),
+  titre: z.string().describe('La séance en deux ou trois mots, telle que la liste la nomme.'),
+  format: z
+    .string()
+    .describe(
+      "Ce qu'on fait : le format tel qu'il t'est donné (« 2 × 3 min », « Z2 montagne », « 10 × 100 m ») avec les allures fournies. Tu n'en calcules aucune.",
+    ),
+  note: z
+    .string()
+    .describe(
+      'Le mot du coach pour ce jour, court : « GO », « plan normal », « déplacée au jeudi », « compensation », « à valider samedi », « sautée ».',
+    ),
+});
+
+const Glissant = z.object({
+  signal: z.object({
+    titre: z.string().describe('Le signal du matin en trois mots : « Très bon signal », « Signal moyen », « Corps fatigué ».'),
+    lignes: z
+      .array(z.string())
+      .describe('Deux ou trois lignes qui citent les chiffres fournis — HRV contre sa base, FC de repos contre sa base, le score sur dix. Aucun autre chiffre.'),
+    verdict: z
+      .enum(['journee_dure_ok', 'qualite_ok', 'facile', 'repos'])
+      .describe("Ce que ce matin autorise aujourd'hui : une journée dure, une séance de qualité, du facile seulement, du repos."),
+  }),
+  implication: z
+    .string()
+    .describe('Ce que ça implique pour les sept jours, en une ou deux phrases : ce qui part tel quel, ce qui bouge, et pourquoi.'),
+  jours: z
+    .array(JourGlissant)
+    .describe(
+      "Une ligne par séance prévue sur les sept prochains jours, dans l'ordre des dates, en commençant par aujourd'hui ; un jour sans séance a une ligne « repos ». Les sept jours y sont, sans exception.",
+    ),
+  decision: z
+    .object({
+      quand: z.string().describe('Quand on tranche : « samedi 22 h ».'),
+      regle: z.string().describe('La règle, en une phrase, avec les seuils fournis : « si la HRV du samedi tient au-dessus de sa base, la sortie longue part ; sinon 75 min facile ».'),
+    })
+    .nullable()
+    .describe("Si une séance clé dépend d'une condition à vérifier plus tard. null sinon."),
+  observations: z.array(Observation).describe('Un bloc « bon », un bloc « attention ». Au plus deux.'),
+  strava_lu: z.array(z.string()).describe("Ce que tu es allé chercher dans Strava. Vide si tu n'y es pas allé."),
+});
+
+const DOCTRINE_GLISSANTE = `${DOCTRINE}
+- Compenser, c'est allonger une sortie longue ou déplacer une séance dans les sept
+  jours — jamais ajouter une séance. La charge des sept jours ne dépasse pas ce que
+  le plan prévoyait pour eux.
+- Le signal du matin décide de la journée : un corps fatigué ne fait pas de qualité,
+  quelle que soit la case du plan. Un très bon signal n'ajoute rien : il autorise.
+- Une séance clé qui dépend de la forme d'un jour à venir se tranche ce jour-là :
+  tu donnes la règle et le moment, tu ne devines pas.`;
+
+const ETAT_EN_CLAIR = {
+  fait: 'FAITE', partiel: 'FAITE AUTREMENT', manque: 'MANQUÉE', aujourdhui: 'AUJOURD’HUI', prevu: 'à venir', repos: 'repos',
+};
+
+function contexteGlissant({ athlete, aujourdhui, jour, semaine, bloc, matin, passees, prochains, regles }) {
+  const lignes = [
+    `Athlète : ${athlete.nom}. Référence 10 km actuelle ${athlete.ref_actuelle} → cible ${athlete.ref_cible}.`,
+    `Aujourd'hui : ${jour} ${aujourdhui} · semaine ${semaine} · bloc ${bloc}.`,
+    '',
+    'Le signal du matin, déjà calculé — cite-le tel quel :',
+  ];
+  const m = matin?.mesure;
+  if (!m || (m.fc_repos == null && m.hrv_ms == null)) {
+    lignes.push("  Pas de mesure ce matin : tu le dis, et tu replanifies sur la semaine seule.");
+  } else {
+    if (m.date !== aujourdhui) lignes.push(`  (dernière mesure : ${m.date}, pas ce matin)`);
+    if (m.fc_repos != null) {
+      const b = matin.base?.fc_repos;
+      lignes.push(`  FC de repos ${m.fc_repos} bpm${b != null ? ` (base ${b}, ${m.fc_repos - b >= 0 ? '+' : ''}${m.fc_repos - b})` : ''}`);
+    }
+    if (m.hrv_ms != null) {
+      const b = matin.base?.hrv_ms;
+      const pct = b ? Math.round(((m.hrv_ms - b) / b) * 100) : null;
+      lignes.push(`  HRV ${m.hrv_ms} ms${b ? ` (base ${b}, ${pct >= 0 ? '+' : ''}${pct} %)` : ''}`);
+    }
+    if (matin.forme) {
+      lignes.push(`  Score de forme ${matin.forme.score}/10 — ${matin.forme.niveau}${matin.forme.alertes?.length ? ` · alertes : ${matin.forme.alertes.join(', ')}` : ''}`);
+    } else {
+      lignes.push('  Pas de score : rien à quoi comparer la mesure.');
+    }
+  }
+
+  lignes.push('', 'La semaine jusqu’ici, séance par séance :');
+  if (!passees?.length) lignes.push('  (la semaine commence aujourd’hui)');
+  for (const s of passees ?? []) {
+    const etat = ETAT_EN_CLAIR[s.statut] ?? s.statut;
+    const strava = s.activite
+      ? ` (Strava : ${s.activite.duree_min} min${s.activite.allure_moy ? ` · ${s.activite.allure_moy}` : ''}${s.activite.sport && s.activite.sport !== 'run' ? ` · ${s.activite.sport}` : ''})`
+      : '';
+    const rpe = s.rpe ? ` · RPE ressenti ${s.rpe}` : '';
+    const bloque = s.limites?.length
+      ? ` · a bloqué : ${s.limites.map((l) => LIMITE_EN_CLAIR[l] ?? l).join(', ')}`
+      : '';
+    lignes.push(`  ${s.id}  ${s.jour} ${s.date} · ${s.titre} · ${s.type} · prévu ${s.duree_min} min${s.natation_m ? ` · ${s.natation_m} m` : ''} · ${etat}${strava}${rpe}${bloque}`);
+  }
+
+  lignes.push('', 'Les sept prochains jours, tels que le plan les prévoit. Une ligne ne peut nommer qu’un de ces id :');
+  for (const s of prochains ?? []) {
+    lignes.push(`  ${s.id}  ${s.jour} ${s.date} · ${s.titre} · ${s.discipline} · ${s.type} · ${s.duree_min} min${s.natation_m ? ` · ${s.natation_m} m` : ''} · RPE cible ${s.rpe_cible}${s.allures ? ` · ${s.allures}` : ''}`);
+  }
+  const avecSeance = new Set((prochains ?? []).map((s) => s.date));
+  const sans = [];
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(`${aujourdhui}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + i);
+    const iso = d.toISOString().slice(0, 10);
+    if (!avecSeance.has(iso)) sans.push(iso);
+  }
+  if (sans.length) lignes.push(`  Jours sans séance : ${sans.join(', ')}.`);
+
+  if (regles?.length) {
+    lignes.push('', 'Les règles d’ajustement du plan, telles qu’elles sont écrites :');
+    for (const r of regles) lignes.push(`  ${r}`);
+  }
+  return lignes.join('\n');
+}
+
+export async function planifierGlissant(corps) {
+  const { client, MODELE } = await coachClient();
+  const langue = corps.langue === 'pl' ? 'pl' : 'fr';
+
+  const { reponse, strava } = await avecRepli(
+    client,
+    {
+      model: MODELE,
+      max_tokens: 12000,
+      system: `${systeme(langue, corps.coach)}\n\n${DOCTRINE_GLISSANTE}`,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'high', format: zodOutputFormat(Glissant) },
+      messages: [
+        {
+          role: 'user',
+          content: `${contexteGlissant(corps)}
+
+Replanifie les sept prochains jours à partir de ce matin. Si tu as accès à Strava,
+regarde ce que l'athlète a réellement fait cette semaine et les précédentes.
+
+Donne : le signal du matin (un titre, deux ou trois lignes avec les chiffres fournis,
+ce qu'il autorise aujourd'hui) ; l'implication pour les sept jours ; puis, jour par
+jour à partir d'aujourd'hui, une ligne par séance prévue — garder, réduire ou allonger
+(une fraction), déplacer (vers un des sept jours), sauter — avec le format tel qu'il
+t'est donné et ton mot pour ce jour ; enfin, si une séance clé dépend d'une condition
+à vérifier plus tard, la décision : quand, et la règle.`,
+        },
+      ],
+    },
+    corps.jeton_strava,
+  );
+
+  if (!reponse.parsed_output) throw new Error("La replanification n'a pas pu être structurée.");
+  return {
+    ...reponse.parsed_output,
+    strava,
+    modele: MODELE,
+    cout_eur: cout(reponse.usage),
+    usage: reponse.usage,
+  };
+}

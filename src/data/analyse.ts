@@ -17,6 +17,7 @@
 
 import * as db from './db';
 import type {
+  GlissantContenu,
   MscActivity,
   MscAnalyseStat,
   MscAjustement,
@@ -28,10 +29,12 @@ import type {
   ZoneCode,
 } from './types';
 import { RACINE_API } from './base';
+import { motDuStatut } from './statut';
 
 const ENDPOINT_ANALYSE = `${RACINE_API}/analyse`;
 const ENDPOINT_COACH = `${RACINE_API}/coach`;
 const ENDPOINT_RECALCUL = `${RACINE_API}/recalcul`;
+const ENDPOINT_GLISSANT = `${RACINE_API}/glissant`;
 
 /* Beyond these, the figure is worth a second look rather than a nod. Réglables
    dans le back office (msc_param) ; ces valeurs sont le défaut du code. */
@@ -513,6 +516,24 @@ export function libelleAjustement(
   const session = db.one('msc_session', (s) => s.id === a.session_id);
   if (!session) return undefined;
 
+  const quand = lang === 'fr'
+    ? `${session.jour_long} · S${session.semaine}`
+    : `${session.jour[lang]} · T${session.semaine}`;
+
+  /* Un déplacement : d'un jour à un autre. Acceptée, la séance est déjà sur
+     le nouveau jour et `avant` dit d'où elle vient. */
+  if (a.vers_date && a.part === undefined) {
+    const de = a.applique ? (a.avant?.jour_long ?? jourLong(a.avant?.date, lang)) : session.jour_long;
+    const vers = a.applique ? session.jour_long : jourLong(a.vers_date, lang);
+    return { quoi: `${session.titre_court[lang]} ${de} → ${vers}`, quand };
+  }
+  /* Une ligne qui nomme la séance sans la changer — sautée, une consigne :
+     elle porte sa phrase. */
+  if (a.part === undefined && !a.vers_date) {
+    const texte = a.texte?.[lang];
+    return { quoi: texte ? `${session.titre_court[lang]} · ${texte}` : session.titre_court[lang], quand };
+  }
+
   /* Accepté : la séance porte déjà la nouvelle quantité, et `avant` dit d'où
      elle vient. Pas accepté : la quantité proposée se calcule. Dans les deux
      cas la flèche dit vrai — c'est tout ce qu'on lui demande. */
@@ -534,12 +555,12 @@ export function libelleAjustement(
     ? `${session.titre_court[lang]} ${milliers(de)} → ${milliers(vers)} m`
     : `${session.titre_court[lang]} ${hm(de)} → ${hm(vers)}`;
 
-  return {
-    quoi,
-    quand: lang === 'fr'
-      ? `${session.jour_long} · S${session.semaine}`
-      : `${session.jour[lang]} · T${session.semaine}`,
-  };
+  return { quoi, quand };
+}
+
+function jourLong(date: string | undefined, lang: Lang): string {
+  if (!date) return '—';
+  return new Date(`${date}T00:00:00`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'pl-PL', { weekday: 'long', day: 'numeric' });
 }
 
 /* --------------------------------------------------------------- les appels */
@@ -593,6 +614,78 @@ export function demanderRecalcul(
       .map((w) => ({ semaine: w.semaine, phase: w.phase, bloc: w.bloc, heures: w.heures })),
     /* The adjustment rules as prose, so the recalculation reasons the way the
        plan does rather than inventing its own doctrine. */
+    regles: db.select('msc_regle').map((r) => `${r.si[lang]} → ${r.alors[lang]} (${r.gravite})`),
+  });
+}
+
+/* ------------------------------------------- les sept prochains jours */
+
+export interface GlissantClaude extends GlissantContenu {
+  observations: AnalyseObservation[];
+  strava_lu: string[];
+  strava: boolean;
+  modele: string;
+  cout_eur: number;
+}
+
+function plusJours(date: string, n: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Replanifier les sept prochains jours. Le navigateur envoie ce qu'il sait
+ * déjà — la semaine jusqu'ici avec l'état de chaque séance, les sept jours du
+ * plan avec les allures que le moteur a calculées, les règles — et le serveur
+ * y joint le signal du matin. Rien ici n'est un chiffre nouveau.
+ */
+export function demanderGlissant(aujourdhui: string, lang: Lang = 'fr'): Promise<GlissantClaude> {
+  const etat = db.etatDesSeances();
+  const lundi = plusJours(aujourdhui, -((new Date(`${aujourdhui}T00:00:00Z`).getUTCDay() + 6) % 7));
+  const fin = plusJours(aujourdhui, 6);
+  const semaine = db.positionDuPlan(aujourdhui).semaine;
+
+  const passees = db
+    .select('msc_session', (s) => s.date >= lundi && s.date < aujourdhui)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.duree_min - b.duree_min)
+    .map((s) => {
+      const j = db.one('msc_journal', (r) => r.session_id === s.id);
+      const a = db.one('msc_activity', (r) => r.session_id === s.id);
+      return {
+        id: s.id, date: s.date, jour: s.jour_long, titre: s.titre_court[lang], type: s.type,
+        duree_min: s.duree_min, natation_m: s.natation_m,
+        statut: db.statutDe(s, aujourdhui, etat),
+        activite: a ? { duree_min: a.duree_min, allure_moy: a.allure_moy, sport: a.sport } : null,
+        rpe: j?.rpe_ressenti || null,
+        limites: (j?.limites ?? []).filter((l) => l !== 'rien'),
+      };
+    });
+
+  const prochains = db
+    .select('msc_session', (s) => s.date >= aujourdhui && s.date <= fin && s.type !== 'repos')
+    .sort((a, b) => a.date.localeCompare(b.date) || b.duree_min - a.duree_min)
+    .map((s) => ({
+      id: s.id, date: s.date, jour: s.jour_long, titre: s.titre_court[lang], discipline: s.discipline,
+      type: s.type, duree_min: s.duree_min, natation_m: s.natation_m, rpe_cible: s.rpe_cible,
+      allures: db.consigne(s, lang) ?? null,
+      etat: motDuStatut(db.statutDe(s, aujourdhui, etat), lang),
+    }));
+
+  return appeler<GlissantClaude>(ENDPOINT_GLISSANT, {
+    langue: lang,
+    aujourdhui,
+    jour: db.one('msc_session', (s) => s.date === aujourdhui)?.jour_long
+      ?? new Date(`${aujourdhui}T00:00:00`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'pl-PL', { weekday: 'long' }),
+    semaine,
+    bloc: db.blocDeSemaine(semaine).code,
+    athlete: {
+      nom: db.athlete.nom,
+      ref_actuelle: db.format10k(db.athlete.ref_actuelle_s),
+      ref_cible: db.format10k(db.athlete.ref_cible_s),
+    },
+    passees,
+    prochains,
     regles: db.select('msc_regle').map((r) => `${r.si[lang]} → ${r.alors[lang]} (${r.gravite})`),
   });
 }

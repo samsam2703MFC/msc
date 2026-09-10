@@ -422,6 +422,41 @@ Between those, a model cannot put a number on this screen. It can only choose
 among the ones the engine is willing to compute — and `check:strava` asserts
 each rule, including the ones that fire when Claude answers badly.
 
+### The next seven days — adaptation à jours glissants
+
+The weekly recalculation reads a calendar week. The athlete's day does not:
+what matters on a Thursday is the seven days ahead, read from this morning.
+**Les 7 prochains jours**, at the top of the Coach screen, does that:
+
+1. the browser sends what it already holds — the week so far, session by
+   session, with its state (done / done otherwise / missed, the Strava
+   duration and pace, the felt RPE, what blocked), and the next seven days of
+   the plan with the paces the engine computed (`demanderGlissant`);
+2. the server adds **the morning signal** — the last confirmed measurement,
+   resting HR and HRV against their baselines, the gauge's score
+   (`signalDuMatin`) — and asks the coach, in their persona, under the plan's
+   doctrine plus three rules of its own: compensating means lengthening a long
+   run or moving a session within the seven days, never adding one; the
+   morning decides the day, whatever the plan's cell says; a key session that
+   depends on a later day is decided that day, by a rule, not a guess;
+3. the coach answers with the signal in words (citing only the figures it
+   was given), what it implies, then **one line per planned session from
+   today**: keep, shorten or lengthen (a fraction), move (to one of the seven
+   dates), skip — with the format as given and a short note (« GO », « plan
+   normal », « déplacée au jeudi », « compensation », « à valider samedi ») —
+   and, when a key session hangs on a condition, the decision: when, and the
+   rule.
+
+Everything is stored as one `msc_analyse` of type `glissant` (the JSON in
+`glissant`; only the latest per plan is kept) and, for each line that
+changes a session, an `msc_ajustement` — `part` for a quantity,
+`vers_date` for a move. Accepting one goes through the same `appliquer` as
+the weekly adjustments; a move rewrites the session's date, week, block, rank
+and day labels (`changerDeJour`), and retracting it puts everything back
+from `avant`. A line that changes nothing (« sautée », a note) is a decision
+recorded, never a write on the session. The coach still produces no figure:
+paces and minutes stay the engine's.
+
 ### The week — « Recalculer le plan »
 
 `/api/recalcul` is the same shape one scope up, and the split falls in the same

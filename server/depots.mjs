@@ -116,7 +116,7 @@ async function vocabulaire() {
   };
 }
 
-async function planActif(athleteId) {
+export async function planActif(athleteId) {
   return ligne(
     'SELECT * FROM msc_plan WHERE athlete_id = :a AND actif = 1 ORDER BY debut DESC LIMIT 1',
     { a: athleteId },
@@ -291,8 +291,9 @@ async function leCoach(athleteId, planId) {
     msc_analyse: analyses.map((a) => ({
       id: a.id, date: a.date, type: a.type,
       session_id: a.session_id ?? undefined, semaine: nombre(a.semaine),
-      modele: a.modele, cout_eur: Number(a.cout_eur),
+      modele: a.modele, cout_eur: Number(a.cout_eur), ton: a.ton ?? undefined,
       verdict: L(a, 'verdict'), stats: json(a.stats), blocs: json(a.blocs),
+      glissant: json(a.glissant) ?? undefined,
     })),
     /* Une zone et une part, pas des minutes et une allure : le navigateur les
        rend avec le moteur, comme il rend tout le reste. */
@@ -309,6 +310,7 @@ async function leCoach(athleteId, planId) {
       id: j.id, analyse_id: j.analyse_id,
       session_id: j.session_id ?? undefined, semaine: nombre(j.semaine),
       type: j.type_code, part: nombre(j.part), texte: Lnul(j, 'texte'),
+      vers_date: j.vers_date ? String(j.vers_date).slice(0, 10) : undefined,
       applique: Boolean(j.applique_le),
       avant: j.applique_le ? json(j.avant) : undefined,
     })),
@@ -458,18 +460,59 @@ export async function apercu(athletes) {
   return Promise.all(athletes.map((x) => apercuDe(x)));
 }
 
-async function apercuDe({ id, droit }) {
-  const [a, plan, mesure, rpe] = await Promise.all([
-    ligne('SELECT * FROM msc_athlete WHERE id = :a', { a: id }),
-    planActif(id),
+/**
+ * Le signal du matin : la dernière mesure confirmée (au plus tard aujourd'hui —
+ * une mesure datée dans le futur, un seed, une saisie mal datée, ne dit rien de
+ * la forme de ce matin), sa ligne de base, et ce que la jauge en lit. Sert la
+ * vue coach et la replanification des sept prochains jours.
+ */
+export async function signalDuMatin(athleteId) {
+  const [a, mesure, reglages] = await Promise.all([
+    ligne('SELECT fc_repos, fc_repos_moy7 FROM msc_athlete WHERE id = :a', { a: athleteId }),
     ligne(
-      /* Au plus tard aujourd'hui : une mesure datée dans le futur — un seed, une
-         saisie mal datée — ne dit rien de la forme de ce matin. */
       `SELECT date, poids_kg, fc_repos, hrv_ms FROM msc_mesure
        WHERE athlete_id = :a AND etat = 'confirme' AND date <= CURDATE()
        ORDER BY date DESC LIMIT 1`,
-      { a: id },
+      { a: athleteId },
     ),
+    reglagesDesCourbes(),
+  ]);
+  if (!a) throw new Error(`athlète ${athleteId} inconnu`);
+  /* La HRV n'a pas de ligne de base sur l'athlète comme la FC de repos : elle
+     se lit sur les jours qui précèdent la dernière mesure, celle-ci exclue —
+     sinon la mesure se comparerait à elle-même. */
+  const hrvBase = mesure
+    ? (await ligne(
+        `SELECT AVG(hrv_ms) AS h FROM msc_mesure
+         WHERE athlete_id = :a AND etat = 'confirme' AND hrv_ms IS NOT NULL
+           AND date < :d1 AND date >= DATE_SUB(:d2, INTERVAL :n DAY)`,
+        { a: athleteId, d1: mesure.date, d2: mesure.date, n: reglages.hrvBaseJours },
+      ))?.h
+    : null;
+  const base = {
+    fc_repos: a.fc_repos_moy7 ?? a.fc_repos ?? null,
+    hrv_ms: hrvBase == null ? null : Math.round(Number(hrvBase)),
+  };
+  return {
+    mesure: mesure
+      ? {
+          date: mesure.date,
+          poids_kg: mesure.poids_kg == null ? null : Number(mesure.poids_kg),
+          fc_repos: mesure.fc_repos ?? null,
+          hrv_ms: mesure.hrv_ms ?? null,
+        }
+      : null,
+    base,
+    forme: forme(mesure, base, await seuilsForme()),
+    reglages,
+  };
+}
+
+async function apercuDe({ id, droit }) {
+  const [a, plan, matin, rpe] = await Promise.all([
+    ligne('SELECT * FROM msc_athlete WHERE id = :a', { a: id }),
+    planActif(id),
+    signalDuMatin(id),
     ligne(
       `SELECT id, rpe_ressenti, date FROM msc_journal
        WHERE athlete_id = :a AND rpe_ressenti IS NOT NULL AND date <= CURDATE()
@@ -478,6 +521,7 @@ async function apercuDe({ id, droit }) {
     ),
   ]);
   if (!a) throw new Error(`athlète ${id} inconnu`);
+  const { mesure, base, reglages } = matin;
   /* Ce qui a bloqué sur cette dernière séance : la ligne que le coach lit
      avant le chiffre. */
   const limitesRpe = rpe
@@ -485,22 +529,7 @@ async function apercuDe({ id, droit }) {
         .map((l) => l.limite)
     : [];
 
-  /* La HRV n'a pas de ligne de base sur l'athlète comme la FC de repos : elle
-     se lit sur les trente jours qui précèdent la dernière mesure, celle-ci
-     exclue — sinon la mesure se comparerait à elle-même. */
-  const reglages = await reglagesDesCourbes();
-  const hrvBase = mesure
-    ? (await ligne(
-        `SELECT AVG(hrv_ms) AS h FROM msc_mesure
-         WHERE athlete_id = :a AND etat = 'confirme' AND hrv_ms IS NOT NULL
-           AND date < :d1 AND date >= DATE_SUB(:d2, INTERVAL :n DAY)`,
-        { a: id, d1: mesure.date, d2: mesure.date, n: reglages.hrvBaseJours },
-      ))?.h
-    : null;
-  const base = {
-    fc_repos: a.fc_repos_moy7 ?? a.fc_repos ?? null,
-    hrv_ms: hrvBase == null ? null : Math.round(Number(hrvBase)),
-  };
+
 
   let semaine = 1;
   let total = 0;
@@ -604,16 +633,9 @@ async function apercuDe({ id, droit }) {
     coach: a.coach ?? 'gentil',
     niveau: await palierDeAthlete(id),
     dernier_rpe: rpe ? { valeur: rpe.rpe_ressenti, date: rpe.date, limites: limitesRpe } : null,
-    mesure: mesure
-      ? {
-          date: mesure.date,
-          poids_kg: mesure.poids_kg == null ? null : Number(mesure.poids_kg),
-          fc_repos: mesure.fc_repos ?? null,
-          hrv_ms: mesure.hrv_ms ?? null,
-        }
-      : null,
+    mesure,
     base,
-    forme: forme(mesure, base, await seuilsForme()),
+    forme: matin.forme,
     charge: { passee_7j: Number(passee?.c ?? 0), a_venir_7j: Number(aVenir?.c ?? 0) },
     /* Les deux courbes, pour la carte du back office — lues de la même
        façon que pour l'athlète lui-même. */
@@ -982,9 +1004,45 @@ export async function zoneAdmissible(cnx, sessionId, propose) {
 }
 
 /** Écrit la séance, et rend ce qu'elle était. */
-async function deplacerSeance(cnx, sessionId, { part, zone, source }) {
+/* Les jours, tels que les séances les portent : le long, le court, le polonais. */
+const JOURS = [
+  ['Lundi', 'LUN', 'PON'], ['Mardi', 'MAR', 'WT'], ['Mercredi', 'MER', 'ŚR'], ['Jeudi', 'JEU', 'CZW'],
+  ['Vendredi', 'VEN', 'PT'], ['Samedi', 'SAM', 'SOB'], ['Dimanche', 'DIM', 'ND'],
+];
+function jourDe(date) {
+  return JOURS[(new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7];
+}
+
+/**
+ * Une séance change de jour. La semaine et le bloc suivent la nouvelle date
+ * (la semaine du plan qui contient ce jour, lue sur les séances qui y sont
+ * déjà), l'ordre du jour se range après ce qui s'y trouve, et les libellés du
+ * jour se réécrivent. Les totaux des deux semaines sont refaits par l'appelant.
+ */
+async function changerDeJour(cnx, s, versDate) {
+  const [[voisine]] = await cnx.execute(
+    `SELECT semaine, bloc_id FROM msc_session
+     WHERE plan_id = ? AND YEARWEEK(date, 3) = YEARWEEK(?, 3) LIMIT 1`,
+    [s.plan_id, versDate],
+  );
+  const semaine = voisine?.semaine ?? s.semaine;
+  const blocId = voisine?.bloc_id ?? s.bloc_id;
+  const [[suivant]] = await cnx.execute(
+    'SELECT COALESCE(MAX(ordre), -1) + 1 AS n FROM msc_session WHERE plan_id = ? AND date = ?',
+    [s.plan_id, versDate],
+  );
+  const [long, fr, pl] = jourDe(versDate);
+  await cnx.execute(
+    `UPDATE msc_session SET date = ?, semaine = ?, bloc_id = ?, ordre = ?, jour_long = ?, jour_fr = ?, jour_pl = ?
+     WHERE id = ?`,
+    [versDate, semaine, blocId, Number(suivant.n), long, fr, pl, s.id],
+  );
+}
+
+async function deplacerSeance(cnx, sessionId, { part, zone, source, versDate = null }) {
   const [[s]] = await cnx.execute(
-    `SELECT id, plan_id, semaine, duree_min, rpe_cible, charge, distance_km, natation_m,
+    `SELECT id, plan_id, semaine, bloc_id, date, ordre, jour_long, jour_fr, jour_pl,
+            duree_min, rpe_cible, charge, distance_km, natation_m,
             meta_fr, meta_pl, adapte_par
      FROM msc_session WHERE id = ? FOR UPDATE`,
     [sessionId],
@@ -1006,6 +1064,10 @@ async function deplacerSeance(cnx, sessionId, { part, zone, source }) {
     meta_fr: s.meta_fr,
     meta_pl: s.meta_pl,
     zones: zonesAvant.map((z) => z.code),
+    /* Le jour d'avant, pour un déplacement : retirer la proposition ramène la
+       séance là où elle était. */
+    date: s.date, semaine: s.semaine, bloc_id: s.bloc_id, ordre: s.ordre,
+    jour_long: s.jour_long, jour_fr: s.jour_fr, jour_pl: s.jour_pl,
   };
 
   const f = Number.isFinite(part) ? Math.min(PART_MAX, Math.max(PART_MIN, part)) : 1;
@@ -1034,7 +1096,12 @@ async function deplacerSeance(cnx, sessionId, { part, zone, source }) {
     );
   }
 
-  await recalculerSemaines(cnx, s.plan_id, s.semaine);
+  if (versDate && versDate !== s.date) {
+    await changerDeJour(cnx, s, versDate);
+    await recalculerSemaines(cnx, s.plan_id, null);
+  } else {
+    await recalculerSemaines(cnx, s.plan_id, s.semaine);
+  }
   return avant;
 }
 
@@ -1062,7 +1129,19 @@ async function restaurerSeance(cnx, sessionId, avant, source) {
       [sessionId, z, i],
     );
   }
-  await recalculerSemaines(cnx, s.plan_id, s.semaine);
+  if (avant.date) {
+    /* Elle avait changé de jour : elle y retourne, avec sa semaine, son bloc,
+       son rang et ses libellés d'alors. */
+    await cnx.execute(
+      `UPDATE msc_session SET date = ?, semaine = ?, bloc_id = ?, ordre = ?, jour_long = ?, jour_fr = ?, jour_pl = ?
+       WHERE id = ?`,
+      [avant.date, avant.semaine ?? s.semaine, avant.bloc_id ?? null, avant.ordre ?? 0,
+       avant.jour_long, avant.jour_fr, avant.jour_pl, sessionId],
+    );
+    await recalculerSemaines(cnx, s.plan_id, null);
+  } else {
+    await recalculerSemaines(cnx, s.plan_id, s.semaine);
+  }
   return true;
 }
 
@@ -1098,22 +1177,28 @@ async function faireAppliquer(cnx, athleteId, table, id, applique) {
         : p.part === null || p.part === undefined
           ? 1
           : Number(p.part);
+    const versDate = table === 'msc_ajustement' && p.vers_date ? String(p.vers_date).slice(0, 10) : null;
+    /* Une ligne qui nomme une séance sans rien lui faire — « sautée », une
+       consigne — est une décision notée, pas une écriture sur la séance. */
+    const rienASeance = table === 'msc_ajustement' && p.session_id
+      && (p.part === null || p.part === undefined) && !versDate;
 
     if (!applique) {
       /* Un ajustement de semaine n'a pas de séance : il porte sa phrase, et
          l'accepter n'est qu'une décision notée. */
-      const rendue = p.session_id
+      const rendue = p.session_id && !rienASeance
         ? await restaurerSeance(cnx, p.session_id, json(p.avant), source)
         : false;
       await cnx.execute(`UPDATE ${table} SET applique_le = NULL WHERE id = ?`, [id]);
       return { id, applique: false, seance: rendue };
     }
 
-    const avant = p.session_id
+    const avant = p.session_id && !rienASeance
       ? await deplacerSeance(cnx, p.session_id, {
           part,
           zone: table === 'msc_adaptation' ? p.zone_code : null,
           source,
+          versDate,
         })
       : null;
     await cnx.execute(`UPDATE ${table} SET applique_le = ?, avant = ? WHERE id = ?`, [
@@ -1206,6 +1291,52 @@ export async function enregistrerRecalcul(athleteId, { plan_id, semaine, date, m
       gardes += 1;
     }
     return { analyse_id: r.insertId, ajustements: gardes, ecartes: ajustements.length - gardes };
+  });
+}
+
+/**
+ * Les sept prochains jours, tels que le coach les a replanifiés. Une seule
+ * replanification vivante par plan : la précédente s'efface, ses propositions
+ * avec elle — celles déjà acceptées ont déjà écrit la séance, et gardent leur
+ * trace sur elle (adapte_par).
+ */
+export async function enregistrerGlissant(athleteId, { plan_id, date, modele, cout_eur, strava, ton = null,
+  implication, observations, glissant, ajustements = [], langue = 'fr' }) {
+  return transaction(async (cnx) => {
+    await cnx.execute("DELETE FROM msc_analyse WHERE plan_id = ? AND type = 'glissant'", [plan_id]);
+    const [r] = await cnx.execute(
+      `INSERT INTO msc_analyse (athlete_id, type, plan_id, date, modele, cout_eur, strava_lu, ton,
+         verdict_fr, verdict_pl, blocs, glissant)
+       VALUES (?, 'glissant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [athleteId, plan_id, date, modele, cout_eur ?? 0, strava ? 1 : 0, ton,
+       ...deuxLangues(implication ?? '', langue),
+       observations ? JSON.stringify(observations) : null,
+       JSON.stringify(glissant ?? null)],
+    );
+
+    /* Une proposition nomme une séance de ce plan, ou elle est écartée. Le type
+       est celui de la séance ; la date d'arrivée d'un déplacement doit tomber
+       dans les sept jours annoncés, sinon elle est ignorée et la ligne reste
+       une note. */
+    let gardes = 0;
+    const jours = new Set((glissant?.jours ?? []).map((j) => j.date));
+    for (const a of ajustements) {
+      if (!a.session_id) continue;
+      const s = await ligne(
+        'SELECT id, type_code, date FROM msc_session WHERE id = :i AND plan_id = :p',
+        { i: a.session_id, p: plan_id },
+      );
+      if (!s) continue;
+      const versDate = a.vers_date && jours.has(a.vers_date) && a.vers_date !== s.date ? a.vers_date : null;
+      const part = a.part === null || a.part === undefined ? null : borner(a.part, 0.5, 1.25);
+      await cnx.execute(
+        `INSERT INTO msc_ajustement (analyse_id, session_id, type_code, part, vers_date, texte_fr, texte_pl)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [r.insertId, s.id, s.type_code, part === 1 ? null : part, versDate, ...deuxLangues(a.texte, langue, true)],
+      );
+      gardes += 1;
+    }
+    return { analyse_id: r.insertId, ajustements: gardes };
   });
 }
 

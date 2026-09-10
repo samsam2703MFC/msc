@@ -10,6 +10,7 @@ import type { TourDeChat } from '../data/analyse';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { Observations } from '../components/Observations';
+import { SeptJours } from '../components/SeptJours';
 import {
   AccentButton,
   Card,
@@ -133,6 +134,9 @@ export function CoachScreen({ app }: { app: App }) {
           </div>
         )}
       </Card>
+
+      {/* les sept prochains jours, replanifiés à partir du signal du matin */}
+      <SeptJours app={app} />
 
       <ReglesCard app={app} declenchees={codesDeclenches} />
 
