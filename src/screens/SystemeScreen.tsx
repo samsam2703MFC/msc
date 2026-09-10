@@ -13,12 +13,11 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import * as api from '../data/api';
 import type { EtatDemoAthlete, Systeme } from '../data/api';
-import type { Lang, MscParam } from '../data/types';
+import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { Card, SectionLabel } from '../components/primitives';
 import type { App } from '../state/useApp';
-import { Reglage } from './ParamScreen';
 
 const T = {
   fr: {
@@ -28,12 +27,12 @@ const T = {
     sansBuild: 'pas de build servi (dist/version.txt absent)', recharger: 'Recharger',
     node: 'Node', env: 'environnement', depuis: 'démarré le',
     sansTls: 'MSC_SANS_TLS est levé : le cookie de session voyage en clair. À ne garder que sur un serveur d’essai.',
-    services: 'Services', renseigner: 'Renseigner', modifier: 'Modifier', fermer: 'Fermer',
+    services: 'Services', reglages: 'Réglages',
     cle: 'Clé Anthropic', cleOk: 'renseignée', cleAbsente: 'absente — à renseigner ici, ou ANTHROPIC_API_KEY dans le .env',
     cleIllisible: 'renseignée mais illisible : scellée avec une autre MSC_SECRET_KEY, ou posée en clair par SQL. Ressaisis-la ici.',
     sources: { base: 'réglée ici (msc_param)', env: 'variable d’environnement', defaut: 'défaut du code' } as Record<string, string>,
     strava: 'Strava', stravaOk: 'client configuré',
-    stravaNon: 'non configuré — l’ID client et le secret de ton application Strava (strava.com/settings/api), à renseigner ici',
+    stravaNon: 'non configuré — l’application commune se renseigne dans Réglages · Strava ; chaque athlète peut aussi porter la sienne, dans sa section Strava',
     scellement: 'Scellement', scellementOk: 'MSC_SECRET_KEY prête', scellementNon: 'MSC_SECRET_KEY absente ou invalide : aucun secret ne peut être lu ni écrit',
     base: 'Base de données', baseOk: 'répond', baseNon: 'ne répond pas',
     demo: 'Données de démonstration',
@@ -51,12 +50,12 @@ const T = {
     sansBuild: 'brak buildu (dist/version.txt nie istnieje)', recharger: 'Odśwież',
     node: 'Node', env: 'środowisko', depuis: 'uruchomiony',
     sansTls: 'MSC_SANS_TLS jest ustawione: ciasteczko sesji podróżuje jawnie. Tylko na serwerze testowym.',
-    services: 'Usługi', renseigner: 'Uzupełnij', modifier: 'Edytuj', fermer: 'Zamknij',
+    services: 'Usługi', reglages: 'Ustawienia',
     cle: 'Klucz Anthropic', cleOk: 'ustawiony', cleAbsente: 'brak — wpisz tutaj albo ANTHROPIC_API_KEY w .env',
     cleIllisible: 'ustawiony, ale nieczytelny: zapieczętowany innym MSC_SECRET_KEY albo wpisany jawnie przez SQL. Wpisz ponownie tutaj.',
     sources: { base: 'ustawione tutaj (msc_param)', env: 'zmienna środowiskowa', defaut: 'domyślny z kodu' } as Record<string, string>,
     strava: 'Strava', stravaOk: 'klient skonfigurowany',
-    stravaNon: 'nieskonfigurowany — ID klienta i sekret twojej aplikacji Strava (strava.com/settings/api), do wpisania tutaj',
+    stravaNon: 'nieskonfigurowany — wspólną aplikację wpisuje się w Ustawieniach · Strava; każdy zawodnik może też mieć własną, w swojej sekcji Strava',
     scellement: 'Pieczęć', scellementOk: 'MSC_SECRET_KEY gotowy', scellementNon: 'MSC_SECRET_KEY brak lub nieprawidłowy: żaden sekret nie da się odczytać ani zapisać',
     base: 'Baza danych', baseOk: 'odpowiada', baseNon: 'nie odpowiada',
     demo: 'Dane demonstracyjne',
@@ -68,12 +67,6 @@ const T = {
     planNote: 'Plan jest usuwany tylko, gdy nie jest aktywny, wraz z zawodami, które tylko on nazywa i które nie mają wyniku.',
   },
 } satisfies Record<Lang, unknown>;
-
-/* Les réglages qui se saisissent depuis cette page, service par service. */
-const REGLAGES: Record<'anthropic' | 'strava', string[]> = {
-  anthropic: ['anthropic.cle'],
-  strava: ['strava.client_id', 'strava.client_secret', 'strava.verify_token'],
-};
 
 const BOUTON_SOBRE = {
   padding: '5px 10px', borderRadius: R.full, border: `1px solid ${C.border}`,
@@ -158,33 +151,20 @@ function Demo({
   );
 }
 
-export function SystemeScreen({ app }: { app: App }) {
+export function SystemeScreen({ app, onSection }: { app: App; onSection?: (s: 'param') => void }) {
   const t = T[app.lang];
   const lang = app.lang;
   const [etat, setEtat] = useState<Systeme | null>(null);
-  const [params, setParams] = useState<MscParam[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [ouvert, setOuvert] = useState<keyof typeof REGLAGES | null>(null);
   const [retrait, setRetrait] = useState<Retrait | null>(null);
 
   const lire = useCallback(() => {
     api.systeme()
       .then((s) => { setEtat(s); setErreur(null); })
       .catch((e) => setErreur(message(e)));
-    api.params()
-      .then((r) => setParams(r.params))
-      .catch(() => setParams(null));
   }, []);
 
   useEffect(() => { lire(); }, [lire]);
-
-  /* Le même geste que dans Réglages, puis l'état des services relu : la ligne
-     doit passer au vert sous les yeux. */
-  const enregistrer = async (cle: string, valeur: string | number | boolean | null) => {
-    const r = await api.majParam(cle, valeur);
-    setParams((ps) => (ps ?? []).map((p) => (p.cle === cle ? r.param : p)));
-    lire();
-  };
 
   const retirer = async (athleteId: number, plan: boolean) => {
     setRetrait({ athlete: athleteId, mode: 'en-cours' });
@@ -213,20 +193,11 @@ export function SystemeScreen({ app }: { app: App }) {
   const demo = etat.demo;
   const demoVide = !demo || Boolean(demo.erreur) || demo.athletes.length === 0;
 
-  const champs = (service: keyof typeof REGLAGES) =>
-    REGLAGES[service]
-      .map((cle) => (params ?? []).find((p) => p.cle === cle))
-      .filter((p): p is MscParam => Boolean(p));
-
-  const bascule = (service: keyof typeof REGLAGES, ok: boolean) => params && champs(service).length > 0 ? (
-    <button type="button" onClick={() => setOuvert((o) => (o === service ? null : service))} aria-expanded={ouvert === service} style={BOUTON_SOBRE}>
-      {ouvert === service ? t.fermer : ok ? t.modifier : t.renseigner}
-    </button>
+  /* Un service se règle dans Réglages, avec tout le reste ; ici on constate,
+     et on y renvoie d'un bouton. */
+  const versReglages = onSection ? (
+    <button type="button" onClick={() => onSection('param')} style={BOUTON_SOBRE}>{`→ ${t.reglages}`}</button>
   ) : null;
-
-  const reglages = (service: keyof typeof REGLAGES) => ouvert === service
-    ? champs(service).map((p) => <Reglage key={p.cle} p={p} lang={lang} onSave={enregistrer} />)
-    : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -268,13 +239,9 @@ export function SystemeScreen({ app }: { app: App }) {
           alerte={etat.cle_illisible}
           titre={t.cle}
           detail={etat.cle_illisible ? t.cleIllisible : etat.cle ? `${t.cleOk} · ${t.sources[etat.cle_source ?? 'defaut'] ?? etat.cle_source}` : t.cleAbsente}
-          action={bascule('anthropic', etat.cle && !etat.cle_illisible)}
-        >
-          {reglages('anthropic')}
-        </Ligne>
-        <Ligne ok={etat.strava} titre={t.strava} detail={etat.strava ? t.stravaOk : t.stravaNon} action={bascule('strava', etat.strava)}>
-          {reglages('strava')}
-        </Ligne>
+          action={versReglages}
+        />
+        <Ligne ok={etat.strava} titre={t.strava} detail={etat.strava ? t.stravaOk : t.stravaNon} action={versReglages} />
         <Ligne ok={etat.scellement} alerte={!etat.scellement} titre={t.scellement} detail={etat.scellement ? t.scellementOk : t.scellementNon} />
         <Ligne ok={etat.base.ok} alerte={!etat.base.ok} titre={t.base} detail={etat.base.ok ? `${t.baseOk} · ${etat.base.version ?? ''}` : `${t.baseNon} · ${etat.base.erreur ?? ''}`} />
       </Card>

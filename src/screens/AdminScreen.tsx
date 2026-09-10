@@ -14,14 +14,16 @@ import type { Methode } from '../data/methode';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { AccentButton, Card, Grid, Mono, SectionLabel } from '../components/primitives';
+import type { Lang } from '../data/types';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
-import { AthletesScreen } from './AthletesScreen';
+import { AthletesHub, Classement, SuiviAthlete } from './AthletesScreen';
+import { ProfilScreen } from './ProfilScreen';
 import { CalendrierScreen } from './CalendrierScreen';
 import { ParamScreen } from './ParamScreen';
 import { ComptesScreen } from './ComptesScreen';
 import { SystemeScreen } from './SystemeScreen';
-import { ConnexionsScreen } from './ConnexionsScreen';
+import { StravaScreen } from './StravaScreen';
 import { Historique } from '../components/Historique';
 
 /** mm:ss → seconds. */
@@ -120,35 +122,61 @@ const OBJECTIF_VIDE: Objectif = {
 };
 
 export const SECTIONS = {
-  fr: { plan: 'Plan', courses: 'Courses', calendrier: 'Calendrier', athletes: 'Athlètes', connexions: 'Connexions', param: 'Réglages', comptes: 'Comptes', systeme: 'Système' },
-  pl: { plan: 'Plan', courses: 'Zawody', calendrier: 'Kalendarz', athletes: 'Zawodnicy', connexions: 'Połączenia', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
+  fr: { athletes: 'Athlètes', classement: 'Classement', calendrier: 'Calendrier', suivi: 'Suivi', plan: 'Plan', courses: 'Starts', strava: 'Strava', profil: 'Profil', param: 'Réglages', comptes: 'Comptes', systeme: 'Système' },
+  pl: { athletes: 'Zawodnicy', classement: 'Ranking', calendrier: 'Kalendarz', suivi: 'Podgląd', plan: 'Plan', courses: 'Starty', strava: 'Strava', profil: 'Profil', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
 } as const;
 
 export type Section = keyof typeof SECTIONS.fr;
 
-/** Les sections qu'un compte peut ouvrir : le back office pour un coach ou un
-    admin, Comptes et Système pour l'admin seul. La même liste sert la barre
-    du téléphone et le menu du bureau. */
+/* Trois groupes, dans cet ordre. Le club : la liste des athlètes (le point
+   d'entrée du coach, avec l'onboarding qui en crée un — une fois), le
+   classement, le calendrier. L'athlète affiché : ce qui change tout le temps
+   d'abord — son suivi, son plan, ses starts — puis sa configuration — son
+   Strava, son profil. Les paramètres de l'application : réglages, comptes,
+   système. Une chose par section, jamais deux fois. Le menu du bureau les
+   affiche par groupe ; la barre du téléphone, à la suite. */
+export const GROUPES: Array<{ code: 'club' | 'athlete' | 'parametres'; titre: Record<Lang, string>; sections: Section[] }> = [
+  { code: 'club', titre: { fr: 'Club', pl: 'Klub' }, sections: ['athletes', 'classement', 'calendrier'] },
+  { code: 'athlete', titre: { fr: 'Athlète', pl: 'Zawodnik' }, sections: ['suivi', 'plan', 'courses', 'strava', 'profil'] },
+  { code: 'parametres', titre: { fr: 'Paramètres', pl: 'Ustawienia' }, sections: ['param', 'comptes', 'systeme'] },
+];
+
+/* Dans le groupe de l'athlète : l'entraînement (ce qui bouge) et la
+   configuration (ce qu'on pose une fois). */
+export const CONFIGURATION: Section[] = ['strava', 'profil'];
+
+/** Les sections qu'un compte peut ouvrir. Un athlète : les siennes, et le
+    club. Un coach : la liste des athlètes et leur suivi en plus, et les
+    réglages. Un admin : Comptes et Système en plus. La même liste sert la
+    barre du téléphone et le menu du bureau. */
 export function sectionsDe(role: 'athlete' | 'coach' | 'admin' | undefined): Section[] {
-  const admin = role === 'coach' || role === 'admin';
+  const coach = role === 'coach' || role === 'admin';
   return [
-    'plan', 'courses', 'calendrier', 'athletes',
-    ...(admin ? (['connexions', 'param'] as Section[]) : []),
+    ...(coach ? (['athletes'] as Section[]) : []),
+    'classement', 'calendrier',
+    ...(coach ? (['suivi'] as Section[]) : []),
+    'plan', 'courses', 'strava', 'profil',
+    ...(coach ? (['param'] as Section[]) : []),
     ...(role === 'admin' ? (['comptes', 'systeme'] as Section[]) : []),
   ];
 }
 
 /** Le contenu d'une section, sans la barre : le téléphone la met sous sa
     bascule, le bureau la met à côté de son menu. */
-export function SectionAdmin({ app, section }: { app: App; section: Section }) {
+export type Suite = 'strava' | 'plan' | 'suivi' | 'param';
+
+export function SectionAdmin({ app, section, onSection }: { app: App; section: Section; onSection?: (s: Suite) => void }) {
   switch (section) {
-    case 'courses': return <BackOffice app={app} />;
-    case 'athletes': return <AthletesScreen app={app} />;
-    case 'param': return <ParamScreen app={app} />;
-    case 'connexions': return <ConnexionsScreen app={app} />;
-    case 'comptes': return <ComptesScreen app={app} />;
-    case 'systeme': return <SystemeScreen app={app} />;
+    case 'athletes': return <AthletesHub app={app} onSection={onSection} />;
+    case 'classement': return <Classement app={app} />;
     case 'calendrier': return <CalendrierScreen app={app} />;
+    case 'suivi': return <SuiviAthlete app={app} />;
+    case 'courses': return <BackOffice app={app} />;
+    case 'strava': return <StravaScreen app={app} />;
+    case 'profil': return <ProfilScreen app={app} onSection={onSection} />;
+    case 'param': return <ParamScreen app={app} />;
+    case 'comptes': return <ComptesScreen app={app} onSection={onSection} />;
+    case 'systeme': return <SystemeScreen app={app} onSection={onSection} />;
     default: return <Generateur app={app} />;
   }
 }
@@ -161,11 +189,11 @@ export function SectionAdmin({ app, section }: { app: App; section: Section }) {
    pour les deux, Comptes et Système pour l'admin seul — les mots de passe des
    autres et l'état du serveur ne regardent pas un coach. */
 export function AdminScreen({ app }: { app: App }) {
-  const [section, setSection] = useState<Section>('plan');
-  const libelles = SECTIONS[app.lang];
   /* Les réglages valent pour tout le serveur : un rôle coach ou admin, et le
      serveur le vérifie de son côté. */
   const role = app.identite?.compte.role ?? 'athlete';
+  const [section, setSection] = useState<Section>(() => (role === 'athlete' ? 'plan' : 'athletes'));
+  const libelles = SECTIONS[app.lang];
   /* Le calendrier et le classement sont communs — un club, tout le monde les
      voit. Les cartes de suivi, elles, ne montrent que les athlètes visibles
      du compte : un seul pour un athlète, tous pour un coach. */
@@ -217,7 +245,7 @@ export function AdminScreen({ app }: { app: App }) {
         ))}
       </div>
 
-      <SectionAdmin app={app} section={section} />
+      <SectionAdmin app={app} section={section} onSection={setSection} />
     </div>
   );
 }

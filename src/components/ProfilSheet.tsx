@@ -9,6 +9,7 @@ import { COACH, COACHS, coachDe } from '../data/coachs';
 import { Avatar } from './Avatar';
 import { CoachAvatar } from './CoachAvatar';
 import { Sheet, SheetCloseButton } from './Sheet';
+import { StravaCard } from './SettingsSheet';
 import type { App } from '../state/useApp';
 
 const T: Record<Lang, Record<string, string>> = {
@@ -95,7 +96,9 @@ function Champ({ label, value, onChange, type = 'text', placeholder }: {
   );
 }
 
-export function ProfilSheet({ app }: { app: App }) {
+/* Le formulaire seul, pour la feuille (téléphone) comme pour la page Profil
+   du bureau : les mêmes champs, le même enregistrement. */
+export function ProfilForm({ app, onDone }: { app: App; onDone: () => void }) {
   const t = T[app.lang];
   const athlete = db.athlete;
   const [prenom, setPrenom] = useState(athlete.prenom ?? '');
@@ -128,7 +131,7 @@ export function ProfilSheet({ app }: { app: App }) {
         annee_naissance: annee ? Number(annee) : null,
         coach,
       });
-      app.closeProfil();
+      onDone();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e));
     } finally {
@@ -137,7 +140,7 @@ export function ProfilSheet({ app }: { app: App }) {
   };
 
   return (
-    <Sheet onClose={app.closeProfil} zIndex={95} label={t.titre}>
+    <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <Avatar nom={affiche} taille={56} />
         <div style={{ minWidth: 0 }}>
@@ -181,6 +184,35 @@ export function ProfilSheet({ app }: { app: App }) {
       >
         {job === 'saving' ? t.enCours : t.enregistrer}
       </button>
+    </>
+  );
+}
+
+/* La feuille de l'athlète, sous son avatar : son profil, ses références
+   10 km, son Strava. Ce qui est à l'application — la langue, le jour du
+   plan, le compte, la version — est sous la roue dentée, et nulle part ici. */
+export function ProfilSheet({ app }: { app: App }) {
+  const t = T[app.lang];
+  const fr = app.lang === 'fr';
+  return (
+    <Sheet onClose={app.closeProfil} zIndex={95} label={t.titre} scrollable>
+      <ProfilForm app={app} onDone={app.closeProfil} />
+      <div style={{ borderRadius: 12, background: C.page, border: `1px solid ${C.border}`, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary, fontWeight: 600 }}>
+          {fr ? 'Références 10 km' : 'Odniesienia 10 km'}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: F.mono, fontSize: 13 }}>
+          <span style={{ color: C.ink }}>{db.format10k(db.athlete.ref_actuelle_s)}</span>
+          <span style={{ color: C.accentDeep }}>→</span>
+          <span style={{ color: C.accentDeep }}>{db.format10k(db.athlete.ref_cible_s)}</span>
+        </div>
+        <div style={{ fontSize: 11, color: C.inkSecondary, lineHeight: 1.4 }}>
+          {fr
+            ? "Toutes les allures du plan sont calculées depuis ces deux nombres. Le test de 30' recale le premier."
+            : 'Wszystkie tempa planu liczone są z tych dwóch liczb. Test 30 min przelicza pierwszą.'}
+        </div>
+      </div>
+      <StravaCard app={app} />
       <SheetCloseButton label={t.fermer} onClick={app.closeProfil} />
     </Sheet>
   );

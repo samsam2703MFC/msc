@@ -44,8 +44,6 @@ export function SettingsSheet({ app }: { app: App }) {
         <PhaseEntrainement app={app} />
       </div>
 
-      <StravaCard app={app} />
-
       {/* FR / PL */}
       <div
         style={{
@@ -161,35 +159,6 @@ export function SettingsSheet({ app }: { app: App }) {
       </div>
 
       {/* the two references the whole plan slides between */}
-      <div
-        style={{
-          borderRadius: 12,
-          background: C.page,
-          border: `1px solid ${C.border}`,
-          padding: 14,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        <SectionLabel icon="gauge" color={C.teal}>
-          {lang === 'fr' ? 'Références 10 km' : 'Odniesienia 10 km'}
-        </SectionLabel>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Mono size={13} color={C.ink}>
-            {db.format10k(db.athlete.ref_actuelle_s)}
-          </Mono>
-          <Icon name="arrow-right" size={14} color={C.accentDeep} />
-          <Mono size={13} color={C.accentDeep}>
-            {db.format10k(db.athlete.ref_cible_s)}
-          </Mono>
-        </div>
-        <div style={{ fontSize: 11, color: C.inkSecondary, lineHeight: 1.4 }}>
-          {lang === 'fr'
-            ? "Toutes les allures du plan sont calculées depuis ces deux nombres. Le test de 30' recale le premier."
-            : 'Wszystkie tempa planu liczone są z tych dwóch liczb. Test 30 min przelicza pierwszą.'}
-        </div>
-      </div>
 
       {/* Qui est connecté, et de quoi partir. Déconnecter vide les tables du
           navigateur, pas seulement l'écran : les données d'un athlète ne
@@ -263,7 +232,7 @@ export function SettingsSheet({ app }: { app: App }) {
 /* Six states, and the card has to be honest about which one it is in. The
    prototype had two — a boolean pretending to be a connection — and "connected"
    there meant nothing had happened. Here it means the server holds a token. */
-function StravaCard({ app }: { app: App }) {
+export function StravaCard({ app }: { app: App }) {
   const lang = app.lang;
   const src = db.mustOne('msc_source', (r) => r.code === 'strava');
   const etat = app.strava;

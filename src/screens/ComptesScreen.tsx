@@ -16,11 +16,13 @@ import type { App } from '../state/useApp';
 
 type Role = CompteAdmin['role'];
 type Droit = AthleteVisible['droit'];
+type Mode = 'les-deux' | 'athlete' | 'compte';
+type Etape = 'quoi' | 'athlete' | 'compte' | 'recap';
 
 const T = {
   fr: {
     chargement: 'Lecture des comptes…',
-    intro: 'Qui se connecte, avec quel rôle, et quel athlète chacun voit. Un compte se désactive, il ne se supprime pas : ce qu’il a écrit reste à lui.',
+    intro: 'Qui se connecte, avec quel rôle, et quel athlète chacun voit. Un compte se désactive, il ne se supprime pas : ce qu’il a écrit reste à lui. L’onboarding d’un athlète, avec son compte, se fait dans Athlètes.',
     comptes: 'Comptes', aucun: 'Aucun compte.',
     roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } as Record<Role, string>,
     rolesAide: 'Un coach ouvre Réglages et Athlètes ; un admin ouvre aussi Comptes et Système.',
@@ -33,19 +35,32 @@ const T = {
     activer: 'Réactiver', desactiver: 'Désactiver',
     email: 'Email', nom: 'Nom', role: 'Rôle', mdp: 'Mot de passe',
     relier: 'Relié à l’athlète', personne: '— aucun —',
-    nouveau: 'Nouvel athlète, nouveau compte',
-    nouveauAide: 'Un athlète et son compte de connexion d’un seul geste. Décoche l’un des deux pour créer l’autre seul, relié à ce qui existe déjà. Les allures sont celles du 10 km, en min/km.',
-    creerQuoi: 'Créer', unAthlete: 'un athlète', unCompte: 'un compte de connexion',
-    blocAthlete: 'L’athlète', blocCompte: 'Le compte',
+    nouveau: 'Onboarding · un athlète et son compte',
+    nouveauAide: 'Une fois par athlète : qui il est, ses allures, son login. Ce qui change ensuite — son plan, ses starts — vit dans ses sections, pas ici.',
+    nouveauCompte: 'Nouveau compte',
+    nouveauCompteAide: 'Un compte seul : un coach, un admin, ou un login pour un athlète déjà encodé. Un athlète et son compte, c’est l’onboarding, dans Athlètes.',
+    etapesLabel: 'Étapes', etapes: { quoi: 'Quoi', athlete: 'Athlète', compte: 'Compte', recap: 'Récap' } as Record<Etape, string>,
+    quoi: 'Que veux-tu créer ?',
+    modes: [
+      { v: 'les-deux' as Mode, l: 'Un athlète et son compte', d: 'Le cas courant : un nouveau membre, avec son login.' },
+      { v: 'athlete' as Mode, l: 'Un athlète seul', d: 'Encodé par le coach, sans login pour l’instant — un compte pourra s’y relier plus tard.' },
+      { v: 'compte' as Mode, l: 'Un compte seul', d: 'Un coach, un admin, ou un login pour un athlète déjà encodé.' },
+    ],
+    blocAthlete: 'L’athlète', blocCompte: 'Le compte', recap: 'Récapitulatif',
+    athleteAide: 'Les allures sont celles du 10 km, en min/km — entre 2:00 et 15:00. Le plan part de l’allure actuelle et vise la cible.',
+    allureAide: 'mm:ss, entre 2:00 et 15:00', emailAide: 'Un email complet, avec son @.',
     prenom: 'Prénom', actuelle: 'Allure 10 km actuelle', cible: 'Allure 10 km visée', debut: 'Début du plan',
     compteRelie: 'Relié au compte', nomCompte: 'Nom du compte',
-    creer: 'Créer', cree: 'Créé', rienACreer: 'Coche au moins l’un des deux.',
+    recapAide: 'Tout est vérifié puis écrit d’un coup : si quelque chose cloche, rien n’est créé.',
+    suivant: 'Suivant', precedent: 'Retour', creer: 'Créer', creation: 'Création…', recommencer: 'En créer un autre',
+    fait: 'C’est fait', suiteAide: 'L’athlète est prêt. Relie son Strava pour récupérer son historique, ou écris son plan.',
+    relierStrava: 'Relier Strava', ecrirePlan: 'Écrire son plan',
     athletes: 'Athlètes', sansLogin: 'sans login',
     retirer: 'retirer',
   },
   pl: {
     chargement: 'Wczytywanie kont…',
-    intro: 'Kto się loguje, z jaką rolą i którego zawodnika widzi. Konto się dezaktywuje, nie usuwa: to, co zapisało, zostaje przy nim.',
+    intro: 'Kto się loguje, z jaką rolą i którego zawodnika widzi. Konto się dezaktywuje, nie usuwa: to, co zapisało, zostaje przy nim. Onboarding zawodnika z kontem robi się w Zawodnikach.',
     comptes: 'Konta', aucun: 'Brak kont.',
     roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } as Record<Role, string>,
     rolesAide: 'Trener otwiera Ustawienia i Zawodników; admin także Konta i System.',
@@ -58,13 +73,26 @@ const T = {
     activer: 'Włącz', desactiver: 'Wyłącz',
     email: 'E-mail', nom: 'Nazwisko', role: 'Rola', mdp: 'Hasło',
     relier: 'Powiązany z zawodnikiem', personne: '— brak —',
-    nouveau: 'Nowy zawodnik, nowe konto',
-    nouveauAide: 'Zawodnik i jego konto logowania jednym ruchem. Odznacz jedno z dwóch, by utworzyć tylko drugie, powiązane z tym, co już istnieje. Tempa dotyczą 10 km, w min/km.',
-    creerQuoi: 'Utwórz', unAthlete: 'zawodnika', unCompte: 'konto logowania',
-    blocAthlete: 'Zawodnik', blocCompte: 'Konto',
+    nouveau: 'Onboarding · zawodnik i jego konto',
+    nouveauAide: 'Raz na zawodnika: kim jest, jego tempa, jego login. To, co się potem zmienia — plan, starty — żyje w jego sekcjach, nie tutaj.',
+    nouveauCompte: 'Nowe konto',
+    nouveauCompteAide: 'Samo konto: trener, admin albo login dla wpisanego już zawodnika. Zawodnik i jego konto to onboarding, w Zawodnikach.',
+    etapesLabel: 'Kroki', etapes: { quoi: 'Co', athlete: 'Zawodnik', compte: 'Konto', recap: 'Podsumowanie' } as Record<Etape, string>,
+    quoi: 'Co chcesz utworzyć?',
+    modes: [
+      { v: 'les-deux' as Mode, l: 'Zawodnika i jego konto', d: 'Zwykły przypadek: nowy członek z loginem.' },
+      { v: 'athlete' as Mode, l: 'Tylko zawodnika', d: 'Wpisany przez trenera, na razie bez loginu — konto można dołączyć później.' },
+      { v: 'compte' as Mode, l: 'Tylko konto', d: 'Trener, admin albo login dla wpisanego już zawodnika.' },
+    ],
+    blocAthlete: 'Zawodnik', blocCompte: 'Konto', recap: 'Podsumowanie',
+    athleteAide: 'Tempa dotyczą 10 km, w min/km — między 2:00 a 15:00. Plan wychodzi od obecnego tempa i celuje w docelowe.',
+    allureAide: 'mm:ss, między 2:00 a 15:00', emailAide: 'Pełny e-mail, z @.',
     prenom: 'Imię', actuelle: 'Obecne tempo 10 km', cible: 'Docelowe tempo 10 km', debut: 'Start planu',
     compteRelie: 'Powiązane z kontem', nomCompte: 'Nazwa konta',
-    creer: 'Utwórz', cree: 'Utworzono', rienACreer: 'Zaznacz przynajmniej jedno z dwóch.',
+    recapAide: 'Wszystko jest sprawdzane i zapisywane naraz: jeśli coś nie gra, nic nie powstaje.',
+    suivant: 'Dalej', precedent: 'Wstecz', creer: 'Utwórz', creation: 'Tworzenie…', recommencer: 'Utwórz kolejnego',
+    fait: 'Gotowe', suiteAide: 'Zawodnik jest gotowy. Połącz jego Stravę, by pobrać historię, albo napisz jego plan.',
+    relierStrava: 'Połącz Stravę', ecrirePlan: 'Napisz plan',
     athletes: 'Zawodnicy', sansLogin: 'bez loginu',
     retirer: 'usuń',
   },
@@ -98,19 +126,23 @@ function Champ({
   label: string; value: string; onChange: (v: string) => void; type?: string; aide?: string;
   autoComplete?: string; mono?: boolean; inputMode?: 'decimal' | 'email' | 'text';
 }) {
+  /* L'aide reste hors de l'étiquette : le nom accessible du champ, c'est le
+     libellé seul — « Allure 10 km actuelle », pas « … 4:15 ». */
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-      <span style={{ fontSize: 11, color: C.inkSecondary }}>{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        autoComplete={autoComplete}
-        inputMode={inputMode}
-        style={{ ...ENTREE, fontFamily: mono ? F.mono : F.body }}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+        <span style={{ fontSize: 11, color: C.inkSecondary }}>{label}</span>
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          inputMode={inputMode}
+          style={{ ...ENTREE, fontFamily: mono ? F.mono : F.body }}
+        />
+      </label>
       {aide && <span style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>{aide}</span>}
-    </label>
+    </div>
   );
 }
 
@@ -323,24 +355,26 @@ function LigneCompte({
   );
 }
 
-/* ---------------------------------------------------------- le formulaire */
+/* ------------------------------------------------------------ l'assistant */
 
-function Coche({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!on)}
-      aria-pressed={on}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 11px', borderRadius: R.md,
-        border: `1px solid ${on ? C.accent : C.border}`, background: on ? C.accentSoft : C.surface,
-        color: on ? C.accentDeep : C.inkSecondary, fontSize: 12, fontWeight: 600,
-      }}
-    >
-      <Icon name={on ? 'check' : 'circle'} size={14} />
-      {label}
-    </button>
-  );
+/* Créer, pas à pas : quoi, l'athlète, le compte, le récapitulatif — puis ce
+   qui vient après (relier Strava, écrire le plan). Chaque étape ne montre que
+   ses champs et ne laisse passer que ce qui est valide ; le serveur revalide
+   tout et écrit en une transaction. */
+
+function allureOk(v: string): boolean {
+  const s = v.trim();
+  let n: number | null = null;
+  if (/^\d+$/.test(s)) n = Number(s);
+  else {
+    const m = s.match(/^(\d{1,2}):([0-5]\d)$/);
+    if (m) n = Number(m[1]) * 60 + Number(m[2]);
+  }
+  return n !== null && n >= 120 && n <= 900;
+}
+
+function emailOk(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
 
 function Bloc({ titre, children }: { titre: string; children: React.ReactNode }) {
@@ -352,18 +386,53 @@ function Bloc({ titre, children }: { titre: string; children: React.ReactNode })
   );
 }
 
-/* Un athlète et son compte d'un seul geste. Décocher l'un crée l'autre seul,
-   relié à ce qui existe déjà : un coach sans athlète, un athlète sans login,
-   un login pour un athlète encodé avant. */
-function Nouveau({
-  comptes, athletes, lang, onCree,
+function Etapes({ etapes, courante, lang }: { etapes: Etape[]; courante: number; lang: Lang }) {
+  const t = T[lang];
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }} aria-label={t.etapesLabel}>
+      {etapes.map((e, i) => {
+        const faite = i < courante;
+        const active = i === courante;
+        return (
+          <div key={e} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: R.full, fontSize: 11, fontWeight: 600,
+                background: active ? C.accent : faite ? C.accentSoft : C.surfaceAlt,
+                color: active ? C.accentInk : faite ? C.accentDeep : C.inkQuiet,
+                border: `1px solid ${active ? C.accent : faite ? C.accent : C.border}`,
+              }}
+              aria-current={active ? 'step' : undefined}
+            >
+              {faite ? <Icon name="check" size={11} /> : <span>{i + 1}</span>}
+              {t.etapes[e]}
+            </span>
+            {i < etapes.length - 1 && <span style={{ width: 10, height: 1, background: C.border }} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Ligne({ label, valeur }: { label: string; valeur: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, fontSize: 12.5, lineHeight: 1.5 }}>
+      <span style={{ color: C.inkSecondary, minWidth: 120 }}>{label}</span>
+      <span style={{ color: C.ink, fontWeight: 600 }}>{valeur}</span>
+    </div>
+  );
+}
+
+export function Assistant({
+  comptes, athletes, lang, app, onCree, onSection, modeInitial = 'les-deux',
 }: {
-  comptes: CompteAdmin[]; athletes: AthleteAdmin[]; lang: Lang;
-  onCree: () => void;
+  comptes: CompteAdmin[]; athletes: AthleteAdmin[]; lang: Lang; app: App;
+  onCree: () => void; onSection?: (s: 'strava' | 'plan') => void; modeInitial?: Mode;
 }) {
   const t = T[lang];
-  const [avecAthlete, setAvecAthlete] = useState(true);
-  const [avecCompte, setAvecCompte] = useState(true);
+  const [mode, setMode] = useState<Mode>(modeInitial);
+  const [indice, setIndice] = useState(0);
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
   const [actuelle, setActuelle] = useState('');
@@ -376,86 +445,182 @@ function Nouveau({
   const [compteId, setCompteId] = useState('');
   const [athleteId, setAthleteId] = useState('');
   const [droit, setDroit] = useState<Droit>('ecriture');
-  const [job, setJob] = useState<'idle' | 'saving' | 'fait'>('idle');
+  const [job, setJob] = useState<'idle' | 'saving'>('idle');
   const [erreur, setErreur] = useState<string | null>(null);
+  const [resultat, setResultat] = useState<{ compte: CompteAdmin | null; athlete: AthleteAdmin | null } | null>(null);
 
-  const pretAthlete = !avecAthlete || (nom.trim() !== '' && actuelle.trim() !== '' && cible.trim() !== '');
-  const pretCompte = !avecCompte || (email.trim() !== '' && mdp !== '' && (avecAthlete || nomCompte.trim() !== ''));
-  const pret = (avecAthlete || avecCompte) && pretAthlete && pretCompte;
+  const avecAthlete = mode !== 'compte';
+  const avecCompte = mode !== 'athlete';
+  const etapes: Etape[] = ['quoi', ...(avecAthlete ? (['athlete'] as Etape[]) : []), ...(avecCompte ? (['compte'] as Etape[]) : []), 'recap'];
+  const courante = etapes[Math.min(indice, etapes.length - 1)];
+
+  const valideAthlete = nom.trim() !== '' && allureOk(actuelle) && allureOk(cible);
+  const valideCompte = emailOk(email) && mdp !== '' && (avecAthlete || nomCompte.trim() !== '');
+  const peutSuivre = courante === 'athlete' ? valideAthlete : courante === 'compte' ? valideCompte : true;
+  const nomDuCompte = avecAthlete ? [prenom.trim(), nom.trim()].filter(Boolean).join(' ') : nomCompte.trim();
+  const compteRelie = comptes.find((c) => String(c.id) === compteId);
+  const athleteRelie = athletes.find((a) => String(a.id) === athleteId);
+
+  const recommencer = () => {
+    setMode(modeInitial); setIndice(0); setResultat(null); setErreur(null);
+    setNom(''); setPrenom(''); setActuelle(''); setCible(''); setEmail(''); setNomCompte(''); setMdp('');
+    setCompteId(''); setAthleteId(''); setRole('athlete'); setDroit('ecriture');
+  };
 
   const creer = async () => {
     setJob('saving'); setErreur(null);
     try {
       const r = await api.inscrire({
         athlete: avecAthlete ? { nom: nom.trim(), prenom: prenom.trim() || null, actuelle: actuelle.trim(), cible: cible.trim(), debut } : null,
-        compte: avecCompte ? { email: email.trim(), nom: (avecAthlete ? [prenom.trim(), nom.trim()].filter(Boolean).join(' ') : nomCompte.trim()), role, mot_de_passe: mdp } : null,
+        compte: avecCompte ? { email: email.trim(), nom: nomDuCompte, role, mot_de_passe: mdp } : null,
         droit,
         compte_id: !avecCompte && compteId ? Number(compteId) : null,
         athlete_id: !avecAthlete && athleteId ? Number(athleteId) : null,
       });
-      if (r.compte || r.athlete) onCree();
-      setNom(''); setPrenom(''); setActuelle(''); setCible(''); setEmail(''); setNomCompte(''); setMdp('');
-      setCompteId(''); setAthleteId(''); setRole('athlete');
-      setJob('fait');
-      setTimeout(() => setJob('idle'), 1500);
+      setResultat(r);
+      setMdp('');
+      onCree();
     } catch (e) {
-      setErreur(message(e)); setJob('idle');
+      setErreur(message(e));
+    } finally {
+      setJob('idle');
     }
   };
 
-  return (
-    <Card padding="16px 18px" gap={10}>
-      <SectionLabel icon="plus" color={C.teal}>{t.nouveau}</SectionLabel>
-      <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.nouveauAide}</div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: C.inkSecondary }}>{t.creerQuoi}</span>
-        <Coche label={t.unAthlete} on={avecAthlete} onChange={setAvecAthlete} />
-        <Coche label={t.unCompte} on={avecCompte} onChange={setAvecCompte} />
-      </div>
-      {!avecAthlete && !avecCompte && <div style={{ fontSize: 12, color: C.warning }}>{t.rienACreer}</div>}
+  /* Après : l'athlète créé devient celui qu'on affiche, et Strava ou le plan
+     sont à un clic — c'est ce qu'un coach fait juste après. */
+  const ouvrir = async (s: 'strava' | 'plan') => {
+    const id = resultat?.athlete?.id ?? athleteRelie?.id;
+    if (id && id !== app.identite?.athletes[0]?.id) await app.recharger(id);
+    else if (id) await app.recharger(id);
+    onSection?.(s);
+  };
 
-      {avecAthlete && (
+  if (resultat) {
+    return (
+      <Card padding="16px 18px" gap={10} featured>
+        <SectionLabel icon="circle-check" iconColor={C.accentDeep}>{t.fait}</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {resultat.athlete && <Ligne label={t.blocAthlete} valeur={`${[resultat.athlete.prenom, resultat.athlete.nom].filter(Boolean).join(' ')} · ${mmss(resultat.athlete.ref_actuelle_s)} → ${mmss(resultat.athlete.ref_cible_s)} /km`} />}
+          {resultat.compte && <Ligne label={t.blocCompte} valeur={`${resultat.compte.email} · ${t.roles[resultat.compte.role]}`} />}
+          {resultat.compte && resultat.compte.athletes.length > 0 && (
+            <Ligne label={t.acces} valeur={resultat.compte.athletes.map((a) => `${a.nom} (${t.droits[a.droit]})`).join(' · ')} />
+          )}
+        </div>
+        {(resultat.athlete || athleteRelie) && (
+          <>
+            <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.suiteAide}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => void ouvrir('strava')} style={BOUTON}>{t.relierStrava}</button>
+              <button type="button" onClick={() => void ouvrir('plan')} style={BOUTON_SOBRE}>{t.ecrirePlan}</button>
+            </div>
+          </>
+        )}
+        <div>
+          <button type="button" onClick={recommencer} style={{ ...BOUTON_SOBRE, fontSize: 11 }}>{t.recommencer}</button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card padding="16px 18px" gap={12}>
+      <SectionLabel icon="plus" color={C.teal}>{modeInitial === 'compte' ? t.nouveauCompte : t.nouveau}</SectionLabel>
+      <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{modeInitial === 'compte' ? t.nouveauCompteAide : t.nouveauAide}</div>
+      <Etapes etapes={etapes} courante={etapes.indexOf(courante)} lang={lang} />
+
+      {courante === 'quoi' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{t.quoi}</div>
+          {t.modes.map((m) => (
+            <button
+              key={m.v}
+              type="button"
+              onClick={() => { setMode(m.v); setIndice(0); }}
+              aria-pressed={mode === m.v}
+              style={{
+                display: 'flex', gap: 10, alignItems: 'flex-start', textAlign: 'left', padding: '10px 12px', borderRadius: 12,
+                border: `1px solid ${mode === m.v ? C.accent : C.border}`, background: mode === m.v ? C.accentSoft : C.surface,
+              }}
+            >
+              <Icon name={mode === m.v ? 'circle-check' : 'circle'} size={16} color={mode === m.v ? C.accentDeep : C.inkQuiet} style={{ marginTop: 1, flexShrink: 0 }} />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{m.l}</span>
+                <span style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.4 }}>{m.d}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {courante === 'athlete' && (
         <Bloc titre={t.blocAthlete}>
+          <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.athleteAide}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <Champ label={t.nom} value={nom} onChange={setNom} autoComplete="off" />
             <Champ label={t.prenom} value={prenom} onChange={setPrenom} autoComplete="off" />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-            <Champ label={t.actuelle} value={actuelle} onChange={setActuelle} mono inputMode="decimal" aide="4:15" />
-            <Champ label={t.cible} value={cible} onChange={setCible} mono inputMode="decimal" aide="3:50" />
+            <Champ label={t.actuelle} value={actuelle} onChange={setActuelle} mono inputMode="decimal" aide={actuelle && !allureOk(actuelle) ? t.allureAide : '4:15'} />
+            <Champ label={t.cible} value={cible} onChange={setCible} mono inputMode="decimal" aide={cible && !allureOk(cible) ? t.allureAide : '3:50'} />
             <Champ label={t.debut} value={debut} onChange={setDebut} type="date" mono />
           </div>
           {!avecCompte && (
-            <Selection label={t.compteRelie} value={compteId} onChange={setCompteId} vide={t.personne}
-              options={comptes.map((c) => ({ v: String(c.id), l: `${c.nom} · ${c.email}` }))} />
+            <>
+              <Selection label={t.compteRelie} value={compteId} onChange={setCompteId} vide={t.personne}
+                options={comptes.map((c) => ({ v: String(c.id), l: `${c.nom} · ${c.email}` }))} />
+              {compteId && <Choix<Droit> label={t.acces} options={[{ v: 'lecture', l: t.droits.lecture }, { v: 'ecriture', l: t.droits.ecriture }]} value={droit} onChange={setDroit} />}
+            </>
           )}
         </Bloc>
       )}
 
-      {avecCompte && (
+      {courante === 'compte' && (
         <Bloc titre={t.blocCompte}>
           {!avecAthlete && <Champ label={t.nomCompte} value={nomCompte} onChange={setNomCompte} autoComplete="off" />}
+          {avecAthlete && <div style={{ fontSize: 11.5, color: C.inkSecondary }}>{`${t.nomCompte} : ${nomDuCompte || '—'}`}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <Champ label={t.email} value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="off" mono />
+            <Champ label={t.email} value={email} onChange={setEmail} type="email" inputMode="email" autoComplete="off" mono aide={email && !emailOk(email) ? t.emailAide : undefined} />
             <Champ label={t.mdp} value={mdp} onChange={setMdp} type="password" autoComplete="new-password" aide={t.mdpAide} />
           </div>
           <Choix<Role> label={t.role} options={ROLES.map((r) => ({ v: r, l: t.roles[r] }))} value={role} onChange={setRole} />
           <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4, marginTop: -4 }}>{t.rolesAide}</div>
           {!avecAthlete && (
-            <Selection label={t.relier} value={athleteId} onChange={setAthleteId} vide={t.personne}
-              options={athletes.map((a) => ({ v: String(a.id), l: a.nom }))} />
+            <>
+              <Selection label={t.relier} value={athleteId} onChange={setAthleteId} vide={t.personne}
+                options={athletes.map((a) => ({ v: String(a.id), l: a.nom }))} />
+              {athleteId && <Choix<Droit> label={t.acces} options={[{ v: 'lecture', l: t.droits.lecture }, { v: 'ecriture', l: t.droits.ecriture }]} value={droit} onChange={setDroit} />}
+            </>
           )}
+          {avecAthlete && <Choix<Droit> label={t.acces} options={[{ v: 'lecture', l: t.droits.lecture }, { v: 'ecriture', l: t.droits.ecriture }]} value={droit} onChange={setDroit} />}
         </Bloc>
       )}
 
-      {((avecAthlete && avecCompte) || (avecAthlete && compteId) || (avecCompte && athleteId)) && (
-        <Choix<Droit> label={t.acces} options={[{ v: 'lecture', l: t.droits.lecture }, { v: 'ecriture', l: t.droits.ecriture }]} value={droit} onChange={setDroit} />
+      {courante === 'recap' && (
+        <Bloc titre={t.recap}>
+          {avecAthlete && <Ligne label={t.blocAthlete} valeur={`${[prenom.trim(), nom.trim()].filter(Boolean).join(' ')} · ${actuelle} → ${cible} /km · ${t.debut.toLowerCase()} ${debut}`} />}
+          {avecCompte && <Ligne label={t.blocCompte} valeur={`${email.trim()} · ${t.roles[role]} · ${nomDuCompte}`} />}
+          {avecAthlete && avecCompte && <Ligne label={t.acces} valeur={t.droits[droit]} />}
+          {!avecCompte && <Ligne label={t.compteRelie} valeur={compteRelie ? `${compteRelie.email} (${t.droits[droit]})` : t.personne} />}
+          {!avecAthlete && <Ligne label={t.relier} valeur={athleteRelie ? `${athleteRelie.nom} (${t.droits[droit]})` : t.personne} />}
+          <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.recapAide}</div>
+        </Bloc>
       )}
 
-      <div>
-        <button type="button" disabled={!pret || job === 'saving'} onClick={() => void creer()} style={{ ...BOUTON, opacity: pret ? 1 : 0.5 }}>
-          {job === 'fait' ? t.cree : t.creer}
-        </button>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {indice > 0 && (
+          <button type="button" onClick={() => setIndice((i) => i - 1)} style={BOUTON_SOBRE}>{t.precedent}</button>
+        )}
+        <div style={{ flex: 1 }} />
+        {courante !== 'recap' ? (
+          <button type="button" disabled={!peutSuivre} onClick={() => setIndice((i) => i + 1)} style={{ ...BOUTON, opacity: peutSuivre ? 1 : 0.5 }}>
+            {t.suivant}
+          </button>
+        ) : (
+          <button type="button" disabled={job === 'saving'} onClick={() => void creer()} style={BOUTON}>
+            {job === 'saving' ? t.creation : t.creer}
+          </button>
+        )}
       </div>
       <Erreur texte={erreur} />
     </Card>
@@ -464,7 +629,7 @@ function Nouveau({
 
 /* ---------------------------------------------------------------- l'écran */
 
-export function ComptesScreen({ app }: { app: App }) {
+export function ComptesScreen({ app, onSection }: { app: App; onSection?: (s: 'strava' | 'plan') => void }) {
   const t = T[app.lang];
   const [comptes, setComptes] = useState<CompteAdmin[] | null>(null);
   const [athletes, setAthletes] = useState<AthleteAdmin[]>([]);
@@ -509,35 +674,15 @@ export function ComptesScreen({ app }: { app: App }) {
         ))}
       </Card>
 
-      <Card padding="12px 16px" gap={0}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6 }}>
-          <Icon name="footprints" size={16} color={C.teal} />
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.teal }}>
-            {`${t.athletes} · ${athletes.length}`}
-          </div>
-        </div>
-        {athletes.map((a) => {
-          const vus = comptes.filter((c) => c.athletes.some((x) => x.id === a.id));
-          return (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: `1px solid ${C.borderSoft}` }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{a.nom}</div>
-                <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.4 }}>
-                  {vus.length === 0 ? t.sansLogin : vus.map((c) => c.email).join(' · ')}
-                </div>
-              </div>
-              <div style={{ fontFamily: F.mono, fontSize: 11, color: C.inkSecondary, whiteSpace: 'nowrap' }}>
-                {`${mmss(a.ref_actuelle_s)} → ${mmss(a.ref_cible_s)}`}
-              </div>
-            </div>
-          );
-        })}
-      </Card>
-
-      <Nouveau
+      {/* Un compte seul — un coach, un admin, un login pour un athlète déjà
+          encodé. L'athlète et son compte, c'est l'onboarding, dans Athlètes. */}
+      <Assistant
         comptes={comptes}
         athletes={athletes}
         lang={app.lang}
+        app={app}
+        modeInitial="compte"
+        onSection={onSection}
         /* Relire les deux listes : un compte créé avec son athlète, un athlète
            relié à un compte existant, un compte relié à un athlète — chaque cas
            touche les deux, et le serveur sait mieux que nous ce qu'il a écrit. */

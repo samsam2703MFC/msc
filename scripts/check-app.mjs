@@ -253,11 +253,11 @@ try {
   console.log('\n=== le back office ===');
   await page.locator('nav button').last().click();
   await page.waitForTimeout(600);
-  await page.click('text=Courses');
+  await page.getByRole('tab', { name: 'Starts' }).click();
   await page.waitForTimeout(600);
   /* Les intitulés de section sont mis en majuscules par le CSS, et innerText
      rend le texte affiché. */
-  check('la section Courses s’ouvre',
+  check('la section Starts s’ouvre sur les compétitions de l’athlète',
     /compétitions/i.test(await page.locator('body').innerText()));
 
   const tracesAvant = await page.locator('svg[role=img]').count();
@@ -323,19 +323,53 @@ try {
   check('Comptes liste le compte connecté, avec son athlète et son droit',
     comptesTexte.includes(EMAIL) && /\(écriture\)/.test(comptesTexte),
     comptesTexte.split('\n').find((l) => l.includes(EMAIL)) ?? '');
-  check('et propose de créer un athlète et son compte d’un seul geste',
-    /Nouvel athlète, nouveau compte/i.test(comptesTexte) && /un compte de connexion/i.test(comptesTexte));
-  await page.getByRole('tab', { name: 'Connexions' }).click();
+  check('et, pour un compte seul, l’assistant part de l’étape Compte',
+    /Nouveau compte/i.test(comptesTexte) && /Un compte seul/.test(comptesTexte) && !/ONBOARDING/.test(comptesTexte));
+
+  /* Le club : la liste des athlètes, et l'assistant qui en crée un avec son
+     compte — pas à pas, sans laisser passer une étape invalide. */
+  await page.getByRole('tab', { name: 'Athlètes' }).click();
   await page.waitForTimeout(900);
-  const connexionsTexte = await page.locator('body').innerText();
-  check('Connexions porte la clé Anthropic, l’application Strava et chaque athlète',
-    /Clé Anthropic/i.test(connexionsTexte) && /Application Strava commune/i.test(connexionsTexte)
-      && /Strava · non connecté|Strava · connecté/.test(connexionsTexte),
-    connexionsTexte.split('\n').find((l) => /Strava · /.test(l)) ?? '');
+  const hubTexte = await page.locator('body').innerText();
+  check('Athlètes liste les athlètes visibles, avec « Ouvrir »',
+    /Verheyden/.test(hubTexte) && /Ouvrir|en cours/i.test(hubTexte), hubTexte.split('\n').find((l) => /Verheyden/.test(l)) ?? '');
+  check('et porte l’onboarding pas à pas — un athlète et son compte, une fois',
+    /Onboarding/i.test(hubTexte) && /Un athlète et son compte/.test(hubTexte));
+  await page.getByRole('button', { name: 'Suivant' }).click();
+  await page.waitForTimeout(300);
+  const suivant = page.getByRole('button', { name: 'Suivant' });
+  check('l’étape Athlète ne laisse pas passer une fiche vide', await suivant.isDisabled());
+  await page.getByLabel('Nom', { exact: true }).last().fill('Assistant de contrôle');
+  await page.getByLabel('Allure 10 km actuelle', { exact: true }).fill('4:30');
+  await page.getByLabel('Allure 10 km visée', { exact: true }).fill('4:00');
+  await page.waitForTimeout(200);
+  check('… et passe une fois l’athlète renseigné', !(await suivant.isDisabled()));
+  /* Strava est à l'athlète : sa liaison, son historique, son application à
+     lui. Les paramètres de l'application — la clé, l'application Strava
+     commune — sont réunis dans Réglages. */
+  await page.getByRole('tab', { name: 'Strava' }).click();
+  await page.waitForTimeout(900);
+  const stravaTexte = await page.locator('body').innerText();
+  check('Strava, pour l’athlète affiché : sa liaison et son application à lui',
+    /Strava · non connecté|Strava · connecté/.test(stravaTexte) && /Application Strava de cet athlète/i.test(stravaTexte),
+    stravaTexte.split('\n').find((l) => /Strava · /.test(l)) ?? '');
   await page.getByRole('button', { name: /Renseigner une application propre/ }).first().click();
   await page.waitForTimeout(400);
-  check('et l’application propre d’un athlète se saisit là',
+  check('et l’application propre se saisit là',
     (await page.getByLabel('ID client', { exact: true }).count()) >= 1);
+  await page.getByRole('tab', { name: 'Profil' }).click();
+  await page.waitForTimeout(900);
+  await page.getByRole('button', { name: 'Vérifier la connexion' }).click();
+  await page.waitForTimeout(900);
+  const profilTexte = await page.locator('body').innerText();
+  check('Profil vérifie la connexion Strava d’un bouton',
+    /Connexion Strava/i.test(profilTexte) && /non connecté|connecté|non configuré/i.test(profilTexte),
+    profilTexte.split('\n').find((l) => /non connecté|connecté|non configuré/i.test(l)) ?? '');
+  await page.getByRole('tab', { name: 'Réglages' }).click();
+  await page.waitForTimeout(900);
+  const reglagesTexte = await page.locator('body').innerText();
+  check('les paramètres de l’application sont réunis dans Réglages : clé Anthropic, application Strava commune',
+    /Clé API Anthropic/i.test(reglagesTexte) && /Strava · Client ID/i.test(reglagesTexte));
   await page.getByRole('tab', { name: 'Système' }).click();
   await page.waitForTimeout(900);
   const systemeTexte = await page.locator('body').innerText();
@@ -345,13 +379,10 @@ try {
   check('et l’état des services', /Clé Anthropic/i.test(systemeTexte) && /Base de données/i.test(systemeTexte)
     && /Strava/.test(systemeTexte) && /Scellement/i.test(systemeTexte));
   check('et ce que la démonstration a laissé', /Données de démonstration/i.test(systemeTexte));
-  /* La clé se saisit là où son absence est nommée : le bouton ouvre le même
-     champ que Réglages. On ne l'enregistre pas — une fausse clé en base
-     ferait mentir les autres contrôles. */
-  await page.getByRole('button', { name: /Renseigner|Modifier/ }).first().click();
-  await page.waitForTimeout(400);
-  check('la clé Anthropic se saisit depuis Système',
-    (await page.locator('input[type=password][autocomplete=new-password]').count()) >= 1);
+  /* Un service se règle dans Réglages, pas deux fois : Système y renvoie. */
+  check('et renvoie vers Réglages plutôt que de dupliquer les champs',
+    (await page.getByRole('button', { name: /→ Réglages/ }).count()) >= 1
+      && (await page.locator('input[type=password]').count()) === 0);
   /* Le bureau : sur un écran large, un coach ou un admin a le menu à gauche
      et la page large ; sur un téléphone, le même compte garde les onglets. */
   console.log('\n=== le bureau ===');
@@ -361,9 +392,11 @@ try {
   await page.waitForTimeout(800);
   const menu = page.getByRole('navigation', { name: 'Back office' });
   const menuTexte = (await menu.count()) ? await menu.innerText() : '';
-  check('sur un écran large, l’admin a le bureau : un menu qui liste tout le back office',
-    (await menu.count()) === 1 && /Connexions/.test(menuTexte) && /Comptes/.test(menuTexte) && /Système/.test(menuTexte),
-    menuTexte.replace(/\n+/g, ' · ').slice(0, 140));
+  check('sur un écran large, l’admin a le bureau : un menu en trois groupes — club, l’athlète affiché, paramètres',
+    (await menu.count()) === 1 && /club/i.test(menuTexte) && /Verheyden/i.test(menuTexte) && /paramètres/i.test(menuTexte)
+      && /Suivi/.test(menuTexte) && /Starts/.test(menuTexte) && /Strava/.test(menuTexte) && /Profil/.test(menuTexte)
+      && /Comptes/.test(menuTexte) && /Système/.test(menuTexte),
+    menuTexte.replace(/\n+/g, ' · ').slice(0, 200));
   check('et plus de barre d’onglets', (await page.locator('nav button').count()) > 5);
   await menu.getByRole('button', { name: 'Système' }).click();
   await page.waitForTimeout(900);

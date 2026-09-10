@@ -3,8 +3,11 @@
    fait cette semaine, la forme. Tout vient de /api/apercu — rien n'est calculé
    deux fois. */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import * as api from '../data/api';
+import type { AthleteAdmin, CompteAdmin } from '../data/api';
+import { Assistant } from './ComptesScreen';
+import type { Suite } from './AdminScreen';
 import * as db from '../data/db';
 import type { ApercuAthlete, Axe, Classement as ClassementDonnees, Conversation as ConversationType, Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
@@ -13,6 +16,8 @@ import { Avatar } from '../components/Avatar';
 import { AvatarNiveau } from '../components/AvatarNiveau';
 import { CoachAvatar } from '../components/CoachAvatar';
 import { FormeJauge } from '../components/FormeJauge';
+import { Courbe } from '../components/Courbe';
+import type { Point } from '../components/Courbe';
 import { Icon } from '../components/Icon';
 import { limiteEnClair } from '../components/Limites';
 import type { App } from '../state/useApp';
@@ -28,9 +33,11 @@ function phaseDe(part: number): { icon: string; couleur: string } {
 const T: Record<Lang, Record<string, string>> = {
   fr: { semaine: 'Semaine', sansPlan: 'Pas de plan actif', seances: 'séances', faites: 'faites',
         volume: 'Volume', rpe: 'Dernier RPE', voir: 'Ouvrir', chargement: 'Lecture des athlètes…',
+        titre: 'Athlètes', reserve: 'Créer un athlète ou un compte est réservé à l’admin.',
         aucun: 'Aucun athlète visible pour ce compte.', courant: 'en cours' },
   pl: { semaine: 'Tydzień', sansPlan: 'Brak aktywnego planu', seances: 'treningi', faites: 'zrobione',
         volume: 'Objętość', rpe: 'Ostatnie RPE', voir: 'Otwórz', chargement: 'Wczytywanie zawodników…',
+        titre: 'Zawodnicy', reserve: 'Tworzenie zawodników i kont jest zastrzeżone dla admina.',
         aucun: 'Brak widocznych zawodników.', courant: 'bieżący' },
 };
 
@@ -135,7 +142,7 @@ function brutDe(l: ClassementDonnees['athletes'][number], axe: Axe | 'total', la
   }
 }
 
-function Classement({ app }: { app: App }) {
+export function Classement({ app }: { app: App }) {
   const lang = app.lang;
   const fr = lang === 'fr';
   const [donnees, setDonnees] = useState<ClassementDonnees | null>(null);
@@ -321,19 +328,125 @@ function Tuile({ label, valeur, sous }: { label: string; valeur: string; sous?: 
   );
 }
 
-export function AthletesScreen({ app }: { app: App }) {
+/* Le suivi de l'athlète affiché : sa carte de coach — allures, semaine en
+   cours, dernier RPE, son coach, sa forme, ce qu'il a demandé. */
+export function SuiviAthlete({ app }: { app: App }) {
   const t = T[app.lang];
+  const fr = app.lang === 'fr';
   useEffect(() => { void app.chargerApercu(); }, [app.chargerApercu, app.version]);
+  const a = app.apercu?.find((x) => x.id === db.athleteId);
+  /* Le poids est à l'athlète — une mesure confirmée du matin — pas à ses
+     courses : sa courbe vit ici, avec le reste de son suivi. */
+  const poids: Point[] = db
+    .select('msc_mesure')
+    .filter((m) => m.poids_kg !== undefined)
+    .map((m) => ({ date: m.date, valeur: m.poids_kg as number, label: m.date }));
+  if (app.apercu === null) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.chargement}</div>;
+  if (!a) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.aucun}</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Carte a={a} app={app} />
+      <div style={{ borderRadius: R.card, background: C.surface, border: `1px solid ${C.border}`, boxShadow: C.shadowCard, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="scale" size={16} color={C.teal} />
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.teal }}>{fr ? 'Poids' : 'Waga'}</div>
+        </div>
+        <Courbe
+          points={poids}
+          couleur="#029CD0"
+          format={(v) => `${v.toFixed(1)} kg`}
+          vide={fr ? 'Aucune mesure de poids confirmée.' : 'Brak potwierdzonych pomiarów wagi.'}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* Le hub des athlètes : la liste de ceux que le compte voit, en une ligne
+   chacun — qui, où dans son plan, ses allures, sa semaine — et « Ouvrir »,
+   qui en fait l'athlète affiché et ouvre son suivi. Dessous, pour l'admin,
+   l'onboarding : l'assistant qui crée un athlète et son compte, une fois. Ce
+   qui change tout le temps — son plan, ses starts — est dans ses sections. */
+export function AthletesHub({ app, onSection }: { app: App; onSection?: (s: Suite) => void }) {
+  const t = T[app.lang];
+  const fr = app.lang === 'fr';
+  useEffect(() => { void app.chargerApercu(); }, [app.chargerApercu, app.version]);
+  const admin = app.identite?.compte.role === 'admin';
+  const [listes, setListes] = useState<{ comptes: CompteAdmin[]; athletes: AthleteAdmin[] } | null>(null);
+  const relire = useCallback(() => {
+    if (!admin) return;
+    api.adminComptes().then(setListes).catch(() => setListes(null));
+  }, [admin]);
+  useEffect(() => { relire(); }, [relire, app.version]);
+
+  const ouvrir = async (id: number) => {
+    if (id !== db.athleteId) await app.basculerAthlete(id);
+    onSection?.('suivi');
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* le classement du club d'abord, puis les cartes des athlètes visibles */}
-      <Classement app={app} />
-      {app.apercu === null
-        ? <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.chargement}</div>
-        : app.apercu.length === 0
-          ? <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.aucun}</div>
-          : app.apercu.map((a) => <Carte key={a.id} a={a} app={app} />)}
+      <div style={{ borderRadius: R.card, background: C.surface, border: `1px solid ${C.border}`, boxShadow: C.shadowCard, padding: '12px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 6 }}>
+          <Icon name="footprints" size={16} color={C.teal} />
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.teal }}>
+            {`${t.titre} · ${app.apercu?.length ?? 0}`}
+          </div>
+        </div>
+        {app.apercu === null
+          ? <div style={{ color: C.inkSecondary, fontSize: 13, padding: '8px 0' }}>{t.chargement}</div>
+          : app.apercu.length === 0
+            ? <div style={{ color: C.inkSecondary, fontSize: 13, padding: '8px 0' }}>{t.aucun}</div>
+            : app.apercu.map((a) => {
+              const courant = a.id === db.athleteId;
+              const affiche = [a.prenom, a.nom].filter(Boolean).join(' ') || a.nom;
+              const phase = a.bloc ? phaseDe(a.bloc.part) : null;
+              return (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: `1px solid ${C.borderSoft}` }}>
+                  <Avatar nom={affiche} taille={36} palier={a.niveau} />
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {affiche}{a.surnom ? <span style={{ fontWeight: 500, color: C.inkSecondary }}> · {a.surnom}</span> : null}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.inkQuiet, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {a.bloc && phase
+                        ? <span style={{ color: phase.couleur, fontWeight: 600 }}>{`${a.bloc.nom[app.lang]} · ${t.semaine} ${a.semaine}/${a.total}`}</span>
+                        : <span>{t.sansPlan}</span>}
+                      <span>{`· 10 km ${db.format10k(a.ref_actuelle_s)} → ${db.format10k(a.ref_cible_s)}`}</span>
+                      <span>{`· ${fr ? 'séances' : 'treningi'} ${a.cette_semaine.faites}/${a.cette_semaine.prevues}`}</span>
+                    </div>
+                  </div>
+                  {courant
+                    ? <span style={{ fontSize: 11, color: C.accentDeep, fontWeight: 600, whiteSpace: 'nowrap' }}>{t.courant}</span>
+                    : (
+                      <button
+                        type="button"
+                        className="msc-hover-accent"
+                        onClick={() => void ouvrir(a.id)}
+                        aria-label={`${t.voir} ${affiche}`}
+                        style={{ padding: '6px 11px', borderRadius: R.full, border: `1px solid ${C.border}`, fontSize: 12, fontWeight: 600, color: C.ink, background: C.surface, whiteSpace: 'nowrap' }}
+                      >
+                        {t.voir}
+                      </button>
+                    )}
+                </div>
+              );
+            })}
+      </div>
+
+      {admin && listes && (
+        <Assistant
+          comptes={listes.comptes}
+          athletes={listes.athletes}
+          lang={app.lang}
+          app={app}
+          onSection={onSection}
+          onCree={() => { relire(); void app.chargerApercu(); }}
+        />
+      )}
+      {!admin && (
+        <div style={{ fontSize: 11.5, color: C.inkQuiet, lineHeight: 1.45 }}>{t.reserve}</div>
+      )}
     </div>
   );
 }

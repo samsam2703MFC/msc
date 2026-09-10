@@ -23,18 +23,19 @@ import { ProfilSheet } from './components/ProfilSheet';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TypeSheet } from './components/TypeSheet';
-import { SECTIONS, SectionAdmin, sectionsDe } from './screens/AdminScreen';
+import { CONFIGURATION, GROUPES, SECTIONS, SectionAdmin, sectionsDe } from './screens/AdminScreen';
 import type { Section } from './screens/AdminScreen';
 import type { App } from './state/useApp';
 
 const ICONES: Record<Section, string> = {
-  plan: 'wand-sparkles', courses: 'flag', calendrier: 'calendar-days', athletes: 'footprints',
-  connexions: 'link', param: 'settings', comptes: 'user', systeme: 'database',
+  athletes: 'footprints', classement: 'zap', calendrier: 'calendar-days',
+  suivi: 'heart-pulse', plan: 'wand-sparkles', courses: 'flag', strava: 'link', profil: 'pencil',
+  param: 'settings', comptes: 'user', systeme: 'database',
 };
 
 const T = {
-  fr: { backOffice: 'Back office', vueAthlete: 'Vue athlète', athlete: 'Athlète affiché', reglages: 'Réglages', deconnexion: 'Déconnexion', version: 'version', horsLigne: 'Hors ligne · copie locale', attente: 'en attente d’envoi', roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } },
-  pl: { backOffice: 'Zaplecze', vueAthlete: 'Widok zawodnika', athlete: 'Wyświetlany zawodnik', reglages: 'Ustawienia', deconnexion: 'Wyloguj', version: 'wersja', horsLigne: 'Offline · kopia lokalna', attente: 'czeka na wysłanie', roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } },
+  fr: { backOffice: 'Back office', vueAthlete: 'Vue athlète', athlete: 'Athlète affiché', entrainement: 'Entraînement', configuration: 'Configuration', reglages: 'Réglages', deconnexion: 'Déconnexion', version: 'version', horsLigne: 'Hors ligne · copie locale', attente: 'en attente d’envoi', roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } },
+  pl: { backOffice: 'Zaplecze', vueAthlete: 'Widok zawodnika', athlete: 'Wyświetlany zawodnik', entrainement: 'Trening', configuration: 'Konfiguracja', reglages: 'Ustawienia', deconnexion: 'Wyloguj', version: 'wersja', horsLigne: 'Offline · kopia lokalna', attente: 'czeka na wysłanie', roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } },
 } as const;
 
 /* Un état de page à deux faces : une section du back office, ou un écran de
@@ -93,7 +94,11 @@ export function Bureau({
   const [page, setPage] = useState<Page>({ type: 'section', section: 'athletes' });
 
   const titre = page.type === 'section' ? SECTIONS[lang][page.section] : ui.screens[app.screen];
-  const sur = page.type === 'section' ? t.backOffice : eyebrow;
+  /* Ce qui est à l'athlète porte son nom en surtitre ; le reste, « Back office ». */
+  const groupeDe = (s: Section) => GROUPES.find((g) => g.sections.includes(s))?.code;
+  const sur = page.type === 'section'
+    ? groupeDe(page.section) === 'athlete' ? db.athlete.nom : t.backOffice
+    : eyebrow;
   const athletes = app.identite?.athletes ?? [];
 
   return (
@@ -125,41 +130,60 @@ export function Bureau({
           </div>
         </div>
 
-        <Groupe titre={t.backOffice}>
-          {sections.map((s) => (
-            <Entree
-              key={s}
-              icon={ICONES[s]}
-              label={SECTIONS[lang][s]}
-              actif={page.type === 'section' && page.section === s}
-              onClick={() => setPage({ type: 'section', section: s })}
-            />
-          ))}
-        </Groupe>
-
-        <Groupe titre={t.vueAthlete}>
-          {athletes.length > 1 && (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 12px 8px' }}>
-              <span style={{ fontSize: 10.5, color: C.inkSecondary }}>{t.athlete}</span>
-              <select
-                value={db.athleteId ?? ''}
-                onChange={(e) => void app.recharger(Number(e.target.value))}
-                style={{ padding: '6px 8px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.ink, fontSize: 12, fontFamily: F.body }}
-              >
-                {athletes.map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}
-              </select>
-            </label>
-          )}
-          {onglets.map((o) => (
-            <Entree
-              key={o.key}
-              icon={o.icon}
-              label={o.label}
-              actif={page.type === 'ecran' && app.screen === o.key}
-              onClick={() => { app.setScreen(o.key); setPage({ type: 'ecran' }); }}
-            />
-          ))}
-        </Groupe>
+        {GROUPES.map((g) => {
+          const siennes = g.sections.filter((s) => sections.includes(s));
+          if (siennes.length === 0) return null;
+          return (
+            <Groupe key={g.code} titre={g.code === 'athlete' ? db.athlete.nom : g.titre[lang]}>
+              {/* Le groupe de l'athlète commence par le choix de l'athlète,
+                  quand le compte en voit plusieurs : tout ce qui suit est à lui. */}
+              {g.code === 'athlete' && athletes.length > 1 && (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 12px 8px' }}>
+                  <span style={{ fontSize: 10.5, color: C.inkSecondary }}>{t.athlete}</span>
+                  <select
+                    value={db.athleteId ?? ''}
+                    onChange={(e) => void app.recharger(Number(e.target.value))}
+                    style={{ padding: '6px 8px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.ink, fontSize: 12, fontFamily: F.body }}
+                  >
+                    {athletes.map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}
+                  </select>
+                </label>
+              )}
+              {siennes.map((s, i) => (
+                <div key={s}>
+                  {/* Chez l'athlète : ce qui bouge (suivi, plan, starts), puis
+                      ce qu'on pose une fois (Strava, profil). */}
+                  {g.code === 'athlete' && (i === 0 || (CONFIGURATION.includes(s) && !CONFIGURATION.includes(siennes[i - 1]))) && (
+                    <div style={{ fontSize: 10, color: C.inkQuiet, padding: `${i === 0 ? 2 : 8}px 12px 2px` }}>
+                      {CONFIGURATION.includes(s) ? t.configuration : t.entrainement}
+                    </div>
+                  )}
+                  <Entree
+                    icon={ICONES[s]}
+                    label={SECTIONS[lang][s]}
+                    actif={page.type === 'section' && page.section === s}
+                    onClick={() => setPage({ type: 'section', section: s })}
+                  />
+                </div>
+              ))}
+              {/* … et ses écrans, tels que le téléphone les montre. */}
+              {g.code === 'athlete' && (
+                <>
+                  <div style={{ fontSize: 10, color: C.inkQuiet, padding: '8px 12px 2px' }}>{t.vueAthlete}</div>
+                  {onglets.map((o) => (
+                    <Entree
+                      key={o.key}
+                      icon={o.icon}
+                      label={o.label}
+                      actif={page.type === 'ecran' && app.screen === o.key}
+                      onClick={() => { app.setScreen(o.key); setPage({ type: 'ecran' }); }}
+                    />
+                  ))}
+                </>
+              )}
+            </Groupe>
+          );
+        })}
 
         <div style={{ flex: 1 }} />
 
@@ -206,7 +230,7 @@ export function Bureau({
         <main className="msc-scroll" style={{ flex: 1, padding: '24px 32px 40px' }}>
           {page.type === 'section' ? (
             <div style={{ maxWidth: 1120 }}>
-              <SectionAdmin app={app} section={page.section} />
+              <SectionAdmin app={app} section={page.section} onSection={(s) => setPage({ type: 'section', section: s })} />
             </div>
           ) : (
             /* Les écrans de l'athlète, à la largeur pour laquelle ils sont

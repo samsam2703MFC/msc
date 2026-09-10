@@ -1,24 +1,16 @@
-/* Connexions : la clé Anthropic, et Strava athlète par athlète.
+/* Strava, pour un athlète : sa liaison, son historique, son application API
+   — la sienne. Le bloc que l'écran Strava du back office affiche pour
+   l'athlète courant.
 
-   Ce qu'un coach ou un admin vient poser ici, c'est ce qui relie le serveur au
-   monde : la clé du coach (Claude), l'application Strava commune, et pour
-   chaque athlète l'état de sa liaison Strava — avec le lien à lui envoyer
-   pour qu'il autorise depuis son téléphone, et l'application Strava qui lui
-   est propre s'il en a créé une.
+   Un secret ne redescend jamais : on sait qu'il est renseigné, on le
+   remplace. Un jeton Strava n'apparaît nulle part, même pas ici. */
 
-   Un secret ne redescend jamais : on sait qu'il est renseigné, on le remplace.
-   Un jeton Strava n'apparaît nulle part, même pas ici. */
-
-import { useCallback, useEffect, useRef, useState } from 'react';
-import * as api from '../data/api';
+import { useEffect, useRef, useState } from 'react';
 import type { StravaAthlete } from '../data/api';
 import * as strava from '../data/strava';
-import type { Lang, MscParam } from '../data/types';
+import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
-import { Icon } from '../components/Icon';
-import { Card, SectionLabel } from '../components/primitives';
-import type { App } from '../state/useApp';
-import { Reglage } from './ParamScreen';
+import { Icon } from './Icon';
 
 const T = {
   fr: {
@@ -87,11 +79,6 @@ const T = {
   },
 } satisfies Record<Lang, unknown>;
 
-const CLES = {
-  anthropic: ['anthropic.cle'],
-  strava: ['strava.client_id', 'strava.client_secret', 'strava.verify_token'],
-};
-
 const ENTREE: React.CSSProperties = {
   width: '100%', minWidth: 0, boxSizing: 'border-box',
   padding: '9px 11px', borderRadius: R.md, border: `1px solid ${C.border}`,
@@ -126,10 +113,10 @@ function Pastille({ texte, ok }: { texte: string; ok: boolean }) {
 
 /* ------------------------------------------------------------- un athlète */
 
-function AthleteStrava({
-  a, lang, recharger,
+export function BlocStrava({
+  a, lang, recharger, onImporte,
 }: {
-  a: StravaAthlete; lang: Lang; recharger: () => Promise<StravaAthlete[] | null>;
+  a: StravaAthlete; lang: Lang; recharger: () => Promise<StravaAthlete[] | null>; onImporte?: () => void;
 }) {
   const t = T[lang];
   const [lien, setLien] = useState<{ url: string; expire_le: string | null } | null>(null);
@@ -217,6 +204,7 @@ function AthleteStrava({
     try {
       setImporte(await strava.importerHistorique(a.id, depuis));
       await recharger();
+      onImporte?.();
     } catch (e) {
       setErreur(message(e));
     } finally {
@@ -395,81 +383,3 @@ function AthleteStrava({
   );
 }
 
-/* ---------------------------------------------------------------- l'écran */
-
-export function ConnexionsScreen({ app }: { app: App }) {
-  const t = T[app.lang];
-  const lang = app.lang;
-  const [params, setParams] = useState<MscParam[] | null>(null);
-  const [athletes, setAthletes] = useState<StravaAthlete[] | null>(null);
-  const [erreur, setErreur] = useState<string | null>(null);
-
-  const recharger = useCallback(async () => {
-    try {
-      const r = await api.stravaParAthlete();
-      setAthletes(r.athletes);
-      return r.athletes;
-    } catch (e) {
-      setErreur(message(e));
-      return null;
-    }
-  }, []);
-
-  useEffect(() => {
-    let vivant = true;
-    api.params()
-      .then((r) => { if (vivant) setParams(r.params); })
-      .catch((e) => { if (vivant) setErreur(message(e)); });
-    void recharger();
-    return () => { vivant = false; };
-  }, [recharger]);
-
-  /* Le même geste que dans Réglages ; l'état Strava des athlètes est relu
-     ensuite, parce que l'application commune vaut pour ceux qui n'en ont pas. */
-  const enregistrer = async (cle: string, valeur: string | number | boolean | null) => {
-    const r = await api.majParam(cle, valeur);
-    setParams((ps) => (ps ?? []).map((p) => (p.cle === cle ? r.param : p)));
-    if (cle.startsWith('strava.')) void recharger();
-  };
-
-  const reglages = (cles: string[]) =>
-    cles
-      .map((cle) => (params ?? []).find((p) => p.cle === cle))
-      .filter((p): p is MscParam => Boolean(p))
-      .map((p) => <Reglage key={p.cle} p={p} lang={lang} onSave={enregistrer} />);
-
-  if (erreur && !params && !athletes) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderRadius: R.md, background: C.warningBg, color: C.warning, fontSize: 12, lineHeight: 1.4 }}>
-        <Icon name="triangle-alert" size={14} />
-        <span>{erreur}</span>
-      </div>
-    );
-  }
-  if (!params || !athletes) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.chargement}</div>;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 12.5, color: C.inkSecondary, lineHeight: 1.5 }}>{t.intro}</div>
-
-      <Card padding="12px 16px" gap={0}>
-        <div style={{ paddingBottom: 2 }}><SectionLabel icon="sparkles" color={C.teal}>{t.cle}</SectionLabel></div>
-        <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45, paddingBottom: 4 }}>{t.cleAide}</div>
-        {reglages(CLES.anthropic)}
-      </Card>
-
-      <Card padding="12px 16px" gap={0}>
-        <div style={{ paddingBottom: 2 }}><SectionLabel icon="link" color={C.teal}>{t.appCommune}</SectionLabel></div>
-        <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45, paddingBottom: 4 }}>{t.appAide}</div>
-        {reglages(CLES.strava)}
-      </Card>
-
-      <Card padding="12px 16px" gap={0}>
-        <div style={{ paddingBottom: 4 }}><SectionLabel icon="footprints" color={C.teal}>{`${t.parAthlete} · ${athletes.length}`}</SectionLabel></div>
-        {athletes.length === 0 && <div style={{ fontSize: 12, color: C.inkQuiet, padding: '8px 0' }}>{t.aucunAthlete}</div>}
-        {athletes.map((a) => <AthleteStrava key={a.id} a={a} lang={lang} recharger={recharger} />)}
-        {erreur && <div style={{ fontSize: 12, color: C.negative, paddingTop: 6 }}>{erreur}</div>}
-      </Card>
-    </div>
-  );
-}

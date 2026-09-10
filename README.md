@@ -978,11 +978,32 @@ The **Créer** tab carries two things now, behind a segmented control: building 
 plan, and keeping the register of races. A switch rather than a sixth tab — the
 bar already has five, and a back office is not a screen you open every day.
 
-For a `coach` or `admin` account the same tab reads **Admin** and the bar
-grows: **Connexions** and Réglages for both roles, **Comptes** and **Système**
-for the admin alone — the passwords of other people and the state of the server are not a
-coach's business. Beyond five sections the segmented control scrolls sideways
-instead of squeezing seven labels into 360 px.
+The sections come in three groups, one thing per section and nothing twice.
+**Club**: **Athlètes** — the coach's entry point, every athlete the account
+sees in one line each (where they are in their plan, their 10 km references,
+this week's sessions) with **Ouvrir**, which makes them the athlete on screen
+and opens their Suivi; below it, for an admin, the onboarding assistant that
+creates an athlete and their account, once — then **Classement** and
+**Calendrier**. **The athlete on screen**, in two halves: what moves all the
+time — **Suivi** (the coach card: paces, week, last RPE, their coach, form,
+what they asked, and the weight curve), **Plan**, **Starts** (their races and
+the progression they draw) — and what is set once — **Strava** (their link,
+their history, their own API application) and **Profil** (the same fields as
+the phone's profile sheet, the two 10 km references, and a button that checks
+the Strava connection). **Paramètres**: **Réglages** for a `coach` or
+`admin`, **Comptes** and **Système** for the admin alone — the passwords of
+other people and the state of the server are not a coach's business. Comptes
+holds login accounts only (its assistant starts at "un compte seul"); Système
+states the services and points to Réglages instead of repeating their
+fields. What is the athlete's (weight, references, Strava, profile) never
+sits next to what is the application's (settings, accounts, system), and the
+phone follows the same line: the avatar opens the athlete's profile — with
+the 10 km references and the Strava card — while the gear holds the
+application: language, plan day, the account, the version. An athlete's own
+tab keeps Classement, Calendrier, Plan, Starts, Strava and Profil. For a
+`coach` or `admin` account the tab reads **Admin**; beyond five sections the
+segmented control scrolls sideways instead of squeezing eleven labels into
+360 px.
 
 ### Competitions
 
@@ -1081,27 +1102,30 @@ and an unknown model (`coach.modele`) get their own messages too.
 The phone is the athlete's application: five tabs, one hand, installable.
 The coach works sitting down, so a `coach` or `admin` account on a screen at
 least 1024 px wide gets **le bureau** instead of the phone shell
-(`src/Bureau.tsx`): a menu on the left that lists the whole back office —
-Plan, Courses, Calendrier, Athlètes, Connexions, Réglages, and Comptes and
-Système for an admin — and a wide page on the right where a table has room for
-its columns. The athlete's own screens (Aujourd'hui, Semaine, Forme, Coach)
-stay one click away in the same menu, rendered in a 520 px column because they
-were drawn for a hand, and a coach who sees several athletes picks which one
-from a select in the menu. The sheets — a session, the profile, Réglages —
+(`src/Bureau.tsx`): a menu on the left in the same three groups — the club
+(Athlètes, Classement, Calendrier), the athlete on screen under their own
+name (a select to pick them when the account sees several, then
+*Entraînement*: Suivi, Plan, Starts; *Configuration*: Strava, Profil; and
+their own screens Aujourd'hui, Semaine, Forme, Coach, rendered in a 520 px
+column because they were drawn for a hand), and the settings (Réglages,
+Comptes, Système for an admin) — and a wide page on the right where a table
+has room for its columns. The desk opens on Athlètes; a section of the
+athlete's group carries their name as its eyebrow. The sheets — a session, the profile, Réglages —
 open over the whole desk. On a phone the same account keeps the five tabs, and
 an athlete never sees the desk at all: the desk is a layout, not a role, and
 `sectionsDe` in `AdminScreen.tsx` is the one list both shells read.
 
-### Connexions — the key, and Strava athlete by athlete
+### Strava, athlete by athlete
 
-One section, for a `coach` or `admin`, for everything that ties the server to
-the outside: the Anthropic key (the same sealed `msc_param` row as Réglages,
-never read back), the common Strava application (client ID, secret, verify
-token), and then one block per athlete the account can see (every athlete for
-an admin). Each block shows whether Strava is linked — the Strava athlete,
-when it was linked, the last sync — and how many activities have arrived and
-when the last one did; activities sync when the athlete opens the app, not
-from here.
+Strava belongs to the athlete, so it is a section of the athlete's group:
+**Strava** shows, for the athlete on screen, whether their account is linked
+— the Strava athlete, when it was linked, the last sync — how many activities
+have arrived and when the last one did (activities sync when the athlete
+opens the app, not from here), and, below, their own API application. The
+application's own settings — the Anthropic key, the common Strava
+application (client ID, secret, verify token) — live in **Réglages** with
+every other `msc_param` row, and only there; Système states them and points
+back. An athlete opens the same section for themselves.
 
 Linking is the athlete's gesture, because it is *their* Strava account that
 answers. So the block offers two ways: **Lien à envoyer** builds an
@@ -1111,7 +1135,8 @@ ici** opens the same round-trip in a popup, for when the athlete is in front
 of you with their own Strava session. **Délier** revokes and forgets the
 token, after a confirmation.
 
-Then the athlete's own Strava application. A freshly created Strava
+Then the athlete's own Strava application — each their own, at the API
+level. A freshly created Strava
 application authorises only the account that created it until Strava has
 reviewed it — a club therefore either gets the common application reviewed,
 or lets each athlete create their own on strava.com/settings/api (callback
@@ -1127,7 +1152,7 @@ walks the round trip and asserts the link carries the athlete's own client ID.
 ### The Strava history, and what a plan takes from it
 
 A coach writing a plan starts from what the athlete has actually done. Once
-an athlete is linked, their Connexions block gets **Importer l'historique**
+an athlete is linked, their Strava section gets **Importer l'historique**
 with a date (two years back by default): the server pulls every activity
 since then from Strava — up to eighty pages, summaries only — and stores
 each with its rich columns (distance, elevation, exact duration, heart rate,
@@ -1161,17 +1186,24 @@ server checks: `403` otherwise). The list shows every account with its role,
 whether it is active, whether it still has no password, and which athletes it
 sees with which right. Opening one edits the name and the role, replaces the
 password — it is never read back — and sets the right on each athlete
-(lecture, écriture, or none). Below it, one form for a new athlete *and*
-their login in a single gesture: the athlete's name, first name, the two
-10 km paces in `mm:ss` and the plan's start; the account's email, password
-and role, the account named after the athlete. Untick one of the two to create
-the other alone, attached to what already exists — a coach without an athlete,
-an athlete without a login, a login for an athlete encoded earlier. The
-server validates everything first and writes in one transaction
-(`POST /api/admin/inscription`): a wrong pace refuses the whole thing rather
-than leaving an orphan account, and `check:api` asserts exactly that. The
-paces go through the same 2:00–15:00 /km gate as the command line, and a
-password through the same `securite.mdp_min`.
+(lecture, écriture, or none). The onboarding assistant — a new athlete *and*
+their login, once — lives in **Athlètes**; Comptes carries the same assistant
+started at "un compte seul", for a coach, an admin or a login for an athlete
+encoded earlier. Its steps: **Quoi** (an athlete and their account, an
+athlete alone, an account alone), **Athlète** (name, first name, the two
+10 km paces in `mm:ss`, the plan's start), **Compte** (email, password, role,
+the account named after the athlete, the right on the athlete), **Récap**,
+then **Créer**. Each step only shows its fields and only lets a valid one
+through — a pace outside 2:00–15:00 /km or an email without its @ keeps
+Suivant greyed — and the last panel offers what a coach does next: **Relier
+Strava** and **Écrire son plan**, which display the new athlete and open the
+matching section. An athlete alone can be attached to an existing account, an
+account alone to an existing athlete. The server revalidates everything and
+writes in one transaction (`POST /api/admin/inscription`): a wrong pace
+refuses the whole thing rather than leaving an orphan account, and
+`check:api` asserts exactly that; `check:app` drives the first two steps. The
+paces go through the same gate as the command line, and a password through
+the same `securite.mdp_min`.
 
 Two things the screen refuses, because the back office must never close from
 the inside: an admin cannot deactivate their own account or take their own
@@ -1182,12 +1214,12 @@ own.
 **Système** answers the question every deploy raises — *am I looking at the
 new version?* — by printing the version built into the page next to the one
 the server serves (`dist/version.txt`), with a **Recharger** button when they
-differ. Then the services, each with the field that fixes it right there: the
+differ. Then the services, each with the gesture that fixes it: the
 Anthropic key in its three states (absent, set and from where, set but
 unreadable because `MSC_SECRET_KEY` changed or a clear value was pushed by
-SQL) with a **Renseigner** button that opens the same field as Réglages;
-Strava's client ID, secret and verify token the same way; the sealing key;
-the database and its version. And what the demo seed left in the live base —
+SQL) and Strava's common application, each with a **→ Réglages** button
+rather than a second copy of the field; the sealing key; the database and
+its version. And what the demo seed left in the live base —
 the invented October 2026 activities, journal, measures, analyses, and the
 thirty-week demo plan — athlete by athlete, because the seed creates its
 athlete by auto-increment and nothing says it is number 1, with a **Retirer**

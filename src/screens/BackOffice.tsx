@@ -21,12 +21,10 @@ import type { App } from '../state/useApp';
 const T: Record<Lang, Record<string, string>> = {
   fr: {
     progression: 'Progression · équivalent 10 km',
-    poids: 'Poids',
     courses: 'Compétitions',
     ajouter: 'Encoder une course',
     aucune: 'Aucune course encodée.',
     pasAssez: 'Deux résultats au moins pour tracer une courbe.',
-    pasDePoids: 'Aucune mesure de poids confirmée.',
     date: 'Date', nom: 'Nom', lieu: 'Lieu', distance: 'Distance (km)',
     temps: 'Temps (h:mm:ss)', classement: 'Classement', partants: 'Partants',
     enregistrer: 'Enregistrer', annuler: 'Annuler', supprimer: 'Supprimer',
@@ -36,12 +34,10 @@ const T: Record<Lang, Record<string, string>> = {
   },
   pl: {
     progression: 'Postęp · ekwiwalent 10 km',
-    poids: 'Waga',
     courses: 'Zawody',
     ajouter: 'Dodaj zawody',
     aucune: 'Brak zapisanych zawodów.',
     pasAssez: 'Potrzeba co najmniej dwóch wyników.',
-    pasDePoids: 'Brak potwierdzonych pomiarów wagi.',
     date: 'Data', nom: 'Nazwa', lieu: 'Miejsce', distance: 'Dystans (km)',
     temps: 'Czas (h:mm:ss)', classement: 'Miejsce', partants: 'Startujących',
     enregistrer: 'Zapisz', annuler: 'Anuluj', supprimer: 'Usuń',
@@ -98,11 +94,6 @@ export function BackOffice({ app }: { app: App }) {
     label: `${c.nom} · ${chrono(c.resultat!.temps_s)}`,
   }));
 
-  const poids: Point[] = db
-    .select('msc_mesure')
-    .filter((m) => m.poids_kg !== undefined)
-    .map((m) => ({ date: m.date, valeur: m.poids_kg as number, label: m.date }));
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <Card padding="16px 18px" gap={10}>
@@ -113,16 +104,6 @@ export function BackOffice({ app }: { app: App }) {
           basMieux
           format={(v) => `${allure(v)}/km`}
           vide={t.pasAssez}
-        />
-      </Card>
-
-      <Card padding="16px 18px" gap={10}>
-        <SectionLabel icon="scale" color={C.teal}>{t.poids}</SectionLabel>
-        <Courbe
-          points={poids}
-          couleur="#029CD0"
-          format={(v) => `${v.toFixed(1)} kg`}
-          vide={t.pasDePoids}
         />
       </Card>
 
