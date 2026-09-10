@@ -551,6 +551,7 @@ CREATE TABLE IF NOT EXISTS msc_activity (
   cadence_moy   TINYINT UNSIGNED NULL,
   effort        SMALLINT UNSIGNED NULL COMMENT 'le suffer score de Strava — ce n''est pas le RPE, qui reste à l''athlète',
   manuelle      TINYINT(1) NOT NULL DEFAULT 0,
+  appariee_main TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'l''athlète a dit lui-même quelle séance c''était — l''appariement automatique ne doit pas le défaire',
   privee        TINYINT(1) NOT NULL DEFAULT 0,
   statut        VARCHAR(16) NOT NULL DEFAULT 'fait',
   maj_le        DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -605,6 +606,19 @@ CREATE TABLE IF NOT EXISTS msc_journal_douleur (
   PRIMARY KEY (journal_id, douleur),
   KEY ix_douleur (douleur),
   CONSTRAINT fk_douleur_journal FOREIGN KEY (journal_id) REFERENCES msc_journal (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Pourquoi une séance n'a PAS été faite. Même forme que les limites, autre
+-- question : les limites disent ce qui a bloqué PENDANT, celles-ci disent
+-- pourquoi il n'y a rien eu du tout. « Pas envie deux semaines de suite » et
+-- « pas le temps le mardi » ne se corrigent pas de la même façon, et c'est ce
+-- que le coach lit avant de replanifier.
+CREATE TABLE IF NOT EXISTS msc_journal_raison (
+  journal_id BIGINT UNSIGNED NOT NULL,
+  raison     VARCHAR(24) NOT NULL,
+  PRIMARY KEY (journal_id, raison),
+  KEY ix_raison (raison),
+  CONSTRAINT fk_raison_journal FOREIGN KEY (journal_id) REFERENCES msc_journal (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Ce qui a bloqué, séance par séance : jambes, souffle, technique, mental,

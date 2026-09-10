@@ -290,6 +290,19 @@ try {
   const relu3 = (await c.appel('/api/db/instantane')).corps.msc_journal.find((j: any) => j.session_id === seanceCochee.id);
   check('et null l’efface', relu3 !== undefined && relu3.fait === undefined, JSON.stringify(relu3?.fait));
 
+  /* Pourquoi elle n'a pas eu lieu : le vocabulaire fermé du bilan de séance.
+     Un mot inventé tombe, le tableau vide efface, et les deux vocabulaires
+     ne se marchent pas dessus. */
+  await ecrireCoche({ fait: false, raisons: ['pas_envie', 'meteo', 'parce_que'] });
+  const relu4 = (await c.appel('/api/db/instantane')).corps.msc_journal.find((j: any) => j.session_id === seanceCochee.id);
+  check('les motifs d’une séance sautée se rangent, hors vocabulaire exclu',
+    JSON.stringify(relu4?.raisons) === JSON.stringify(['meteo', 'pas_envie']), JSON.stringify(relu4?.raisons));
+  await ecrireCoche({ fait: true, raisons: [], limites: ['jambes'] });
+  const relu5 = (await c.appel('/api/db/instantane')).corps.msc_journal.find((j: any) => j.session_id === seanceCochee.id);
+  check('« finalement si » les efface, et ce qui a bloqué prend la place',
+    JSON.stringify(relu5?.raisons) === '[]' && JSON.stringify(relu5?.limites) === JSON.stringify(['jambes']),
+    JSON.stringify({ raisons: relu5?.raisons, limites: relu5?.limites }));
+
   /* Les sept prochains jours : la route vérifie sa forme, puis demande au
      coach — sans clé Anthropic ici, c'est le 401 qui dit lequel des trois cas
      on est ; avec une clé, une replanification rangée. */

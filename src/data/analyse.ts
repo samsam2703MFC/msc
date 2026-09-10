@@ -659,6 +659,9 @@ export function demanderGlissant(aujourdhui: string, lang: Lang = 'fr'): Promise
         activite: a ? { duree_min: a.duree_min, allure_moy: a.allure_moy, sport: a.sport } : null,
         rpe: j?.rpe_ressenti || null,
         limites: (j?.limites ?? []).filter((l) => l !== 'rien'),
+        /* Et quand elle n'a pas eu lieu, pourquoi. « Pas envie » deux fois
+           dans la semaine ne se replanifie pas comme « pas le temps ». */
+        raisons: j?.raisons ?? [],
       };
     });
 

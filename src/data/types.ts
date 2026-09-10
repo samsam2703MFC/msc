@@ -85,6 +85,9 @@ export interface MscActivity {
   allure_moy?: string;
   fc_moy?: number;
   splits_blocs?: number[];
+  /** L'athlète a désigné lui-même la séance : l'appariement automatique la
+      repose telle quelle au lieu de la recalculer. */
+  appariee_main?: boolean;
   /** Ce que l'historique importé apporte : de quoi compter des kilomètres. */
   nom?: string;
   distance_km?: number;
@@ -100,6 +103,9 @@ export interface MscJournal {
   /** Ce qui a bloqué : codes de `LIMITES`. `['rien']` quand la question a eu
       sa réponse et que rien n'a bloqué ; vide tant qu'elle n'a pas été posée. */
   limites?: string[];
+  /** Pourquoi elle n'a pas eu lieu : codes de `RAISONS`. Vide tant que rien
+      n'a été dit — et sans objet quand la séance a été faite. */
+  raisons?: string[];
   note?: string;
   /** La coche de l'athlète : vrai « faite », faux « pas faite », absent tant
       qu'il n'a rien dit — Strava compte à part, dans msc_activity. */
@@ -197,6 +203,11 @@ export interface CalendrierEntree {
 /** Le vocabulaire fermé de « ce qui a bloqué » — le même que le serveur. */
 export const LIMITES = ['rien', 'jambes', 'souffle', 'technique', 'mental', 'sommeil', 'nutrition', 'douleur', 'chaleur'] as const;
 export type Limite = (typeof LIMITES)[number];
+
+/** Pourquoi une séance n'a pas eu lieu. Le pendant des limites : celles-ci
+    disent ce qui a bloqué pendant, celles-là pourquoi il n'y a rien eu. */
+export const RAISONS = ['pas_envie', 'pas_le_temps', 'fatigue', 'douleur', 'malade', 'meteo', 'voyage', 'imprevu', 'autrement'] as const;
+export type Raison = (typeof RAISONS)[number];
 
 export interface MscDaily {
   date: string;

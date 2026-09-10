@@ -290,16 +290,44 @@ export interface Appariement {
  * minutes of threshold in the evening has done the threshold session, and
  * chronological order would have handed it to the jog. Each session is claimed
  * once; whatever is left over is orphaned rather than forced onto something.
+ *
+ * `forces` est la sortie de secours : quand rien de tout cela ne trouve la
+ * bonne séance — un vélo fait à la place de la course, une sortie enregistrée
+ * la veille — l'athlète désigne l'activité, et c'est lui qui a raison.
  */
 export function apparier(
   brutes: ActiviteStrava[],
   sessions: MscPlanSession[],
   details?: Map<number, ActiviteDetaillee>,
+  /* Ce que l'athlète a désigné lui-même : id Strava → séance. Ces paires-là
+     sont posées d'abord et retirées du calcul — sans quoi la synchro suivante
+     déferait ce qu'il vient de dire, ce qui est exactement ce qu'on lui
+     reproche quand une application « ne met pas à jour ». */
+  forces?: Map<number, number>,
 ): Appariement {
   const cle = (date: string, sport: string) => `${date}|${sport}`;
+  const parId = new Map(sessions.map((s) => [s.id, s]));
+
+  const activites: MscActivity[] = [];
+  const orphelines: ActiviteStrava[] = [];
+  const posees = new Set<number>();
+  const prisesForcees = new Set<number>();
+  if (forces?.size) {
+    for (const a of brutes) {
+      const sessionId = forces.get(a.id_strava);
+      const session = sessionId == null ? undefined : parId.get(sessionId);
+      /* Une séance qui n'existe plus (un plan remplacé) : la marque tombe,
+         l'activité repart dans le calcul ordinaire. */
+      if (!session || prisesForcees.has(session.id)) continue;
+      prisesForcees.add(session.id);
+      posees.add(a.id_strava);
+      activites.push({ ...ligne(a, session, details?.get(a.id_strava)), appariee_main: true });
+    }
+  }
 
   const seancesPar = new Map<string, MscPlanSession[]>();
   for (const s of sessions) {
+    if (prisesForcees.has(s.id)) continue;
     const sport = SPORT_DE_DISCIPLINE[s.discipline];
     /* Rest days map to no sport, so nothing can ever land on one. */
     if (!sport) continue;
@@ -311,14 +339,12 @@ export function apparier(
 
   const activitesPar = new Map<string, ActiviteStrava[]>();
   for (const a of brutes) {
+    if (posees.has(a.id_strava)) continue;
     const k = cle(a.date, a.sport);
     const liste = activitesPar.get(k);
     if (liste) liste.push(a);
     else activitesPar.set(k, [a]);
   }
-
-  const activites: MscActivity[] = [];
-  const orphelines: ActiviteStrava[] = [];
 
   for (const [k, groupe] of activitesPar) {
     const candidates = seancesPar.get(k) ?? [];

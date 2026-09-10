@@ -31,6 +31,7 @@ import {
   CircleX,
   Clock,
   ClockAlert,
+  CloudRain,
   Cookie,
   Database,
   Dot,
@@ -70,6 +71,7 @@ import {
   Sun,
   Tags,
   Target,
+  Thermometer,
   Timer,
   TimerReset,
   TrendingDown,
@@ -154,6 +156,9 @@ export const ICONS: Record<string, LucideIcon> = {
   'waves': Waves,
   'wind': Wind,
   'wine': Wine,
+  /* le bilan d'une séance : pourquoi elle n'a pas eu lieu */
+  'cloud-rain': CloudRain,
+  'thermometer': Thermometer,
   /* le journal : ce qui a bloqué, et le motif « trop mangé » */
   'bandage': Bandage,
   'brain': Brain,

@@ -330,6 +330,22 @@ the tick is what the athlete says, and it wins. The back office counts done
 sessions and the past seven days' load by the same rule
 (`etatDesSeances()` on the client, the same two `EXISTS` on the server).
 
+**Le bilan d'une séance** vit dans sa fiche, ouverte depuis la semaine : *Comment
+ça s'est passé ?*, et deux voies qui ne se mélangent pas. **Pas faite** demande
+pourquoi, dans un vocabulaire fermé (`RAISONS` : pas envie, pas le temps,
+fatigue, douleur, malade, météo, voyage, imprévu, autre chose à la place) rangé
+dans `msc_journal_raison` — « pas envie » deux fois dans la semaine ne se
+replanifie pas comme « pas le temps », et le prompt des sept jours glissants le
+dit au coach en toutes lettres. **Faite** ouvre l'autre moitié : l'activité
+Strava appariée, le RPE ressenti, ce qui a bloqué (`LIMITES`), la note. Répondre
+à l'une efface l'autre, en base comme à l'écran.
+
+Quand l'appariement automatique n'a rien trouvé, la fiche propose ce que Strava
+a ce jour-là et que rien n'a réclamé : *C'était celle-ci* pose la paire à la
+main. `msc_activity.appariee_main` la garde — `apparier()` repose ces paires
+d'abord et les retire du calcul, et la synchro suivante ne défait pas ce que
+l'athlète vient de dire.
+
 ### Setting it up
 
 1. Create an application at <https://www.strava.com/settings/api>. Set its

@@ -181,7 +181,7 @@ async function lePlan(planId) {
 }
 
 async function leVecu(athleteId) {
-  const [activites, blocs, journal, douleurs, limites, mesures, attente] = await Promise.all([
+  const [activites, blocs, journal, douleurs, limites, raisons, mesures, attente] = await Promise.all([
     lignes('SELECT * FROM msc_activity WHERE athlete_id = :a ORDER BY date, id', { a: athleteId }),
     lignes(
       `SELECT b.* FROM msc_activity_bloc b JOIN msc_activity a ON a.id = b.activity_id
@@ -193,6 +193,9 @@ async function leVecu(athleteId) {
     lignes(
       `SELECT l.* FROM msc_journal_limite l JOIN msc_journal j ON j.id = l.journal_id
        WHERE j.athlete_id = :a ORDER BY l.limite`, { a: athleteId }),
+    lignes(
+      `SELECT r.* FROM msc_journal_raison r JOIN msc_journal j ON j.id = r.journal_id
+       WHERE j.athlete_id = :a ORDER BY r.raison`, { a: athleteId }),
     lignes(
       "SELECT * FROM msc_mesure WHERE athlete_id = :a AND etat = 'confirme' ORDER BY date",
       { a: athleteId }),
@@ -218,6 +221,11 @@ async function leVecu(athleteId) {
     if (!limitesPar.has(l.journal_id)) limitesPar.set(l.journal_id, []);
     limitesPar.get(l.journal_id).push(l.limite);
   }
+  const raisonsPar = new Map();
+  for (const r of raisons) {
+    if (!raisonsPar.has(r.journal_id)) raisonsPar.set(r.journal_id, []);
+    raisonsPar.get(r.journal_id).push(r.raison);
+  }
 
   return {
     msc_activity: activites.map((a) => ({
@@ -228,6 +236,9 @@ async function leVecu(athleteId) {
       fc_moy: nombre(a.fc_moy),
       splits_blocs: parActivite.get(a.id),
       statut: a.statut,
+      /* L'athlète a désigné la séance lui-même : la synchro suivante doit
+         reposer le même appariement plutôt que de le recalculer. */
+      appariee_main: a.appariee_main ? true : undefined,
       /* Ce que l'historique apporte : de quoi compter des kilomètres. */
       nom: a.nom ?? undefined,
       distance_km: a.distance_m ? Number(a.distance_m) / 1000 : undefined,
@@ -239,6 +250,7 @@ async function leVecu(athleteId) {
       sommeil: Number(j.sommeil_h ?? 0),
       douleurs: parJournal.get(j.id) ?? [],
       limites: limitesPar.get(j.id) ?? [],
+      raisons: raisonsPar.get(j.id) ?? [],
       note: j.note ?? undefined,
       fait: j.fait == null ? undefined : Boolean(j.fait),
     })),
@@ -782,7 +794,12 @@ export async function mutation(athleteId, id, operation, travail) {
    codes, et un mot libre irait dans la note. */
 export const LIMITES = ['rien', 'jambes', 'souffle', 'technique', 'mental', 'sommeil', 'nutrition', 'douleur', 'chaleur'];
 
-export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil, note, douleurs, limites, fait }, cnx) {
+/* Et celui de « pourquoi elle n'a pas eu lieu ». Fermé pour la même raison :
+   « pas envie » trois fois en dix jours n'est pas « pas le temps » trois fois,
+   et le coach ne replanifie pas pareil. */
+export const RAISONS = ['pas_envie', 'pas_le_temps', 'fatigue', 'douleur', 'malade', 'meteo', 'voyage', 'imprevu', 'autrement'];
+
+export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil, note, douleurs, limites, raisons, fait }, cnx) {
   const q = cnx ?? { execute: (...a) => import('./bd.mjs').then((m) => m.bd().execute(...a)) };
   /* La coche « faite » : vrai, faux, null pour l'effacer — et absente du
      corps pour ne pas y toucher. Une écriture du RPE ne doit pas défaire ce
@@ -818,6 +835,15 @@ export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil,
     await q.execute('DELETE FROM msc_journal_limite WHERE journal_id = ?', [journalId]);
     for (const l of gardees) {
       await q.execute('INSERT INTO msc_journal_limite (journal_id, limite) VALUES (?, ?)', [journalId, l]);
+    }
+  }
+  /* Pourquoi elle n'a pas eu lieu. Même règle : le tableau absent ne touche à
+     rien, le tableau vide efface — dire « finalement si » doit pouvoir. */
+  if (journalId && Array.isArray(raisons)) {
+    const admises = [...new Set(raisons.map(String).filter((r) => RAISONS.includes(r)))];
+    await q.execute('DELETE FROM msc_journal_raison WHERE journal_id = ?', [journalId]);
+    for (const r of admises) {
+      await q.execute('INSERT INTO msc_journal_raison (journal_id, raison) VALUES (?, ?)', [journalId, r]);
     }
   }
   return { journal_id: journalId };
@@ -898,8 +924,12 @@ export async function ecrireActivites(athleteId, activites, cnx, { depuis } = {}
   if (fenetre) {
     /* Une séance est faite une fois (uq_activity_session) : on libère toutes
        celles de la fenêtre avant de reposer l'appariement. */
+    /* Sauf celles que l'athlète a appariées lui-même : c'est lui qui sait.
+       Le client les repose telles quelles, et un client qui l'ignorerait ne
+       peut plus les défaire ici. */
     await q.execute(
-      'UPDATE msc_activity SET session_id = NULL WHERE athlete_id = ? AND id_strava IS NOT NULL AND date >= ?',
+      `UPDATE msc_activity SET session_id = NULL
+       WHERE athlete_id = ? AND id_strava IS NOT NULL AND date >= ? AND appariee_main = 0`,
       [athleteId, fenetre],
     );
     const ids = lot.map((a) => Number(a.id_strava));
@@ -913,14 +943,16 @@ export async function ecrireActivites(athleteId, activites, cnx, { depuis } = {}
   for (const a of lot) {
     const [r] = await q.execute(
       `INSERT INTO msc_activity (athlete_id, id_strava, session_id, date, sport, duree_min,
-         allure_s_km, fc_moy, statut)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         allure_s_km, fc_moy, statut, appariee_main)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), session_id = VALUES(session_id),
          date = VALUES(date), sport = VALUES(sport), duree_min = VALUES(duree_min),
          allure_s_km = COALESCE(VALUES(allure_s_km), allure_s_km),
-         fc_moy = COALESCE(VALUES(fc_moy), fc_moy), statut = VALUES(statut)`,
+         fc_moy = COALESCE(VALUES(fc_moy), fc_moy), statut = VALUES(statut),
+         appariee_main = VALUES(appariee_main)`,
       [athleteId, a.id_strava, a.session_id ?? null, a.date, a.sport, a.duree_min,
-       a.allure_moy ? secondesDAllure(a.allure_moy) : null, a.fc_moy ?? null, a.statut ?? 'fait'],
+       a.allure_moy ? secondesDAllure(a.allure_moy) : null, a.fc_moy ?? null, a.statut ?? 'fait',
+       a.appariee_main ? 1 : 0],
     );
     await q.execute('DELETE FROM msc_activity_bloc WHERE activity_id = ?', [r.insertId]);
     for (const [ordre, allure] of (a.splits_blocs ?? []).entries()) {

@@ -87,6 +87,21 @@ const LIMITE_EN_CLAIR = {
   chaleur: 'la chaleur',
 };
 
+/* Et pourquoi elle n'a pas eu lieu du tout. Le coach n'ajuste pas de la même
+   façon selon la réponse : « pas le temps » déplace, « pas envie » se traite
+   au moral et à la dose, « douleur » protège. */
+const RAISON_EN_CLAIR = {
+  pas_envie: 'pas envie',
+  pas_le_temps: 'pas le temps',
+  fatigue: 'trop fatigué',
+  douleur: 'une douleur',
+  malade: 'malade',
+  meteo: 'la météo',
+  voyage: 'en déplacement',
+  imprevu: 'un imprévu',
+  autrement: 'autre chose à la place',
+};
+
 const Analyse = z.object({
   verdict: z.string().describe(
     "Une à deux phrases : ce qui s'est passé dans cette séance. Tu peux citer les chiffres qui te sont donnés, jamais en inventer.",
@@ -622,7 +637,10 @@ function contexteGlissant({ athlete, aujourdhui, jour, semaine, bloc, matin, pas
     const bloque = s.limites?.length
       ? ` · a bloqué : ${s.limites.map((l) => LIMITE_EN_CLAIR[l] ?? l).join(', ')}`
       : '';
-    lignes.push(`  ${s.id}  ${s.jour} ${s.date} · ${s.titre} · ${s.type} · prévu ${s.duree_min} min${s.natation_m ? ` · ${s.natation_m} m` : ''} · ${etat}${strava}${rpe}${bloque}`);
+    const pourquoi = s.raisons?.length
+      ? ` · pas faite parce que : ${s.raisons.map((r) => RAISON_EN_CLAIR[r] ?? r).join(', ')}`
+      : '';
+    lignes.push(`  ${s.id}  ${s.jour} ${s.date} · ${s.titre} · ${s.type} · prévu ${s.duree_min} min${s.natation_m ? ` · ${s.natation_m} m` : ''} · ${etat}${strava}${rpe}${bloque}${pourquoi}`);
   }
 
   lignes.push('', 'Les sept prochains jours, tels que le plan les prévoit. Une ligne ne peut nommer qu’un de ces id :');

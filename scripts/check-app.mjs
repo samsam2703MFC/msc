@@ -218,6 +218,32 @@ try {
     semaine.match(/\d+:\d\d\/km/g)?.slice(0, 3).join(' ') ?? '');
   check('et dit ce que veulent dire ses trois couleurs', /faite/.test(semaine) && /autrement/.test(semaine) && /manquée/.test(semaine));
 
+  /* Le bilan d'une séance passée : les deux voies, et la bonne question sous
+     chacune. « Pas faite » demande pourquoi ; « faite » ouvre Strava et le
+     ressenti. C'est le geste de l'athlète le dimanche soir. */
+  await page.locator('button.msc-hover-surface').nth(1).click();
+  await page.waitForTimeout(900);
+  const fiche = await page.locator('body').innerText();
+  check('une séance passée s’ouvre sur son bilan, en deux voies',
+    /Comment ça s’est passé/.test(fiche) && /Je l’ai faite/.test(fiche) && /Pas faite/.test(fiche),
+    fiche.split('\n').find((l) => /Comment ça/.test(l)) ?? '');
+  const pasFaite = page.getByRole('button', { name: /^Pas faite$/ });
+  if (await pasFaite.getAttribute('aria-pressed') !== 'true') {
+    await pasFaite.click();
+    await page.waitForTimeout(1200);
+  }
+  const sautee = await page.locator('body').innerText();
+  check('« pas faite » demande pourquoi, dans un vocabulaire fermé',
+    /Pourquoi \?/.test(sautee) && /Pas envie/.test(sautee) && /Pas le temps/.test(sautee));
+  await page.getByRole('button', { name: /Je l’ai faite/ }).click();
+  await page.waitForTimeout(1200);
+  const faite = await page.locator('body').innerText();
+  check('« faite » ouvre Strava, le ressenti et ce qui a bloqué',
+    /Strava/.test(faite) && /Ton ressenti/.test(faite) && /Quelque chose a bloqué/.test(faite)
+      && !/Pourquoi \?/.test(faite));
+  await page.getByRole('button', { name: /^Fermer$/ }).last().click();
+  await page.waitForTimeout(500);
+
   await page.click('text=Forme');
   await page.waitForTimeout(500);
   const ecranForme = await page.locator('body').innerText();

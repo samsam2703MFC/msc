@@ -3,29 +3,14 @@
 
 import * as db from '../data/db';
 import type { Lang } from '../data/types';
-import { C, R } from '../design/theme';
+import { C } from '../design/theme';
 import { ChatBar, Conversation } from '../screens/CoachScreen';
-import { visuelDuStatut } from '../data/statut';
+import { Bilan } from './Bilan';
 import { Icon } from './Icon';
 import { GainPill, SheetHeading } from './SheetHeading';
 import { Card, Grid, IconLine, Mono } from './primitives';
 import { Sheet, SheetCloseButton } from './Sheet';
 import type { App } from '../state/useApp';
-
-/* « Faite ? » — la coche de l'athlète sur une séance passée. Strava compte à
-   part ; ici c'est ce qu'il dit, lui, et ça prime. */
-const FAITE: Record<Lang, Record<string, string>> = {
-  fr: {
-    question: 'Faite ?', oui: 'Faite', non: 'Pas faite',
-    fait: 'faite', partiel: 'faite autrement', manque: 'manquée', aujourdhui: 'aujourd’hui', prevu: 'à venir', repos: 'repos', adapte: 'adaptée',
-    strava: 'Strava a apparié',
-  },
-  pl: {
-    question: 'Zrobiony?', oui: 'Zrobiony', non: 'Nie zrobiony',
-    fait: 'zrobiony', partiel: 'zrobiony inaczej', manque: 'pominięty', aujourdhui: 'dzisiaj', prevu: 'zaplanowany', repos: 'odpoczynek', adapte: 'dostosowany',
-    strava: 'Strava dopasowała',
-  },
-};
 
 /* Suggested openers — UI copy, so they sit with the component, not in msc_. */
 const CHAT: Record<Lang, { placeholder: string; prompts: string[] }> = {
@@ -83,7 +68,7 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
         onType={() => app.openType(type.code)}
       />
 
-      {session.type !== 'repos' && session.date <= app.date && <Faite app={app} sessionId={session.id} />}
+      {session.type !== 'repos' && session.date <= app.date && <Bilan app={app} sessionId={session.id} />}
 
       <IconLine icon="target">{session.detail[lang]}</IconLine>
 
@@ -168,63 +153,5 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
 
       <SheetCloseButton label={ui.modalClose} onClick={app.closeSession} />
     </Sheet>
-  );
-}
-
-/* L'état de la séance et les deux boutons. La coche s'enregistre tout de
-   suite ; toucher de nouveau la même la retire (on revient à ce que Strava
-   dit). En lecture seule, l'état se lit sans se changer. */
-function Faite({ app, sessionId }: { app: App; sessionId: number }) {
-  const lang = app.lang;
-  const t = FAITE[lang];
-  const session = db.mustOne('msc_session', (r) => r.id === sessionId);
-  const statut = db.statutDe(session, app.date, db.etatDesSeances());
-  const visuel = visuelDuStatut(statut);
-  const coche = db.one('msc_journal', (j) => j.session_id === sessionId)?.fait ?? null;
-  const activite = db.one('msc_activity', (a) => a.session_id === sessionId);
-  const lecture = db.droit !== 'ecriture';
-
-  const bouton = (valeur: boolean, icon: string, couleur: string, label: string) => {
-    const actif = coche === valeur;
-    return (
-      <button
-        type="button"
-        className="msc-hover-accent"
-        aria-pressed={actif}
-        disabled={lecture}
-        onClick={() => void app.marquerSeance(sessionId, actif ? null : valeur)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: R.full,
-          border: `1px solid ${actif ? couleur : C.border}`,
-          background: actif ? `${couleur}1A` : C.surface,
-          color: actif ? couleur : C.inkMuted, fontSize: 12, fontWeight: 600,
-          opacity: lecture ? 0.6 : 1,
-        }}
-      >
-        <Icon name={icon} size={14} />
-        {label}
-      </button>
-    );
-  };
-
-  return (
-    <Card background={C.page} padding={14} gap={10} style={{ borderRadius: 12, boxShadow: 'none' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: C.inkSecondary }}>{t.question}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: C.ink }}>
-          <Icon name={visuel.icon} size={14} color={visuel.couleur} />
-          {t[statut] ?? statut}
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {bouton(true, 'circle-check', C.accentDeep, t.oui)}
-        {bouton(false, 'circle-x', C.negative, t.non)}
-      </div>
-      {activite && (
-        <Mono size={11} color={C.inkQuiet}>
-          {`${t.strava} ${activite.duree_min} min · ${activite.sport}`}
-        </Mono>
-      )}
-    </Card>
   );
 }

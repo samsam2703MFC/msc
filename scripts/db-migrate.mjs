@@ -86,6 +86,11 @@ try {
       "ADD COLUMN glissant JSON NULL COMMENT 'type glissant : le signal du matin, l’implication, les sept prochains jours ligne par ligne, la décision à valider' AFTER sources"],
     ['msc_ajustement', 'vers_date',
       "ADD COLUMN vers_date DATE NULL COMMENT 'un déplacement : le jour où la séance atterrit à l’acceptation' AFTER part"],
+    /* Le bilan de séance : l'athlète désigne lui-même l'activité Strava quand
+       l'appariement automatique ne l'a pas trouvée. La marque survit aux
+       synchros suivantes, qui referaient sinon le mauvais calcul. */
+    ['msc_activity', 'appariee_main',
+      "ADD COLUMN appariee_main TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'l''athlète a dit lui-même quelle séance c''était — l''appariement automatique ne doit pas le défaire' AFTER manuelle"],
   ];
   for (const [table, colonne, ddl] of AJOUTS) {
     const [[{ n }]] = await cnx.query(

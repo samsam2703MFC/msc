@@ -10,6 +10,7 @@ import * as db from '../data/db';
 import { motDuStatut, visuelDuStatut } from '../data/statut';
 import { C } from '../design/theme';
 import { Annee } from '../components/Annee';
+import { raisonEnClair } from '../components/Bilan';
 import { Icon } from '../components/Icon';
 import { Card, Grid, Mono, SectionLabel, TypeSquare } from '../components/primitives';
 import type { App } from '../state/useApp';
@@ -126,6 +127,17 @@ export function WeekScreen({ app }: { app: App }) {
               >
                 <div style={{ fontSize: 14, color: C.ink }}>{d.titre_court[lang]}</div>
                 <div style={{ fontSize: 11, color: C.inkQuiet }}>{d.meta[lang]}</div>
+                {/* Une séance sautée porte son motif : la ligne dit pourquoi
+                    plutôt que de laisser une croix rouge sans explication. */}
+                {(() => {
+                  const j = db.one('msc_journal', (r) => r.session_id === d.id);
+                  if (j?.fait !== false || !j.raisons?.length) return null;
+                  return (
+                    <div style={{ fontSize: 11, color: C.negative }}>
+                      {j.raisons.map((r) => raisonEnClair(r, lang).toLowerCase()).join(' · ')}
+                    </div>
+                  );
+                })()}
               </div>
               <Icon name={statut.icon} size={17} color={statut.couleur} />
             </button>

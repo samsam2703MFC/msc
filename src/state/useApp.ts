@@ -435,9 +435,16 @@ export function useApp() {
   /* L'appariement a besoin du plan, donc il se fait ici ; ce qui en sort part
      au serveur, qui le range. Puis on relit : le serveur est la vérité, même
      quand c'est nous qui venons de la lui donner. */
-  const appliquer = useCallback(async () => {
+  const appliquer = useCallback(async (forcees?: Map<number, number>) => {
     const sessions = db.select('msc_session');
-    const resultat = strava.apparier(brutes.current, sessions, details.current);
+    /* Ce que l'athlète a désigné lui-même, relu de l'instantané : la synchro
+       ne redéfait pas ce qu'il a dit. Le nouveau choix passe par-dessus. */
+    const forces = new Map<number, number>();
+    for (const a of db.select('msc_activity')) {
+      if (a.appariee_main && a.session_id) forces.set(a.id_strava, a.session_id);
+    }
+    for (const [id, session] of forcees ?? []) forces.set(id, session);
+    const resultat = strava.apparier(brutes.current, sessions, details.current, forces);
     await api.ecrireActivites(resultat.activites, sessions[0]?.date);
     await recharger(db.athleteId);
     if (monte.current) setOrphelines(resultat.orphelines);
@@ -672,6 +679,64 @@ export function useApp() {
       if (monte.current) setAnaErreur(message(e));
     }
   }, [date, recharger]);
+
+  /* Le bilan d'une séance, depuis la semaine : faite ou pas, pourquoi pas, ce
+     qui a bloqué, le ressenti, la note. Tout tient dans la ligne de journal de
+     CETTE séance — pas celle d'aujourd'hui : on remplit souvent hier.
+
+     Les deux vocabulaires s'excluent, et le dire ici évite de les voir
+     coexister : une séance pas faite n'a rien qui a bloqué pendant, une séance
+     faite n'a pas de raison de ne pas l'avoir été. */
+  const bilanSeance = useCallback(async (
+    sessionId: number,
+    patch: { fait?: boolean | null; rpe?: number; limites?: string[]; raisons?: string[]; note?: string },
+  ) => {
+    if (!db.chargee || db.droit !== 'ecriture') return;
+    const session = db.one('msc_session', (s) => s.id === sessionId);
+    if (!session) return;
+    const j = db.one('msc_journal', (r) => r.session_id === sessionId);
+    const fait = patch.fait === undefined ? (j?.fait ?? null) : patch.fait;
+    const limites = patch.limites ?? (fait === false ? [] : j?.limites);
+    const raisons = patch.raisons ?? (fait === false ? j?.raisons : []);
+    try {
+      const r = await api.ecrireJournal({
+        date: session.date,
+        session_id: sessionId,
+        /* `|| undefined` et non `??` : l'instantané pose 0 quand il n'y a pas
+           de RPE, et 0 viole la contrainte (1 à 10, ou rien). */
+        rpe: patch.rpe ?? (j?.rpe_ressenti || undefined),
+        sommeil: j?.sommeil || undefined,
+        note: patch.note ?? j?.note,
+        limites,
+        raisons,
+        fait,
+      });
+      if (api.estDiffere(r) && monte.current) setEnAttente((n) => n + 1);
+      if (session.date === date) {
+        if (patch.fait !== undefined) setFait(fait);
+        if (patch.rpe !== undefined) setRpe(patch.rpe);
+        if (limites) setLimites(limites);
+        if (patch.note !== undefined) setNote(patch.note);
+      }
+      await recharger(db.athleteId);
+    } catch (e) {
+      if (monte.current) setAnaErreur(message(e));
+    }
+  }, [date, recharger]);
+
+  /* « C'était celle-ci » : l'athlète désigne l'activité Strava que
+     l'appariement n'a pas su trouver. On repose tout l'appariement avec cette
+     paire imposée, et la marque part au serveur avec — la synchro suivante la
+     relira plutôt que de la recalculer. */
+  const attacherActivite = useCallback(async (sessionId: number, idStrava: number) => {
+    if (!db.chargee || db.droit !== 'ecriture') return;
+    setStravaErreur(null);
+    try {
+      await appliquer(new Map([[idStrava, sessionId]]));
+    } catch (e) {
+      if (monte.current) setStravaErreur(message(e));
+    }
+  }, [appliquer]);
 
   /* Un toucher par réponse ; « rien » exclut les autres, et une réponse part
      tout de suite — pas de bouton « enregistrer » pour une question à choix. */
@@ -1005,6 +1070,8 @@ export function useApp() {
     done,
     toggleDone,
     marquerSeance,
+    bilanSeance,
+    attacherActivite,
     rpe,
     setRpe,
     limites,
