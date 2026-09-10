@@ -22,6 +22,7 @@ import { FormScreen } from './screens/FormScreen';
 import { TodayScreen } from './screens/TodayScreen';
 import { WeekScreen } from './screens/WeekScreen';
 import { useApp } from './state/useApp';
+import { Bureau } from './Bureau';
 
 const ORDER: ScreenKey[] = ['today', 'week', 'form', 'coach', 'admin'];
 const TAB_ICONS: Record<ScreenKey, string> = {
@@ -70,18 +71,22 @@ function eyebrow(app: ReturnType<typeof useApp>): string {
 
 /* Below this the bezel would cost more room than it is worth. */
 const FRAME_QUERY = '(min-width: 720px) and (min-height: 940px)';
+/* À partir d'ici, un coach ou un admin a le bureau : menu à gauche, page
+   large. Un athlète garde le téléphone quelle que soit la fenêtre — l'app
+   installée est la sienne. */
+const BUREAU_QUERY = '(min-width: 1024px)';
 
-function useFramed() {
-  const [framed, setFramed] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia(FRAME_QUERY).matches,
+function useMedia(requete: string) {
+  const [ok, setOk] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(requete).matches,
   );
   useEffect(() => {
-    const mq = window.matchMedia(FRAME_QUERY);
-    const onChange = () => setFramed(mq.matches);
+    const mq = window.matchMedia(requete);
+    const onChange = () => setOk(mq.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return framed;
+  }, [requete]);
+  return ok;
 }
 
 function Screen({ app }: { app: ReturnType<typeof useApp> }) {
@@ -321,7 +326,24 @@ function Contenu({ app, framed }: { app: ReturnType<typeof useApp>; framed: bool
 
 export function App() {
   const app = useApp();
-  const framed = useFramed();
+  const framed = useMedia(FRAME_QUERY);
+  const large = useMedia(BUREAU_QUERY);
+
+  /* Le bureau du coach : une fois connecté, sur un écran large. Les écrans de
+     l'athlète y restent accessibles, rendus par le même `Screen`. */
+  if (app.amorce === 'pret' && large && backOffice(app)) {
+    const ui = db.ui(app.lang);
+    return (
+      <IOSDevice standalone>
+        <Bureau
+          app={app}
+          ecran={<Screen app={app} />}
+          eyebrow={eyebrow(app)}
+          onglets={ORDER.filter((k) => k !== 'admin').map((k) => ({ key: k, icon: TAB_ICONS[k], label: ui.tabs[k] }))}
+        />
+      </IOSDevice>
+    );
+  }
 
   if (!framed) {
     return (

@@ -118,12 +118,39 @@ const OBJECTIF_VIDE: Objectif = {
   principal: false,
 };
 
-const SECTIONS = {
+export const SECTIONS = {
   fr: { plan: 'Plan', courses: 'Courses', calendrier: 'Calendrier', athletes: 'Athlètes', connexions: 'Connexions', param: 'Réglages', comptes: 'Comptes', systeme: 'Système' },
   pl: { plan: 'Plan', courses: 'Zawody', calendrier: 'Kalendarz', athletes: 'Zawodnicy', connexions: 'Połączenia', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
 } as const;
 
-type Section = keyof typeof SECTIONS.fr;
+export type Section = keyof typeof SECTIONS.fr;
+
+/** Les sections qu'un compte peut ouvrir : le back office pour un coach ou un
+    admin, Comptes et Système pour l'admin seul. La même liste sert la barre
+    du téléphone et le menu du bureau. */
+export function sectionsDe(role: 'athlete' | 'coach' | 'admin' | undefined): Section[] {
+  const admin = role === 'coach' || role === 'admin';
+  return [
+    'plan', 'courses', 'calendrier', 'athletes',
+    ...(admin ? (['connexions', 'param'] as Section[]) : []),
+    ...(role === 'admin' ? (['comptes', 'systeme'] as Section[]) : []),
+  ];
+}
+
+/** Le contenu d'une section, sans la barre : le téléphone la met sous sa
+    bascule, le bureau la met à côté de son menu. */
+export function SectionAdmin({ app, section }: { app: App; section: Section }) {
+  switch (section) {
+    case 'courses': return <BackOffice app={app} />;
+    case 'athletes': return <AthletesScreen app={app} />;
+    case 'param': return <ParamScreen app={app} />;
+    case 'connexions': return <ConnexionsScreen app={app} />;
+    case 'comptes': return <ComptesScreen app={app} />;
+    case 'systeme': return <SystemeScreen app={app} />;
+    case 'calendrier': return <CalendrierScreen app={app} />;
+    default: return <Generateur app={app} />;
+  }
+}
 
 /* L'écran Créer porte deux choses différentes : fabriquer un plan, et tenir le
    registre des courses. Une bascule plutôt qu'un sixième onglet — la barre en a
@@ -138,15 +165,10 @@ export function AdminScreen({ app }: { app: App }) {
   /* Les réglages valent pour tout le serveur : un rôle coach ou admin, et le
      serveur le vérifie de son côté. */
   const role = app.identite?.compte.role ?? 'athlete';
-  const admin = role === 'coach' || role === 'admin';
   /* Le calendrier et le classement sont communs — un club, tout le monde les
      voit. Les cartes de suivi, elles, ne montrent que les athlètes visibles
      du compte : un seul pour un athlète, tous pour un coach. */
-  const sections: Section[] = [
-    'plan', 'courses', 'calendrier', 'athletes',
-    ...(admin ? (['connexions', 'param'] as Section[]) : []),
-    ...(role === 'admin' ? (['comptes', 'systeme'] as Section[]) : []),
-  ];
+  const sections = sectionsDe(role);
   /* Jusqu'à cinq, les sections se partagent la largeur. Au-delà — l'admin —
      la barre défile : sept intitulés serrés dans 360 px ne se lisent plus. */
   const serre = sections.length > 3;
@@ -194,21 +216,7 @@ export function AdminScreen({ app }: { app: App }) {
         ))}
       </div>
 
-      {section === 'courses'
-        ? <BackOffice app={app} />
-        : section === 'athletes'
-          ? <AthletesScreen app={app} />
-          : section === 'param'
-            ? <ParamScreen app={app} />
-            : section === 'connexions'
-              ? <ConnexionsScreen app={app} />
-            : section === 'comptes'
-              ? <ComptesScreen app={app} />
-              : section === 'systeme'
-                ? <SystemeScreen app={app} />
-                : section === 'calendrier'
-                  ? <CalendrierScreen app={app} />
-                  : <Generateur app={app} />}
+      <SectionAdmin app={app} section={section} />
     </div>
   );
 }

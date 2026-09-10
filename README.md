@@ -1076,6 +1076,22 @@ can be behind it, and the server now names which:
 every refused call. A key with no credit left (`credit balance is too low`)
 and an unknown model (`coach.modele`) get their own messages too.
 
+### The desktop back office
+
+The phone is the athlete's application: five tabs, one hand, installable.
+The coach works sitting down, so a `coach` or `admin` account on a screen at
+least 1024 px wide gets **le bureau** instead of the phone shell
+(`src/Bureau.tsx`): a menu on the left that lists the whole back office —
+Plan, Courses, Calendrier, Athlètes, Connexions, Réglages, and Comptes and
+Système for an admin — and a wide page on the right where a table has room for
+its columns. The athlete's own screens (Aujourd'hui, Semaine, Forme, Coach)
+stay one click away in the same menu, rendered in a 520 px column because they
+were drawn for a hand, and a coach who sees several athletes picks which one
+from a select in the menu. The sheets — a session, the profile, Réglages —
+open over the whole desk. On a phone the same account keeps the five tabs, and
+an athlete never sees the desk at all: the desk is a layout, not a role, and
+`sectionsDe` in `AdminScreen.tsx` is the one list both shells read.
+
 ### Connexions — the key, and Strava athlete by athlete
 
 One section, for a `coach` or `admin`, for everything that ties the server to
@@ -1116,11 +1132,17 @@ server checks: `403` otherwise). The list shows every account with its role,
 whether it is active, whether it still has no password, and which athletes it
 sees with which right. Opening one edits the name and the role, replaces the
 password — it is never read back — and sets the right on each athlete
-(lecture, écriture, or none). Below it, two forms: a new account (email, name,
-role, password, optionally an athlete to attach) and a new athlete (name,
-first name, the two 10 km paces in `mm:ss`, the plan's start, optionally an
-account to attach). The paces go through the same 2:00–15:00 /km gate as the
-command line, and a password through the same `securite.mdp_min`.
+(lecture, écriture, or none). Below it, one form for a new athlete *and*
+their login in a single gesture: the athlete's name, first name, the two
+10 km paces in `mm:ss` and the plan's start; the account's email, password
+and role, the account named after the athlete. Untick one of the two to create
+the other alone, attached to what already exists — a coach without an athlete,
+an athlete without a login, a login for an athlete encoded earlier. The
+server validates everything first and writes in one transaction
+(`POST /api/admin/inscription`): a wrong pace refuses the whole thing rather
+than leaving an orphan account, and `check:api` asserts exactly that. The
+paces go through the same 2:00–15:00 /km gate as the command line, and a
+password through the same `securite.mdp_min`.
 
 Two things the screen refuses, because the back office must never close from
 the inside: an admin cannot deactivate their own account or take their own
