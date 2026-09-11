@@ -542,6 +542,18 @@ try {
      qu'une intention. */
   /* Le back office : encoder une course, la voir apparaître, et voir la courbe
      se tracer une fois qu'il y a deux résultats à comparer. */
+  /* Le calendrier : toute la table du plan, datée, avec ses allures et son
+     état — et les sept prochains jours en tête. C'est ce qu'un coach doit
+     pouvoir lire d'un athlète sans ouvrir sa base. */
+  await ouvrirMoi(page, 'Mes séances');
+  const calendrier = await page.locator('body').innerText();
+  check('le calendrier montre chaque séance datée, avec son allure et son état',
+    /Tout son calendrier|Mon calendrier|Les 7 prochains jours/i.test(calendrier)
+      && /\d{4}-\d{2}-\d{2}/.test(calendrier) && /\/km/.test(calendrier),
+    calendrier.split('\n').find((l) => /^\d{4}-\d{2}-\d{2}/.test(l.trim()))?.slice(0, 60) ?? '');
+  check('et son niveau de forme, celui que le coach lit chaque matin',
+    /Son niveau de forme|Base endurance|Récupération/i.test(calendrier));
+
   console.log('\n=== le back office ===');
   /* Les objectifs par discipline : l'athlète les remplit depuis son téléphone,
      dans son profil — le même écran que le coach ouvre dans la fiche. */

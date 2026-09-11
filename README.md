@@ -1225,6 +1225,24 @@ since is never overwritten. `check:db` compares the natures in the database
 against `src/data/reference.ts`, which is what would catch a plan that lost
 them.
 
+### Le calendrier d'un athlète, en entier
+
+The model, stated plainly: the weekly matrix plus the objective's dates
+generate **one row per session, dated** — `msc_session`, tied to its athlete
+through its plan — and the morning signal, `msc_daily` (resting heart rate,
+HRV), is what the coach reads to adapt those rows as the weeks pass.
+
+Every other tab shows a slice of that table: the matrix is the mould, Plan is
+what comes out of it, Suivi is what was done. The **Calendrier** tab is the
+table itself — id, date, day, week, period, sport, type, duration, paces,
+load, state — grouped by week, from today by default, or all of it. Above it:
+the seven rolling days ahead, and the form the coach reads each morning, from
+the same two curves the athlete sees.
+
+Pace is not a column of the table and will not be: it is computed from the
+session's type and its period's reference. Storing it would mean two versions,
+one of them wrong the day the athlete gets faster.
+
 ### Le plan part de la semaine type, volume compris
 
 The weekly matrix already gave the plan its days, its sports and its session

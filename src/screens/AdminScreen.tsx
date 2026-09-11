@@ -17,7 +17,8 @@ import { Icon } from '../components/Icon';
 import { AccentButton, Card, Colonnes, Grid, Mono, SectionLabel } from '../components/primitives';
 import { DEFICITS_DEFAUT, DISCIPLINES, estMulti, referenceAPied, typeCourse, typesGroupes } from '../data/courses';
 import type { Deficits, TypeCourse } from '../data/courses';
-import type { Lang, MscCompetition, NaturePeriode } from '../data/types';
+import type { Lang, MscCompetition, MscPlanSession, NaturePeriode } from '../data/types';
+import { motDuStatut, visuelDuStatut } from '../data/statut';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
 import { AthletesHub, SuiviAthlete } from './AthletesScreen';
@@ -30,6 +31,7 @@ import { SystemeScreen } from './SystemeScreen';
 import { StravaScreen } from './StravaScreen';
 import { StructureScreen } from './StructureScreen';
 import { Historique } from '../components/Historique';
+import { FormeCourbes } from '../components/FormeCourbes';
 
 /** « 3:20:00 », « 41:40 » ou « 2500 » → secondes. Un marathon se vise en
     heures, une référence 10 km en minutes : les deux passent par ici. */
@@ -192,13 +194,13 @@ export type Section = keyof typeof SECTIONS.fr;
 
 /** Les onglets de la fiche d'un athlète — le second niveau, et le seul. */
 export const ONGLETS = {
-  fr: { suivi: 'Suivi', structure: 'Semaine type', plan: 'Plan', courses: 'Starts', profil: 'Profil', strava: 'Strava' },
-  pl: { suivi: 'Podgląd', structure: 'Tydzień wzorcowy', plan: 'Plan', courses: 'Starty', profil: 'Profil', strava: 'Strava' },
+  fr: { suivi: 'Suivi', structure: 'Semaine type', plan: 'Plan', seances: 'Calendrier', courses: 'Starts', profil: 'Profil', strava: 'Strava' },
+  pl: { suivi: 'Podgląd', structure: 'Tydzień wzorcowy', plan: 'Plan', seances: 'Kalendarz', courses: 'Starty', profil: 'Profil', strava: 'Strava' },
 } as const;
 
 export type Onglet = keyof typeof ONGLETS.fr;
 
-export const ONGLETS_ORDRE: Onglet[] = ['suivi', 'structure', 'plan', 'courses', 'profil', 'strava'];
+export const ONGLETS_ORDRE: Onglet[] = ['suivi', 'structure', 'plan', 'seances', 'courses', 'profil', 'strava'];
 
 /* Ce que chaque onglet répond, en une ligne : la fiche le dit sous le nom de
    l'athlète, pour qu'on n'ait pas à ouvrir les cinq pour trouver le bon. */
@@ -206,6 +208,7 @@ const ONGLET_AIDE: Record<Onglet, Record<Lang, string>> = {
   suivi: { fr: 'Ce qui a été fait : forme, charge, poids, séances de la semaine.', pl: 'Co zostało zrobione: forma, obciążenie, waga, treningi tygodnia.' },
   structure: { fr: 'La semaine type : sept jours, deux créneaux, un sport et un type par créneau. C’est elle que le coach suit chaque jour.', pl: 'Tydzień wzorcowy: siedem dni, dwa okna, sport i typ w każdym. To nią kieruje się trener każdego dnia.' },
   plan: { fr: 'Le plan : objectifs, contraintes, et le plan que le coach en tire.', pl: 'Plan: cele, ograniczenia i plan, który z nich wynika.' },
+  seances: { fr: 'Le calendrier : chaque séance datée, avec son allure et son état. C’est la table que le coach adapte au fil des signaux du matin.', pl: 'Kalendarz: każda sesja z datą, tempem i stanem. To tabela, którą trener dostosowuje do porannych sygnałów.' },
   courses: { fr: 'Les starts : les courses déjà faites, et celles qui viennent.', pl: 'Starty: biegi już zrobione i nadchodzące.' },
   profil: { fr: 'L’identité : nom, références 10 km, coach choisi, langue.', pl: 'Dane: nazwisko, odniesienia 10 km, wybrany trener, język.' },
   strava: { fr: 'La liaison Strava : relier, importer l’historique, l’application.', pl: 'Połączenie Strava: łączenie, import historii, aplikacja.' },
@@ -218,7 +221,7 @@ export const ICONES_SECTION: Record<Section, string> = {
 
 export const ICONES_ONGLET: Record<Onglet, string> = {
   suivi: 'heart-pulse', structure: 'calendar-days', plan: 'wand-sparkles',
-  courses: 'flag', profil: 'pencil', strava: 'link',
+  seances: 'list', courses: 'flag', profil: 'pencil', strava: 'link',
 };
 
 /* Deux familles, dans cet ordre : ce que le club fait, puis ce que
@@ -379,6 +382,7 @@ export function FicheAthlete({
       {onglet === 'suivi' && <SuiviAthlete app={app} large={large} />}
       {onglet === 'structure' && <StructureScreen app={app} large={large} />}
       {onglet === 'plan' && <Generateur app={app} large={large} />}
+      {onglet === 'seances' && <CalendrierEntrainement app={app} large={large} />}
       {onglet === 'courses' && <BackOffice app={app} />}
       {onglet === 'profil' && (
         <ProfilScreen
@@ -410,11 +414,12 @@ export function FicheAthlete({
 
 /* Le classement n'est plus ici : c'est « Dupki », un onglet de la barre du
    bas. Deux chemins vers le même écran, c'était un de trop. */
-const MOI_ORDRE = ['plan', 'courses', 'profil', 'strava', 'calendrier'] as const;
+const MOI_ORDRE = ['plan', 'seances', 'courses', 'profil', 'strava', 'calendrier'] as const;
 type OngletMoi = (typeof MOI_ORDRE)[number];
 
 const MOI_LIBELLE: Record<OngletMoi, Record<Lang, string>> = {
   plan: { fr: 'Mon plan', pl: 'Mój plan' },
+  seances: { fr: 'Mes séances', pl: 'Moje sesje' },
   courses: { fr: 'Mes starts', pl: 'Moje starty' },
   profil: { fr: 'Mon profil', pl: 'Mój profil' },
   strava: { fr: 'Strava', pl: 'Strava' },
@@ -422,12 +427,13 @@ const MOI_LIBELLE: Record<OngletMoi, Record<Lang, string>> = {
 };
 
 const MOI_ICONE: Record<OngletMoi, string> = {
-  plan: 'wand-sparkles', courses: 'flag', profil: 'pencil', strava: 'link',
+  plan: 'wand-sparkles', seances: 'list', courses: 'flag', profil: 'pencil', strava: 'link',
   calendrier: 'calendar-days',
 };
 
 const MOI_AIDE: Record<OngletMoi, Record<Lang, string>> = {
   plan: { fr: 'Mes objectifs, mes contraintes, et le plan que le coach en tire.', pl: 'Moje cele, ograniczenia i plan, który z nich wynika.' },
+  seances: { fr: 'Mon calendrier : chaque séance datée, son allure, son état.', pl: 'Mój kalendarz: każda sesja z datą, tempem i stanem.' },
   courses: { fr: 'Les courses que j’ai faites, et celles qui viennent.', pl: 'Biegi, które zrobiłem, i te, które nadchodzą.' },
   profil: { fr: 'Mon nom, mes références 10 km, mon coach, ma langue.', pl: 'Moje nazwisko, odniesienia 10 km, trener, język.' },
   strava: { fr: 'Ma liaison Strava : relier, importer mon historique.', pl: 'Moje połączenie ze Stravą: łączenie, import historii.' },
@@ -474,6 +480,7 @@ export function MoiScreen({ app, large = false }: { app: App; large?: boolean })
       </Card>
 
       {onglet === 'plan' && <Generateur app={app} large={large} />}
+      {onglet === 'seances' && <CalendrierEntrainement app={app} large={large} />}
       {onglet === 'courses' && <BackOffice app={app} />}
       {onglet === 'profil' && <ProfilScreen app={app} onSection={() => setOnglet('strava')} large={large} />}
       {onglet === 'strava' && <StravaScreen app={app} />}
@@ -1587,6 +1594,192 @@ function Resultat({ methode }: { methode: Methode }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------- le calendrier d'entraînement */
+
+/* Tout ce que le plan demande à cet athlète, jour par jour.
+
+   C'est la table que le générateur a écrite — une ligne par séance, datée,
+   rattachée à sa semaine et à sa période — et c'est elle que le coach adapte
+   au fil des signaux du matin. Les autres onglets en montrent des tranches :
+   la semaine type est le moule, le plan est ce qui en sort, le suivi est ce
+   qui a été fait. Ici, c'est la table elle-même.
+
+   L'allure n'y est pas stockée, et ne le sera pas : elle se calcule du type
+   de la séance et de la référence de sa période. La stocker, ce serait en
+   avoir deux versions dont une fausse le jour où l'athlète progresse. */
+function CalendrierEntrainement({ app, large = false }: { app: App; large?: boolean }) {
+  const lang = app.lang;
+  const fr = lang === 'fr';
+  const [tout, setTout] = useState(false);
+
+  const seances = db.select('msc_session').slice().sort((a, b) => a.date.localeCompare(b.date)
+    || a.id - b.id);
+  const etat = db.etatDesSeances();
+  const aujourdhui = app.date;
+
+  if (seances.length === 0) {
+    return (
+      <Card padding="16px 18px">
+        <div style={{ fontSize: 13, color: C.inkSecondary, lineHeight: 1.5 }}>
+          {fr
+            ? 'Aucun plan actif pour cet athlète : il n’y a donc pas de calendrier. Compose-en un dans l’onglet Plan.'
+            : 'Brak aktywnego planu: nie ma więc kalendarza. Ułóż go w zakładce Plan.'}
+        </div>
+      </Card>
+    );
+  }
+
+  /* Les sept prochains jours, à partir d'aujourd'hui — glissants, pas la
+     semaine civile : c'est ce que l'athlète a devant lui. */
+  const jour = (n: number) => new Date(Date.parse(`${aujourdhui}T00:00:00Z`) + n * 86_400_000)
+    .toISOString().slice(0, 10);
+  const sept = Array.from({ length: 7 }, (_, i) => jour(i));
+
+  const visibles = tout ? seances : seances.filter((s) => s.date >= aujourdhui);
+  const semaines = [...new Set(visibles.map((s) => s.semaine))].sort((a, b) => a - b);
+
+  const cellule: React.CSSProperties = {
+    padding: '6px 8px', borderTop: `1px solid ${C.borderSoft}`, whiteSpace: 'nowrap',
+  };
+  const entete: React.CSSProperties = {
+    textAlign: 'left', padding: '6px 8px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+    textTransform: 'uppercase', color: C.inkSecondary, borderBottom: `1px solid ${C.border}`,
+    whiteSpace: 'nowrap',
+  };
+
+  const allures = (s: MscPlanSession) => s.zones
+    .map((z) => db.allure(z, s.bloc))
+    .filter((x: string, i: number, liste: string[]) => liste.indexOf(x) === i)
+    .join(' · ');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* d'où vient l'adaptation : le signal du matin, et ce qu'il donne */}
+      <Card padding="14px 16px" gap={10}>
+        <SectionLabel icon="activity" color={C.teal}>
+          {fr ? 'Son niveau de forme' : 'Jego forma'}
+        </SectionLabel>
+        <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.45 }}>
+          {fr
+            ? 'Ce que le coach lit chaque matin — charge et récupération — et qui lui fait adapter les jours qui suivent.'
+            : 'To, co trener czyta każdego ranka — obciążenie i regeneracja — i na tej podstawie dostosowuje kolejne dni.'}
+        </div>
+        <FormeCourbes courbes={db.courbes} lang={lang} compact={!large} />
+      </Card>
+
+      <Card padding="14px 16px" gap={10}>
+        <SectionLabel icon="calendar-days" color={C.teal}>
+          {fr ? 'Les 7 prochains jours' : 'Najbliższe 7 dni'}
+        </SectionLabel>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {sept.map((d) => {
+            const duJour = seances.filter((s) => s.date === d && s.discipline !== 'Repos');
+            const nom = new Date(`${d}T00:00:00`).toLocaleDateString(fr ? 'fr-FR' : 'pl-PL', { weekday: 'short', day: 'numeric' });
+            return (
+              <div
+                key={d}
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: 3, minWidth: 132, flex: '1 1 132px',
+                  padding: '8px 10px', borderRadius: R.md,
+                  border: `1px solid ${d === aujourdhui ? C.accent : C.border}`,
+                  background: d === aujourdhui ? C.accentSoft : C.surface,
+                }}
+              >
+                <Mono size={11} color={C.inkQuiet}>{nom}</Mono>
+                {duJour.length === 0 && (
+                  <span style={{ fontSize: 12, color: C.inkQuiet }}>{fr ? 'repos' : 'odpoczynek'}</span>
+                )}
+                {duJour.map((s) => (
+                  <div key={s.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 12, color: C.ink, fontWeight: 600 }}>
+                      {`${s.discipline} · ${db.type(s.type).label[lang]}`}
+                    </span>
+                    <Mono size={11} color={C.inkQuiet}>
+                      {`${s.duree_min} min${allures(s) ? ` · ${allures(s)}` : ''}`}
+                    </Mono>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card padding="14px 16px" gap={10}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <SectionLabel icon="list" color={C.teal}>
+            {fr ? 'Tout son calendrier' : 'Cały jego kalendarz'}
+          </SectionLabel>
+          <Bascule
+            label={tout
+              ? (fr ? `Tout (${seances.length})` : `Wszystko (${seances.length})`)
+              : (fr ? 'Depuis aujourd’hui' : 'Od dzisiaj')}
+            on={tout}
+            onChange={setTout}
+          />
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+            <thead>
+              <tr>
+                {['id', fr ? 'Date' : 'Data', fr ? 'Jour' : 'Dzień', fr ? 'Période' : 'Okres',
+                  fr ? 'Sport' : 'Sport', fr ? 'Type' : 'Typ', fr ? 'Durée' : 'Czas',
+                  fr ? 'Allures' : 'Tempa', fr ? 'Charge' : 'Obciążenie', fr ? 'État' : 'Stan'].map((h) => (
+                  <th key={h} scope="col" style={entete}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {semaines.map((n) => {
+                const deLaSemaine = visibles.filter((s) => s.semaine === n);
+                const minutes = deLaSemaine.reduce((t, s) => t + s.duree_min, 0);
+                const bloc = db.blocDeSemaine(n);
+                return (
+                  <Fragment key={n}>
+                    <tr>
+                      <td colSpan={10} style={{ ...cellule, background: C.surfaceAlt, fontWeight: 600, color: C.ink }}>
+                        {`S${n} · ${db.periode(bloc).nom[lang]} · ${(minutes / 60).toFixed(1)} h · ${deLaSemaine.filter((s) => s.discipline !== 'Repos').length} ${fr ? 'séances' : 'sesji'}`}
+                      </td>
+                    </tr>
+                    {deLaSemaine.map((s) => {
+                      const st = db.statutDe(s, aujourdhui, etat);
+                      const vu = visuelDuStatut(st);
+                      return (
+                        <tr key={s.id} style={{ background: s.date === aujourdhui ? C.accentSoft : 'transparent' }}>
+                          <td style={cellule}><Mono size={11} color={C.inkQuiet}>{String(s.id)}</Mono></td>
+                          <td style={cellule}><Mono size={11.5} color={C.inkBody}>{s.date}</Mono></td>
+                          <td style={cellule}><Mono size={11} color={C.inkQuiet}>{s.jour[lang]}</Mono></td>
+                          <td style={cellule}><Mono size={11} color={C.teal}>{s.bloc}</Mono></td>
+                          <td style={cellule}>{s.discipline}</td>
+                          <td style={cellule}>{db.type(s.type).label[lang]}</td>
+                          <td style={cellule}><Mono size={11.5} color={C.inkBody}>{s.duree_min ? `${s.duree_min}′` : '—'}</Mono></td>
+                          <td style={cellule}><Mono size={11} color={C.inkQuiet}>{allures(s) || '—'}</Mono></td>
+                          <td style={cellule}><Mono size={11} color={C.inkQuiet}>{s.charge ? String(s.charge) : '—'}</Mono></td>
+                          <td style={cellule}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: vu.couleur, fontSize: 11.5 }}>
+                              <Icon name={vu.icon} size={12} />
+                              {motDuStatut(st, lang)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>
+          {fr
+            ? 'L’allure n’est pas stockée : elle se calcule du type de la séance et de la référence de sa période. La stocker, ce serait en avoir deux versions dont une fausse le jour où il progresse.'
+            : 'Tempo nie jest zapisane: wylicza się z typu sesji i odniesienia okresu.'}
+        </div>
+      </Card>
     </div>
   );
 }
