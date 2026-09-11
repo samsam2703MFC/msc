@@ -179,9 +179,9 @@ async function plan(cnx: Cnx, athleteId: number) {
   const blocs = new Map<string, number>();
   for (const b of msc_bloc) {
     const [rb] = (await cnx.query(
-      `INSERT INTO msc_bloc (plan_id, code, part, semaine_de, semaine_a, nom_fr, nom_pl, focus_fr, focus_pl)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [planId, b.code, b.part, b.de, b.a, ...L(b.nom), ...L(b.quoi)],
+      `INSERT INTO msc_bloc (plan_id, code, part, nature, semaine_de, semaine_a, nom_fr, nom_pl, focus_fr, focus_pl)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [planId, b.code, b.part, b.nature, b.de, b.a, ...L(b.nom), ...L(b.quoi)],
     )) as any;
     blocs.set(b.code, rb.insertId);
   }

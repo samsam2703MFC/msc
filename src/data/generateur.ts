@@ -49,6 +49,7 @@ const RAMPE = 1.06; //  +6 % per week inside a block
 const DECHARGE = 0.8; //  every fourth week
 const SEMAINE_COURSE = 0.55; //  a race week carries the race, not the volume
 const CADENCE_DECHARGE = 4;
+const AFFUTAGE = 0.75; //  each taper week weighs three quarters of the one before
 
 /** Hours between two hard runs. Below this the second one is not training. */
 const ECART_QUALITE_H = 48;
@@ -103,6 +104,8 @@ export interface Contraintes {
   plancher_km_sortie: number;
   /** Weeks of easy rebuilding before the first quality session. */
   reamorcage_semaines: number;
+  /** Weeks of taper before the main objective, race week included. */
+  affutage_semaines: number;
   /** Disciplines available besides running. */
   natation: boolean;
   velo: boolean;
@@ -187,6 +190,7 @@ export function periodiser(
     de: 1,
     a: finA,
     part: 0,
+    nature: 'reamorcage',
     nom: l('Réamorçage'),
     quoi: l("Reconstruire avant de travailler. Aucune allure imposée avant le test."),
   });
@@ -225,7 +229,10 @@ export function periodiser(
       part: allureCible === null
         ? Math.min(Math.max(partPrecedente, 0), 1)
         : Math.min(Math.max(partDe(allureCible), 0), 1),
-      nom: l(o.principal ? 'Bloc final' : `Vers ${o.nom}`),
+      /* Le bloc qui mène à l'objectif principal est le pic : c'est là que
+         l'allure visée devient l'allure de travail. Les autres construisent. */
+      nature: o.principal ? 'pic' : 'construction',
+      nom: l(o.principal ? 'Pic' : `Vers ${o.nom}`),
       quoi: l(allureCible === null
         ? `${o.nom} le ${o.date} — préparation spécifique, sans allure de référence.`
         : ref && ref.distance_km !== o.distance_km
@@ -251,17 +258,49 @@ export function periodiser(
     fusionnes.push(b);
   }
 
+  /* L'affûtage : les dernières semaines ne construisent plus rien, elles
+     rendent ce qui a été construit — le volume tombe, l'allure reste. On les
+     détache du dernier bloc plutôt que d'en faire une règle cachée dans la
+     courbe de volume : une période qu'on voit est une période qu'on peut
+     discuter. Il faut qu'il reste de quoi faire un pic devant, sinon la
+     préparation n'aurait qu'un affûtage. */
+  const dernier = fusionnes[fusionnes.length - 1];
+  const combien = Math.max(0, Math.round(contraintes.affutage_semaines));
+  if (dernier && dernier.nature === 'pic' && combien >= 1
+      && dernier.a - dernier.de + 1 >= combien + 2) {
+    const coupe = dernier.a - combien + 1;
+    fusionnes.push({
+      code: codes[fusionnes.length] ?? `T${fusionnes.length}`,
+      de: coupe,
+      a: dernier.a,
+      /* Même référence que le pic : on n'affûte pas vers une allure plus
+         lente que celle qu'on va courir. */
+      part: dernier.part,
+      nature: 'affutage',
+      nom: l('Affûtage'),
+      quoi: l(`Les ${combien} dernières semaines, course comprise : le volume tombe d'un quart par semaine, l'allure ne bouge pas.`),
+    });
+    dernier.a = coupe - 1;
+  } else if (dernier && dernier.nature === 'pic' && combien >= 1) {
+    avertissements.push(
+      `Le bloc final ne dure que ${dernier.a - dernier.de + 1} semaines : pas d'affûtage détaché.`,
+    );
+  }
+
   return { blocs: fusionnes, semaines_total: total, avertissements };
 }
 
 /* ------------------------------------------------------------------ volume */
 
-/** Hours per week: ramp inside the block, deload every fourth, drop for races. */
+/** Hours per week: ramp inside the block, deload every fourth, drop for races,
+    and come back down through the taper. */
 export function courbeVolume(
   semaines: number,
   contraintes: Contraintes,
   semainesDeCourse: ReadonlySet<number>,
   reamorcage: number,
+  /** First week of the taper; nothing descends before it. */
+  affutageDe = Number.POSITIVE_INFINITY,
 ): number[] {
   const plancher = contraintes.plancher_heures;
   const out: number[] = [];
@@ -269,6 +308,15 @@ export function courbeVolume(
   for (let s = 1; s <= semaines; s++) {
     if (semainesDeCourse.has(s)) {
       out.push(Math.round(plancher * SEMAINE_COURSE * 10) / 10);
+      continue;
+    }
+
+    /* L'affûtage descend, et le plancher ne s'y applique pas : descendre est
+       justement ce qu'on lui demande. Pas de décharge non plus — la semaine
+       entière en est une. */
+    if (s >= affutageDe) {
+      const precedent = out[s - 2] ?? plancher;
+      out.push(Math.round(precedent * AFFUTAGE * 10) / 10);
       continue;
     }
 
@@ -368,11 +416,13 @@ export function genererPlan(
 
   const semaineDe = (dateISO: string) => semainesEntre(depart, lundi(dateISO)) + 1;
   const semainesDeCourse = new Set(objectifs.map((o) => semaineDe(o.date)));
+  const affutage = blocs.find((b) => b.nature === 'affutage');
   const volumes = courbeVolume(
     semaines_total,
     contraintes,
     semainesDeCourse,
     contraintes.reamorcage_semaines,
+    affutage ? affutage.de : Number.POSITIVE_INFINITY,
   );
 
   const blocDe = (s: number) => blocs.find((b) => s >= b.de && s <= b.a) ?? blocs[blocs.length - 1];

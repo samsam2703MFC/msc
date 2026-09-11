@@ -296,6 +296,9 @@ CREATE TABLE IF NOT EXISTS msc_bloc (
   plan_id     INT UNSIGNED NOT NULL,
   code        VARCHAR(4) NOT NULL,
   part        DECIMAL(4,3) NOT NULL,
+  -- Laquelle des quatre périodes : on reconstruit, on construit, on vise
+  -- l'allure de course, puis on rend ce qui a été construit.
+  nature      VARCHAR(14) NOT NULL DEFAULT 'construction',
   semaine_de  SMALLINT UNSIGNED NOT NULL,
   semaine_a   SMALLINT UNSIGNED NOT NULL,
   nom_fr      VARCHAR(120) NOT NULL,
@@ -306,6 +309,7 @@ CREATE TABLE IF NOT EXISTS msc_bloc (
   UNIQUE KEY uq_bloc_plan_code (plan_id, code),
   CONSTRAINT fk_bloc_plan FOREIGN KEY (plan_id) REFERENCES msc_plan (id) ON DELETE CASCADE,
   CONSTRAINT ck_bloc_part CHECK (part BETWEEN 0 AND 1),
+  CONSTRAINT ck_bloc_nature CHECK (nature IN ('reamorcage', 'construction', 'pic', 'affutage')),
   CONSTRAINT ck_bloc_semaines CHECK (semaine_a >= semaine_de)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

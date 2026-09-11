@@ -144,6 +144,7 @@ async function lePlan(planId) {
   return {
     msc_bloc: blocs.map((b) => ({
       code: b.code, de: b.semaine_de, a: b.semaine_a, part: Number(b.part),
+      nature: b.nature ?? 'construction',
       nom: L(b, 'nom'), quoi: Lnul(b, 'focus') ?? { fr: '', pl: '' },
     })),
     msc_week: semaines.map((w) => ({
@@ -634,7 +635,7 @@ async function apercuDe({ id, droit }) {
 
     const [b, prevu, faites, bornes] = await Promise.all([
       ligne(
-        `SELECT code, part, semaine_de, semaine_a, nom_fr, nom_pl FROM msc_bloc
+        `SELECT code, part, nature, semaine_de, semaine_a, nom_fr, nom_pl FROM msc_bloc
          WHERE plan_id = :p AND :s BETWEEN semaine_de AND semaine_a`,
         { p: plan.id, s: semaine },
       ),
@@ -667,7 +668,8 @@ async function apercuDe({ id, droit }) {
         )
       : null;
     bloc = b
-      ? { code: b.code, part: Number(b.part), de: b.semaine_de, a: b.semaine_a, nom: L(b, 'nom') }
+      ? { code: b.code, part: Number(b.part), nature: b.nature ?? 'construction',
+          de: b.semaine_de, a: b.semaine_a, nom: L(b, 'nom') }
       : null;
     cette = {
       prevues: Number(prevu?.n ?? 0),
@@ -1729,6 +1731,9 @@ export async function conversations(athleteId) {
    anciennes restent, et leur histoire avec. C'est la réponse que le schéma
    donnait déjà, et c'est ici qu'elle se vérifie. */
 
+/* Les quatre périodes que le générateur pose. Un plan venu d'ailleurs qui dit
+   autre chose retombe sur « construction » plutôt que d'être refusé. */
+const NATURES = new Set(['reamorcage', 'construction', 'pic', 'affutage']);
 const MAX_BLOCS = 12;
 const MAX_SEMAINES = 120;
 const MAX_SEANCES = 1200;
@@ -1797,10 +1802,11 @@ async function ecrirePlan(cnx, athleteId, { nom, athlete, methode, blocs, semain
     const idDeBloc = new Map();
     for (const b of blocs) {
       const [rb] = await cnx.execute(
-        `INSERT INTO msc_bloc (plan_id, code, part, semaine_de, semaine_a,
+        `INSERT INTO msc_bloc (plan_id, code, part, nature, semaine_de, semaine_a,
            nom_fr, nom_pl, focus_fr, focus_pl)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [planId, texte(b.code, 4), Math.min(1, Math.max(0, Number(b.part) || 0)),
+         NATURES.has(b.nature) ? b.nature : 'construction',
          entier(b.de, 0, 999), entier(b.a, 0, 999),
          texte(b.nom?.fr, 120), texte(b.nom?.pl ?? b.nom?.fr, 120),
          b.quoi?.fr ? texte(b.quoi.fr, 190) : null,

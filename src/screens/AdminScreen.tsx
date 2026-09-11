@@ -567,16 +567,21 @@ function Periodisation({ app }: { app: App }) {
                   <td style={cellule}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Mono size={12} color={C.teal}>{l.bloc.code}</Mono>
-                      <span style={{ fontWeight: 600, color: C.ink }}>{l.bloc.nom[lang]}</span>
+                      <span style={{ fontWeight: 600, color: C.ink }}>{db.periode(l.bloc).nom[lang]}</span>
                       {ici && (
                         <span style={{ fontSize: 9.5, fontWeight: 700, color: C.accentDeep, textTransform: 'uppercase' }}>
                           {fr ? 'ici' : 'tu'}
                         </span>
                       )}
                     </div>
-                    {l.bloc.quoi?.[lang] && (
-                      <div style={{ fontSize: 11, color: C.inkQuiet, whiteSpace: 'normal' }}>{l.bloc.quoi[lang]}</div>
-                    )}
+                    {/* Le nom que le bloc porte, quand il dit autre chose que
+                        sa période — « Vers le semi de Lille » vaut mieux que
+                        « Construction » répété quatre fois. */}
+                    <div style={{ fontSize: 11, color: C.inkQuiet, whiteSpace: 'normal' }}>
+                      {[l.bloc.nom[lang] === db.periode(l.bloc).nom[lang] ? null : l.bloc.nom[lang],
+                        l.bloc.quoi?.[lang] || db.periode(l.bloc).quoi[lang]]
+                        .filter(Boolean).join(' · ')}
+                    </div>
                   </td>
                   <td style={cellule}>
                     <Mono size={12} color={C.inkBody}>{`${l.bloc.de} → ${l.bloc.a}`}</Mono>
@@ -634,6 +639,7 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     plancher_heures: seed.plancher_heures,
     plancher_km_sortie: seed.plancher_km_sortie,
     reamorcage_semaines: 6,
+    affutage_semaines: 3,
     natation: true,
     velo: true,
     salle: true,
@@ -845,6 +851,8 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
             onChange={(v) => setContraintes({ ...contraintes, plancher_km_sortie: Number(v) || 0 })} mono />
           <Champ label={fr ? 'Réamorçage' : 'Rozruch'} value={String(contraintes.reamorcage_semaines)}
             onChange={(v) => setContraintes({ ...contraintes, reamorcage_semaines: Number(v) || 0 })} mono />
+          <Champ label={fr ? 'Affûtage' : 'Tapering'} value={String(contraintes.affutage_semaines)}
+            onChange={(v) => setContraintes({ ...contraintes, affutage_semaines: Number(v) || 0 })} mono />
         </Grid>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <Bascule label={fr ? 'Natation' : 'Pływanie'} on={contraintes.natation}

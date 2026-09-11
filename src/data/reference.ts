@@ -48,13 +48,13 @@ export const msc_athlete: MscAthlete[] = [
 /** `part` is how far along the way from the current reference to the target
     the block sits. The block's reference pace is interpolated from it. */
 export const msc_bloc: MscBloc[] = [
-  { code: 'A', de: 1, a: 6, part: 0, nom: l('Réamorçage'),
+  { code: 'A', de: 1, a: 6, part: 0, nature: 'reamorcage', nom: l('Réamorçage'),
     quoi: l("Ton niveau actuel. Aucune allure imposée avant le test de la semaine 5.") },
-  { code: 'B', de: 7, a: 13, part: 0.28, nom: l('Construction semi'),
+  { code: 'B', de: 7, a: 13, part: 0.28, nature: 'construction', nom: l('Construction semi'),
     quoi: l("Le semi du 22/11 et le 10 km du 29/11 se courent à cette référence.") },
-  { code: 'C', de: 14, a: 23, part: 0.65, nom: l('Bloc vitesse'),
+  { code: 'C', de: 14, a: 23, part: 0.65, nature: 'construction', nom: l('Bloc vitesse'),
     quoi: l("Le fractionné du mercredi vise cette allure, pas 3:36.") },
-  { code: 'D', de: 24, a: 29, part: 1, nom: l('Bloc final'),
+  { code: 'D', de: 24, a: 29, part: 1, nature: 'pic', nom: l('Bloc final'),
     quoi: l("La cible. C'est seulement ici que 3:36/km devient l'allure de travail.") },
 ];
 

@@ -461,11 +461,11 @@ const DOCTRINE = `Deux règles du plan que tu ne discutes pas :
 - Quand il faut sacrifier, l'ordre est : le vélo d'abord, puis le second Hyrox,
   puis la nage. La séance de qualité et la sortie longue se protègent.`;
 
-function contexteSemaine({ athlete, semaine, bloc, ecart, seances, suite, regles }) {
+function contexteSemaine({ athlete, semaine, bloc, periode, ecart, seances, suite, regles }) {
   const lignes = [
     `Athlète : ${athlete.nom}. Référence 10 km actuelle ${athlete.ref_actuelle} → cible ${athlete.ref_cible}.`,
     ...(ligneObjectifs(athlete) ? [ligneObjectifs(athlete)] : []),
-    `Semaine ${semaine}, bloc ${bloc}.`,
+    `Semaine ${semaine}, bloc ${bloc}${periode ? ` — ${periode}` : ''}.`,
     '',
     'L’écart, déjà calculé — cite-le tel quel :',
     `  volume en retard ${ecart.retard} · ${ecart.sautees} séance(s) sautée(s) · réalisation ${ecart.realisation}`,
@@ -616,11 +616,11 @@ const ETAT_EN_CLAIR = {
   fait: 'FAITE', partiel: 'FAITE AUTREMENT', manque: 'MANQUÉE', aujourdhui: 'AUJOURD’HUI', prevu: 'à venir', repos: 'repos',
 };
 
-function contexteGlissant({ athlete, aujourdhui, jour, semaine, bloc, matin, passees, prochains, structure, regles }) {
+function contexteGlissant({ athlete, aujourdhui, jour, semaine, bloc, periode, matin, passees, prochains, structure, regles }) {
   const lignes = [
     `Athlète : ${athlete.nom}. Référence 10 km actuelle ${athlete.ref_actuelle} → cible ${athlete.ref_cible}.`,
     ...(ligneObjectifs(athlete) ? [ligneObjectifs(athlete)] : []),
-    `Aujourd'hui : ${jour} ${aujourdhui} · semaine ${semaine} · bloc ${bloc}.`,
+    `Aujourd'hui : ${jour} ${aujourdhui} · semaine ${semaine} · bloc ${bloc}${periode ? ` — ${periode}` : ''}.`,
     '',
     'Le signal du matin, déjà calculé — cite-le tel quel :',
   ];

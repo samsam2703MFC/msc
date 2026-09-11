@@ -27,6 +27,7 @@ const contraintes: Contraintes = {
   plancher_heures: 8,
   plancher_km_sortie: 10,
   reamorcage_semaines: 6,
+  affutage_semaines: 3,
   natation: true,
   velo: true,
   salle: true,
@@ -63,10 +64,37 @@ console.log('\n=== contrôles ===');
 const semainesDeCourse = new Set(
   objectifs.map((o) => plan.sessions.find((s) => s.date === o.date)?.semaine),
 );
-const horsCourse = plan.semaines.filter((w) => !semainesDeCourse.has(w.semaine) && w.semaine > 6);
-check('plancher de 8h tenu hors semaines de course',
+const affutage = plan.blocs.find((b) => b.nature === 'affutage');
+/* L'affûtage passe sous le plancher exprès : c'est ce qu'on lui demande. */
+const horsCourse = plan.semaines.filter((w) => !semainesDeCourse.has(w.semaine) && w.semaine > 6
+  && !(affutage && w.semaine >= affutage.de));
+check('plancher de 8h tenu hors semaines de course et hors affûtage',
   horsCourse.every((w) => w.heures >= 7.9),
   horsCourse.filter((w) => w.heures < 7.9).map((w) => `S${w.semaine}=${w.heures}h`).join(' '));
+
+const natures = plan.blocs.map((b) => b.nature);
+check('les quatre périodes y sont, dans l’ordre',
+  natures[0] === 'reamorcage' && natures[natures.length - 1] === 'affutage'
+  && natures[natures.length - 2] === 'pic'
+  && natures.slice(1, -2).every((n) => n === 'construction'),
+  natures.join(' → '));
+
+const pic = plan.blocs.find((b) => b.nature === 'pic');
+check('l’affûtage garde l’allure du pic, il ne ralentit pas',
+  !!pic && !!affutage && pic.part === affutage.part,
+  `pic ${pic?.part} · affûtage ${affutage?.part}`);
+
+/* Hors la semaine de course, qui a sa propre règle : chaque semaine d'affûtage
+   pèse moins que celle d'avant. Un affûtage qui remonte n'en est pas un. */
+const semainesAffutage = affutage
+  ? plan.semaines.filter((w) => w.semaine >= affutage.de && !semainesDeCourse.has(w.semaine))
+  : [];
+check('l’affûtage descend, semaine après semaine',
+  semainesAffutage.length > 0 && semainesAffutage.every((w, i) => {
+    const avant = plan.semaines.find((x) => x.semaine === w.semaine - 1);
+    return i === 0 ? !!avant && w.heures < avant.heures : w.heures < semainesAffutage[i - 1].heures;
+  }),
+  semainesAffutage.map((w) => `S${w.semaine}=${w.heures}h`).join(' '));
 
 const courses = plan.sessions.filter((s) => s.type === 'course');
 check('les 4 courses sont dans le plan', courses.length === 4,

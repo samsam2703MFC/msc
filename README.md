@@ -1174,6 +1174,38 @@ A table rather than six cards, because periods are read by comparison, and
 comparison happens in rows. Everything in it is computed from the plan already
 in the snapshot — nothing new is stored to display it.
 
+**Which period a block is** is a column of its own, `msc_bloc.nature`, one of
+four words — `reamorcage`, `construction`, `pic`, `affutage` — because a
+block's *name* can be anything (« Vers le semi de Lille ») while its nature is
+one of four things. `PERIODES` in `src/data/engine.ts` gives each its label and
+what it asks for, in both languages, and the table names every row by its
+nature with the block's own name underneath. The coach's payload carries it
+too: a coach who knows the athlete is tapering does not propose a longer long
+run.
+
+The generator assigns them: block A is the rebuild, the block that leads to the
+main objective is the peak, the rest build. The **taper** is then cut off the
+end of the peak — `affutage_semaines` weeks, race week included, three by
+default, next to `reamorcage_semaines` in the generator's constraints — and it
+is a period of its own rather than a rule hidden in the volume curve, because a
+period you can see is a period you can argue with. It keeps the peak's
+reference (you do not taper towards a slower pace), each of its weeks weighs
+three quarters of the one before, and the weekly floor does not apply to it:
+coming down is the whole point. A final block too short to give up three weeks
+and still be a block keeps its weeks, and says so in the warnings.
+
+`check:plan` holds all of it: the four natures in order, the taper at the
+peak's pace, each taper week lighter than the last, and the floor still held
+everywhere else.
+
+A plan written before the column existed has every block at `construction`,
+which is wrong at both ends. `db-migrate` repairs those two ends from what
+`part` already means — a first block at 0 % is the rebuild, a last block at
+100 % is the peak — and only on blocks still at the default, so a period set
+since is never overwritten. `check:db` compares the natures in the database
+against `src/data/reference.ts`, which is what would catch a plan that lost
+them.
+
 ### Les objectifs, discipline par discipline
 
 An athlete has more than one number to chase. `msc_objectif_sport` holds two

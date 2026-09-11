@@ -611,6 +611,13 @@ export interface MscAthlete {
   note: Localized;
 }
 
+/** The four periods a preparation goes through, in order.
+
+    `reamorcage` rebuilds, `construction` builds, `pic` is the specific work at
+    target pace, `affutage` gives it back — volume down, pace kept. A plan has
+    one of each at most, and always in that order. */
+export type NaturePeriode = 'reamorcage' | 'construction' | 'pic' | 'affutage';
+
 export interface MscBloc {
   code: string;
   /** First and last week of the block, inclusive. */
@@ -618,6 +625,8 @@ export interface MscBloc {
   a: number;
   /** Share of the way from the current reference to the target one, 0 → 1. */
   part: number;
+  /** Which of the four periods this block is. */
+  nature: NaturePeriode;
   nom: Localized;
   quoi: Localized;
 }

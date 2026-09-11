@@ -17,6 +17,7 @@
 
 import { athlete as athleteCourant, tables } from './vives';
 import type {
+  Localized,
   MscAthlete,
   MscBloc,
   MscPlanSession,
@@ -24,6 +25,7 @@ import type {
   MscRegle,
   MscSignal,
   MscZoneDef,
+  NaturePeriode,
   ZoneCode,
 } from './types';
 
@@ -84,6 +86,7 @@ const SANS_BLOC: MscBloc = {
   de: 0,
   a: 0,
   part: 0,
+  nature: 'construction',
   nom: { fr: 'Sans plan', pl: 'Bez planu' },
   quoi: { fr: '', pl: '' },
 };
@@ -91,6 +94,38 @@ const SANS_BLOC: MscBloc = {
 export function blocDeSemaine(semaine: number): MscBloc {
   const week = Math.max(semaine, 1);
   return tables.msc_bloc.find((b) => week >= b.de && week <= b.a) ?? tables.msc_bloc[0] ?? SANS_BLOC;
+}
+
+/** Les quatre périodes, dans l'ordre où une préparation les traverse — et ce
+    que chacune fait. Le nom d'un bloc peut être n'importe quoi (« Vers le semi
+    de Lille ») ; sa nature, elle, est l'un de ces quatre mots. */
+export const PERIODES: Array<{
+  nature: NaturePeriode;
+  nom: Localized;
+  quoi: Localized;
+}> = [
+  { nature: 'reamorcage',
+    nom: { fr: 'Réamorçage', pl: 'Rozruch' },
+    quoi: { fr: 'On reconstruit. Aucune allure imposée, pas de qualité.',
+      pl: 'Odbudowa. Bez narzuconego tempa, bez jakości.' } },
+  { nature: 'construction',
+    nom: { fr: 'Construction', pl: 'Budowa' },
+    quoi: { fr: 'Le volume monte, la qualité entre. C’est le gros du travail.',
+      pl: 'Objętość rośnie, wchodzi jakość. To główna część pracy.' } },
+  { nature: 'pic',
+    nom: { fr: 'Pic', pl: 'Szczyt' },
+    quoi: { fr: 'L’allure visée devient l’allure de travail.',
+      pl: 'Docelowe tempo staje się tempem pracy.' } },
+  { nature: 'affutage',
+    nom: { fr: 'Affûtage', pl: 'Tapering' },
+    quoi: { fr: 'Le volume tombe, l’allure reste. On rend ce qui a été construit.',
+      pl: 'Objętość spada, tempo zostaje. Oddajemy to, co zbudowane.' } },
+];
+
+/** La période d'un bloc — jamais `undefined` : un plan d'avant les périodes
+    passe pour de la construction, ce qu'il est le plus souvent. */
+export function periode(b: MscBloc) {
+  return PERIODES.find((p) => p.nature === b.nature) ?? PERIODES[1];
 }
 
 /** Tous les blocs du plan, dans l'ordre des semaines. */

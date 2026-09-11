@@ -91,6 +91,12 @@ try {
        synchros suivantes, qui referaient sinon le mauvais calcul. */
     ['msc_activity', 'appariee_main',
       "ADD COLUMN appariee_main TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'l''athlète a dit lui-même quelle séance c''était — l''appariement automatique ne doit pas le défaire' AFTER manuelle"],
+    /* Laquelle des quatre périodes le bloc est. Un plan d'avant n'en savait
+       rien : « construction » est le défaut le moins faux, et le prochain plan
+       généré pose les vraies. */
+    ['msc_bloc', 'nature',
+      "ADD COLUMN nature VARCHAR(14) NOT NULL DEFAULT 'construction' COMMENT 'reamorcage | construction | pic | affutage' AFTER part, "
+      + "ADD CONSTRAINT ck_bloc_nature CHECK (nature IN ('reamorcage', 'construction', 'pic', 'affutage'))"],
   ];
   for (const [table, colonne, ddl] of AJOUTS) {
     const [[{ n }]] = await cnx.query(
@@ -237,6 +243,29 @@ try {
 
      C'est une amorce, pas une règle : le jour où le club a ses modèles, ces
      trente lignes se suppriment sans rien casser. */
+  /* Les périodes d'un plan d'avant. La colonne arrive avec « construction »
+     pour tout le monde, ce qui est faux aux deux bouts : un premier bloc sans
+     allure imposée EST le réamorçage, et un dernier bloc à la cible EST le
+     pic. C'est la définition même de `part` dans ce modèle, pas une devinette,
+     alors on la rejoue — et seulement sur les blocs restés au défaut, pour ne
+     jamais écraser une période posée depuis. */
+  const [bouts] = await cnx.query(
+    `SELECT b.id, b.part, b.plan_id,
+            (b.semaine_de = (SELECT MIN(x.semaine_de) FROM msc_bloc x WHERE x.plan_id = b.plan_id)) AS premier,
+            (b.semaine_a  = (SELECT MAX(x.semaine_a)  FROM msc_bloc x WHERE x.plan_id = b.plan_id)) AS dernier
+       FROM msc_bloc b WHERE b.nature = 'construction'`,
+  );
+  let periodes = 0;
+  for (const b of bouts) {
+    const nature = b.premier && Number(b.part) === 0 ? 'reamorcage'
+      : b.dernier && Number(b.part) === 1 ? 'pic'
+        : null;
+    if (!nature) continue;
+    await cnx.query('UPDATE msc_bloc SET nature = ? WHERE id = ?', [nature, b.id]);
+    periodes += 1;
+  }
+  if (periodes > 0) console.log(`~ msc_bloc : ${periodes} périodes retrouvées (réamorçage, pic)`);
+
   const AMORCE_ATHLETE = 'Verheyden';
   const AMORCE_MODELE = 'Triathlon + Hyrox';
   const AMORCE_CRENEAUX = [

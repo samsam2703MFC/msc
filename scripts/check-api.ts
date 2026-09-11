@@ -519,7 +519,7 @@ try {
   const genere = genererPlan(
     { nom: 'Contrôle', ref_actuelle_s: 336, ref_cible_s: 300, debut: '2031-01-06' },
     [{ date: '2031-04-13', nom: 'Semi du contrôle', cible_s: 5400, distance_km: 21.1, principal: true }],
-    { plancher_heures: 8, plancher_km_sortie: 10, reamorcage_semaines: 6,
+    { plancher_heures: 8, plancher_km_sortie: 10, reamorcage_semaines: 6, affutage_semaines: 3,
       natation: true, velo: true, salle: true, montagne_toutes_les: 3 },
   );
 

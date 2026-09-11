@@ -619,6 +619,9 @@ export function demanderRecalcul(
       objectifs: objectifsDuCoach(),
     },
     bloc: db.blocDeSemaine(semaine).code,
+    /* Laquelle des quatre périodes : un coach qui sait qu'on affûte ne
+       propose pas d'allonger la sortie longue. */
+    periode: db.periode(db.blocDeSemaine(semaine)).nom[lang],
     ecart: {
       retard: calcule.stats[0].valeur,
       sautees: calcule.sautees,
@@ -714,6 +717,9 @@ export function demanderGlissant(aujourdhui: string, lang: Lang = 'fr'): Promise
       ?? new Date(`${aujourdhui}T00:00:00`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'pl-PL', { weekday: 'long' }),
     semaine,
     bloc: db.blocDeSemaine(semaine).code,
+    /* Laquelle des quatre périodes : un coach qui sait qu'on affûte ne
+       propose pas d'allonger la sortie longue. */
+    periode: db.periode(db.blocDeSemaine(semaine)).nom[lang],
     athlete: {
       nom: db.athlete.nom,
       ref_actuelle: db.format10k(db.athlete.ref_actuelle_s),

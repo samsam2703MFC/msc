@@ -75,11 +75,12 @@ ${objectifs.map((o) => `- ${o.nom}, ${o.date}, ${o.distance_km} km, cible ${fmt(
 Contraintes :
 - Plancher de ${contraintes.plancher_heures} h par semaine, ${contraintes.plancher_km_sortie} km minimum par sortie.
 - ${contraintes.reamorcage_semaines} semaines de réamorçage avant la première séance de qualité.
+- ${contraintes.affutage_semaines ?? 3} semaines d'affûtage avant l'objectif principal, course comprise : le volume descend, l'allure ne bouge pas.
 - Disciplines disponibles : course${contraintes.natation ? ', natation' : ''}${contraintes.velo ? ', vélo' : ''}${contraintes.salle ? ', salle (Hyrox)' : ''}.
 ${contraintes.montagne_toutes_les ? `- Une sortie montagne toutes les ${contraintes.montagne_toutes_les} semaines.` : ''}
 
 Blocs déjà calculés par le moteur (tu ne les changes pas, tu les nommes et les expliques) :
-${blocs.map((b) => `- ${b.code} : semaines ${b.de} à ${b.a}, référence 10 km ${fmt((athlete.ref_actuelle_s - (athlete.ref_actuelle_s - athlete.ref_cible_s) * b.part) * 10)}`).join('\n')}`;
+${blocs.map((b) => `- ${b.code} (${b.nature ?? 'construction'}) : semaines ${b.de} à ${b.a}, référence 10 km ${fmt((athlete.ref_actuelle_s - (athlete.ref_actuelle_s - athlete.ref_cible_s) * b.part) * 10)}`).join('\n')}`;
 }
 
 export async function construireMethode({ athlete, objectifs, contraintes, blocs }) {

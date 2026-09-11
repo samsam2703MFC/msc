@@ -49,8 +49,8 @@ check('les 30 semaines aussi', semaines.n === msc_week.length, `${semaines.n}`);
 /* Le `part` du bloc est la moitié du moteur d'allures. Un DECIMAL(4,3) qui
    arrondirait 0,28 casserait les huit zones du bloc B d'un coup. */
 const blocs = (await lignes(
-  'SELECT code, part, semaine_de, semaine_a FROM msc_bloc ORDER BY code',
-)) as { code: string; part: string; semaine_de: number; semaine_a: number }[];
+  'SELECT code, part, nature, semaine_de, semaine_a FROM msc_bloc ORDER BY code',
+)) as { code: string; part: string; nature: string; semaine_de: number; semaine_a: number }[];
 check(
   'les quatre parts de bloc ressortent au millième',
   blocs.every((b, i) => Number(b.part) === msc_bloc[i].part),
@@ -59,6 +59,14 @@ check(
 check(
   'les bornes de semaine des blocs aussi',
   blocs.every((b, i) => b.semaine_de === msc_bloc[i].de && b.semaine_a === msc_bloc[i].a),
+);
+/* Et leur période : un plan qui a perdu ses natures montre quatre fois
+   « Construction » dans le tableau des périodes, ce qui ne se voit pas
+   autrement qu'ici. */
+check(
+  'et la période de chacun',
+  blocs.every((b, i) => b.nature === msc_bloc[i].nature),
+  blocs.map((b) => `${b.code} ${b.nature}`).join(' '),
 );
 
 const zones = (await lignes(
@@ -291,7 +299,7 @@ console.log('\n=== enregistrer un plan généré ===');
 const genere = genererPlan(
   { nom: 'Essai', ref_actuelle_s: 336, ref_cible_s: 300, debut: '2030-01-07' },
   [{ date: '2030-04-14', nom: 'Essai — semi', cible_s: 5400, distance_km: 21.1, principal: true }],
-  { plancher_heures: 8, plancher_km_sortie: 10, reamorcage_semaines: 6,
+  { plancher_heures: 8, plancher_km_sortie: 10, reamorcage_semaines: 6, affutage_semaines: 3,
     natation: true, velo: true, salle: true, montagne_toutes_les: 3 },
 );
 

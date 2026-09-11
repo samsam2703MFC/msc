@@ -474,6 +474,12 @@ try {
     /Les périodes du plan/i.test(createur) && /Réamorçage/i.test(createur)
       && /%\s*\n?\s*/.test(createur) && /\/sem/.test(createur),
     createur.split('\n').find((l) => /Réamorçage/i.test(l))?.slice(0, 70) ?? '');
+  /* Et il les nomme par leur nature, pas par le nom du bloc : le plan du
+     classeur s'ouvre sur un réamorçage et finit sur un pic. */
+  check('et il nomme chaque période — réamorçage, construction, pic',
+    /Réamorçage/i.test(createur) && /Construction/i.test(createur) && /\bPic\b/i.test(createur),
+    createur.split('\n').filter((l) => /^(Réamorçage|Construction|Pic|Affûtage)/i.test(l.trim()))
+      .join(' · ').slice(0, 80));
   check('l’écran Créer montre le plan généré',
     /Plan généré/i.test(createur) && /semaines/i.test(createur));
   check('et, en tête, l’historique Strava d’où l’on part',
