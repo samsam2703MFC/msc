@@ -1651,6 +1651,11 @@ function CalendrierEntrainement({ app, large = false }: { app: App; large?: bool
     whiteSpace: 'nowrap',
   };
 
+  /* Ses courses, par date : une ligne du calendrier qui tombe un jour de
+     compétition n'est pas une séance comme les autres — c'est elle que tout
+     le reste prépare, et elle doit se voir d'un coup d'œil. */
+  const competitions = new Map(db.select('msc_competition').map((c) => [c.date, c]));
+
   const allures = (s: MscPlanSession) => s.zones
     .map((z) => db.allure(z, s.bloc))
     .filter((x: string, i: number, liste: string[]) => liste.indexOf(x) === i)
@@ -1737,24 +1742,51 @@ function CalendrierEntrainement({ app, large = false }: { app: App; large?: bool
               {semaines.map((n) => {
                 const deLaSemaine = visibles.filter((s) => s.semaine === n);
                 const minutes = deLaSemaine.reduce((t, s) => t + s.duree_min, 0);
+                /* La charge de la semaine, sous son titre : c'est elle qui dit
+                   ce que la semaine coûte, plus que les heures — une heure de
+                   seuil et une heure d'endurance ne pèsent pas pareil. */
+                const charge = deLaSemaine.reduce((t, s) => t + (s.charge ?? 0), 0);
+                const km = deLaSemaine.reduce((t, s) => t + (s.distance_km ?? 0), 0);
                 const bloc = db.blocDeSemaine(n);
                 return (
                   <Fragment key={n}>
                     <tr>
                       <td colSpan={10} style={{ ...cellule, background: C.surfaceAlt, fontWeight: 600, color: C.ink }}>
-                        {`S${n} · ${db.periode(bloc).nom[lang]} · ${(minutes / 60).toFixed(1)} h · ${deLaSemaine.filter((s) => s.discipline !== 'Repos').length} ${fr ? 'séances' : 'sesji'}`}
+                        {[
+                          `S${n}`,
+                          db.periode(bloc).nom[lang],
+                          `${(minutes / 60).toFixed(1)} h`,
+                          `${deLaSemaine.filter((s) => s.discipline !== 'Repos').length} ${fr ? 'séances' : 'sesji'}`,
+                          km > 0 ? `${km.toFixed(0)} km` : null,
+                          `${fr ? 'charge' : 'obciążenie'} ${charge}`,
+                          deLaSemaine.some((x) => competitions.has(x.date))
+                            ? `⚑ ${[...new Set(deLaSemaine.map((x) => competitions.get(x.date)?.nom).filter(Boolean))].join(', ')}`
+                            : null,
+                        ].filter(Boolean).join(' · ')}
                       </td>
                     </tr>
                     {deLaSemaine.map((s) => {
                       const st = db.statutDe(s, aujourdhui, etat);
                       const vu = visuelDuStatut(st);
+                      const course = competitions.get(s.date);
                       return (
-                        <tr key={s.id} style={{ background: s.date === aujourdhui ? C.accentSoft : 'transparent' }}>
+                        <tr
+                          key={s.id}
+                          style={{
+                            background: course ? C.warningBg : s.date === aujourdhui ? C.accentSoft : 'transparent',
+                            fontWeight: course ? 600 : 400,
+                          }}
+                        >
                           <td style={cellule}><Mono size={11} color={C.inkQuiet}>{String(s.id)}</Mono></td>
                           <td style={cellule}><Mono size={11.5} color={C.inkBody}>{s.date}</Mono></td>
                           <td style={cellule}><Mono size={11} color={C.inkQuiet}>{s.jour[lang]}</Mono></td>
                           <td style={cellule}><Mono size={11} color={C.teal}>{s.bloc}</Mono></td>
-                          <td style={cellule}>{s.discipline}</td>
+                          <td style={cellule}>
+                            {s.discipline}
+                            {course && (
+                              <span style={{ color: C.warning, fontSize: 11 }}>{` · ${course.nom}`}</span>
+                            )}
+                          </td>
                           <td style={cellule}>{db.type(s.type).label[lang]}</td>
                           <td style={cellule}><Mono size={11.5} color={C.inkBody}>{s.duree_min ? `${s.duree_min}′` : '—'}</Mono></td>
                           <td style={cellule}><Mono size={11} color={C.inkQuiet}>{allures(s) || '—'}</Mono></td>

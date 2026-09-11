@@ -550,21 +550,33 @@ export function genererPlan(
       let duree = Math.round((minutes * creneau.part) / totalPart);
       if (estJourDeCourse && course) duree = Math.round(course.cible_s / 60);
 
+      /* Le jour de la course, c'est la course qui commande — pas le créneau
+         qu'elle remplace. Un 10 km tombé sur le jour de vélo donnait
+         « Vélo · Course · 3:46/km » : un sport, le type d'un autre, et une
+         allure au kilomètre sur un vélo. La discipline vient donc de
+         l'objectif, et sa distance avec. */
+      const duJour: Creneau = estJourDeCourse && course
+        ? { ...creneau, discipline: course.discipline || 'Course à pied' }
+        : creneau;
+
       /* The per-run distance floor: a run shorter than the floor is padded, and
-         what it costs is taken off the bike rather than off the long run. */
-      const estCourse = creneau.discipline === 'Course à pied';
+         what it costs is taken off the bike rather than off the long run. Une
+         course, elle, dure ce qu'elle dure : on ne rallonge pas un 10 km. */
+      const estCourse = duJour.discipline === 'Course à pied';
       const distance = estCourse ? Math.round((duree / 6) * 10) / 10 : undefined;
-      if (estCourse && distance !== undefined && distance < contraintes.plancher_km_sortie) {
+      if (!estJourDeCourse && estCourse && distance !== undefined
+          && distance < contraintes.plancher_km_sortie) {
         duree = Math.round(contraintes.plancher_km_sortie * 6);
       }
 
       sessions.push(
         seance(
-          id++, s, bloc, date, creneau, type, duree,
+          id++, s, bloc, date, duJour, type, duree,
           estJourDeCourse ? ['allure10'] : creneau.zones,
           contraintes,
           l(titreDe(type, course?.nom)),
           l(detailDe(type)),
+          estJourDeCourse ? course?.distance_km : undefined,
         ),
       );
     }
@@ -606,11 +618,14 @@ function seance(
   contraintes: Contraintes,
   titre: Localized,
   detail: Localized,
+  /** La distance de la course, quand c'en est une : elle est connue, on ne la
+      déduit pas d'une durée. */
+  distance_km?: number,
 ): MscPlanSession {
   const jour = (new Date(date).getUTCDay() + 6) % 7;
   const rpe = RPE[type] ?? 5;
   const estCourse = creneau.discipline === 'Course à pied' && type !== 'repos';
-  const distance = estCourse ? Math.round((duree / 6) * 10) / 10 : undefined;
+  const distance = distance_km ?? (estCourse ? Math.round((duree / 6) * 10) / 10 : undefined);
   const metres = creneau.discipline === 'Natation' ? Math.round((duree * 40) / 100) * 100 : undefined;
 
   const meta = [duree ? `${duree} min` : '', distance ? `${distance} km` : '',

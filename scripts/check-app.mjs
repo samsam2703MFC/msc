@@ -322,6 +322,12 @@ try {
   check('et dit ce que veulent dire ses trois couleurs', /faite/.test(semaine) && /autrement/.test(semaine) && /manquée/.test(semaine));
   /* La semaine réelle porte la semaine type : sept jours, le sport de chaque
      créneau, et une phrase qui dit si la semaine s'y tient. */
+  /* Les sept jours qui viennent, glissants : la semaine civile est à moitié
+     passée dès mercredi, et l'athlète veut savoir ce qu'il a devant lui. */
+  check('la semaine s’ouvre sur les 7 prochains jours, à partir d’aujourd’hui',
+    /Les 7 prochains jours/i.test(semaine) && /AUJ\.|DZIŚ/i.test(semaine),
+    semaine.split('\n').find((l) => /7 prochains jours/i.test(l)) ?? '');
+
   check('la semaine porte la semaine type de l’athlète, et dit ce qui s’en écarte',
     /Ma semaine type/i.test(semaine)
       && /(suit ta semaine type|s’écarte|s’écartent)/.test(semaine),
@@ -553,6 +559,11 @@ try {
     calendrier.split('\n').find((l) => /^\d{4}-\d{2}-\d{2}/.test(l.trim()))?.slice(0, 60) ?? '');
   check('et son niveau de forme, celui que le coach lit chaque matin',
     /Son niveau de forme|Base endurance|Récupération/i.test(calendrier));
+  /* Le sous-total d'une semaine dit ce qu'elle coûte, pas seulement ce qu'elle
+     dure — et une semaine de course se voit dans son titre. */
+  check('chaque semaine porte son sous-total : heures, séances, charge',
+    /\d+[.,]\d\s*h\s*·\s*\d+\s*séances/i.test(calendrier) && /charge\s*\d+/i.test(calendrier),
+    calendrier.split('\n').find((l) => /^S\d+\s*·/.test(l.trim()))?.slice(0, 80) ?? '');
 
   console.log('\n=== le back office ===');
   /* Les objectifs par discipline : l'athlète les remplit depuis son téléphone,

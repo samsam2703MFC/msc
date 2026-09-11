@@ -113,6 +113,16 @@ check('l’affûtage descend, semaine après semaine',
   }),
   semainesAffutage.map((w) => `S${w.semaine}=${w.heures}h`).join(' '));
 
+/* Le jour de la course, c'est la course qui commande. Un 10 km tombé sur le
+   jour de vélo donnait « Vélo · Course · 3:46/km » : le sport du créneau, le
+   type de la course, et une allure au kilomètre sur un vélo. */
+const surMesureCourses = genererPlan(athlete, objectifs, contraintes, STRUCTURE)
+  .sessions.filter((x) => x.type === 'course');
+check('le jour d’une course, la séance porte le sport de la course',
+  surMesureCourses.length > 0
+  && surMesureCourses.every((x) => x.discipline === 'Course à pied'),
+  surMesureCourses.map((x) => `${x.date} ${x.discipline}`).join(' · '));
+
 const courses = plan.sessions.filter((s) => s.type === 'course');
 check('les 4 courses sont dans le plan', courses.length === 4,
   courses.map((c) => `${c.date}`).join(' '));

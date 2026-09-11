@@ -71,6 +71,11 @@ export function WeekScreen({ app }: { app: App }) {
         </div>
       </Card>
 
+      {/* Ce qui vient, à partir d'aujourd'hui — pas la semaine civile, qui est
+          à moitié passée dès mercredi. C'est la même lecture que le coach a de
+          son côté : sept jours glissants, sport, durée, allure. */}
+      <Sept app={app} etat={etat} />
+
       {/* Ma semaine type, et ce qui s'en écarte cette semaine. */}
       <SemaineType jours={jours} lang={lang} />
 
@@ -243,6 +248,78 @@ function SemaineType({ jours, lang }: { jours: MscPlanSession[]; lang: Lang }) {
           : (fr
             ? `${ecarts} jour${ecarts > 1 ? 's' : ''} s’écarte${ecarts > 1 ? 'nt' : ''} de ta semaine type — le coach a changé le sport, ou le jour est vide.`
             : `${ecarts} dzień/dni odbiega od wzorca — trener zmienił sport albo dzień jest pusty.`)}
+      </div>
+    </Card>
+  );
+}
+
+/* Les sept prochains jours, glissants. Pas d'appel au coach ici : c'est le
+   calendrier tel qu'il est écrit, lu depuis aujourd'hui. L'adaptation, elle,
+   est dans l'onglet Coach — elle demande le signal du matin. */
+function Sept({ app, etat }: { app: App; etat: ReturnType<typeof db.etatDesSeances> }) {
+  const lang = app.lang;
+  const fr = lang === 'fr';
+  const jour = (n: number) => new Date(Date.parse(`${app.date}T00:00:00Z`) + n * 86_400_000)
+    .toISOString().slice(0, 10);
+  const sept = Array.from({ length: 7 }, (_, i) => jour(i));
+  const toutes = db.select('msc_session');
+
+  return (
+    <Card padding="14px 16px" gap={8}>
+      <SectionLabel icon="calendar-days">
+        {fr ? 'Les 7 prochains jours' : 'Najbliższe 7 dni'}
+      </SectionLabel>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {sept.map((d, i) => {
+          const duJour = toutes.filter((s) => s.date === d && s.discipline !== 'Repos');
+          const nom = new Date(`${d}T00:00:00`).toLocaleDateString(fr ? 'fr-FR' : 'pl-PL',
+            { weekday: 'short', day: 'numeric' });
+          return (
+            <div
+              key={d}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0',
+                borderTop: i === 0 ? 'none' : `1px solid ${C.borderSoft}`,
+              }}
+            >
+              <Mono size={11} color={d === app.date ? C.accentDeep : C.inkQuiet}
+                style={{ width: 58, flexShrink: 0, textTransform: 'uppercase' }}>
+                {i === 0 ? (fr ? 'auj.' : 'dziś') : nom}
+              </Mono>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {duJour.length === 0 && (
+                  <span style={{ fontSize: 12.5, color: C.inkQuiet }}>{fr ? 'repos' : 'odpoczynek'}</span>
+                )}
+                {duJour.map((s) => {
+                  const statut = visuelDuStatut(db.statutDe(s, app.date, etat));
+                  const type = db.type(s.type);
+                  const allures = s.zones.map((z) => db.allure(z, s.bloc))
+                    .filter((x, j, liste) => liste.indexOf(x) === j).join(' · ');
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="msc-hover-surface"
+                      onClick={() => app.openSession(s.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                        textAlign: 'left', padding: 0,
+                      }}
+                    >
+                      <Icon name={statut.icon} size={12} color={statut.couleur} />
+                      <span style={{ fontSize: 13, color: C.ink, flex: 1, minWidth: 0 }}>
+                        {`${s.discipline} · ${type.label[lang]}`}
+                      </span>
+                      <Mono size={11} color={C.inkQuiet}>
+                        {`${s.duree_min}′${allures ? ` · ${allures}` : ''}`}
+                      </Mono>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
