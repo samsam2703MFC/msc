@@ -1273,6 +1273,25 @@ returns zero affected rows both when nothing matched and when nothing changed;
 the row stayed in "modified" state, and a modified row has no delete button —
 so the race could no longer be erased either.
 
+### Deux courses ne peuvent pas viser la même allure
+
+A half-marathon is run faster than a marathon. Two targets posted at the same
+pace per kilometre are therefore not two targets, they are one mistake — and
+that is exactly what an editor showing raw times invites: 1:30:00 over 21.1 km
+and 3:00:00 over 42.2 km both read 4:16/km, and the half turns out to be the
+*easier* of the two, and easier than the 10 km before it. The plan follows
+faithfully: the block reference slows down mid-preparation, and nothing on
+screen says why.
+
+So every target now shows what it is worth over ten kilometres — `≡ 37:50 au
+10 km`, computed by the same Riegel conversion the generator uses to set block
+references — and a button fills in the time that the athlete's own 10 km
+objective is worth over that distance (`depuis10k`, the inverse of
+`equivalent10k`; `check:plan` holds that the two close on each other, and that
+at equal level the half comes out faster per kilometre than the marathon).
+When one objective is easier than the one before it, the card says so, names
+both in 10 km terms, and points at the button.
+
 ### Une seule couture pour dire de quel athlète on parle
 
 The server reads the athlete from `?athlete=` and, failing that, takes the

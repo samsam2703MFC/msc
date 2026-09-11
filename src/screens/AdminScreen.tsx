@@ -7,7 +7,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import * as db from '../data/db';
-import { genererPlan } from '../data/generateur';
+import { depuis10k, equivalent10k, genererPlan } from '../data/generateur';
 import type { Contraintes, Objectif, PlanGenere, ProfilAthlete } from '../data/generateur';
 import { appliquerMethode, demanderMethode, MethodeError } from '../data/methode';
 import type { Methode } from '../data/methode';
@@ -839,6 +839,29 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
 
   /* Mémoïsé : le plan se recalcule quand les contraintes changent, et un objet
      neuf à chaque rendu le ferait recalculer pour rien — 261 séances. */
+  /* Une échelle qui redescend : un objectif plus facile que celui d'avant. Le
+     plan suit — la référence du bloc ralentit en chemin — et personne ne
+     comprend pourquoi tant que les chronos ne sont pas ramenés à la même
+     unité. Un semi et un marathon posés à la même allure au kilomètre, par
+     exemple : c'est impossible, un semi se court plus vite. */
+  const echelle = (() => {
+    const comparables = objectifs
+      .filter((o) => o.date && o.cible_s > 0 && !estMulti(o.type_course ?? ''))
+      .map((o) => ({ nom: o.nom, e: equivalent10k(o.cible_s, o.distance_km) }));
+    for (let i = 1; i < comparables.length; i += 1) {
+      const avant = comparables[i - 1];
+      const ici = comparables[i];
+      if (ici.e > avant.e + 1) {
+        const a = versTexte(Math.round(avant.e * 10));
+        const b = versTexte(Math.round(ici.e * 10));
+        return fr
+          ? `« ${ici.nom} » vaut ${b} au 10 km, « ${avant.nom} » qui le précède en vaut ${a} : l’objectif redescend, et le plan avec lui. Le bouton « Aligner sur sa cible » pose le chrono qui correspond à son objectif 10 km.`
+          : `„${ici.nom}” to ${b} na 10 km, a poprzedzające „${avant.nom}” — ${a}: cel się obniża, a plan razem z nim.`;
+      }
+    }
+    return null;
+  })();
+
   const contraintes: Contraintes = useMemo(
     () => ({ ...reglages, plancher_heures: plancherSaisi ?? plancherDeLaMatrice }),
     [reglages, plancherSaisi, plancherDeLaMatrice],
@@ -1013,6 +1036,14 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
           <Icon name="plus" size={14} />
           {fr ? 'Ajouter une course' : 'Dodaj zawody'}
         </button>
+        {echelle && (
+          <div style={{
+            fontSize: 11.5, color: C.warning, lineHeight: 1.45,
+            padding: '8px 10px', borderRadius: R.md, background: C.warningBg,
+          }}>
+            {echelle}
+          </div>
+        )}
         {app.coursesErreur && (
           <div style={{ fontSize: 12, color: C.negative, lineHeight: 1.4 }}>{app.coursesErreur}</div>
         )}
@@ -1335,10 +1366,14 @@ function LigneObjectif({
             if (s !== (course.cible_s ?? 0)) onChange({ cible_s: s, cible_haute_s: s || undefined });
           }}
           mono
+          /* Ce que ce chrono vaut sur dix kilomètres. Sans cette ligne, un semi
+             et un marathon posés à la même allure ne se voyaient pas — et c'est
+             pourtant impossible : un semi se court plus vite. */
           aide={multi
             ? (fr ? 'total, transitions comprises' : 'łącznie ze strefami zmian')
-            : (course.cible_s ? typeCourse(course.type_course)?.exemple
-              : `${fr ? 'à son allure cible' : 'w tempie docelowym'} : ${versTexte(Math.round(refCible * course.distance_km))}`)}
+            : course.cible_s
+              ? `≡ ${versTexte(Math.round(equivalent10k(course.cible_s, course.distance_km) * 10))} ${fr ? 'au 10 km' : 'na 10 km'}`
+              : `${fr ? 'à son allure cible' : 'w tempie docelowym'} : ${versTexte(Math.round(depuis10k(refCible, course.distance_km)))}`}
         />
       </Grid>
       {multi && (
@@ -1362,6 +1397,24 @@ function LigneObjectif({
           on={!!course.principal}
           onChange={(v) => onChange({ principal: v })}
         />
+        {/* Aligner : le chrono que son objectif 10 km vaut sur cette distance.
+            Un clic plutôt qu'une conversion de tête, qui est exactement
+            l'endroit où deux courses finissent à la même allure. */}
+        {!multi && (
+          <button
+            type="button"
+            className="msc-hover-accent"
+            onClick={() => {
+              const t = Math.round(depuis10k(refCible, course.distance_km));
+              onChange({ cible_s: t, cible_haute_s: t });
+            }}
+            style={{ fontSize: 12, color: C.inkSecondary, padding: '9px 11px' }}
+          >
+            {fr
+              ? `Aligner sur sa cible (${versTexte(Math.round(depuis10k(refCible, course.distance_km)))})`
+              : `Wyrównaj do celu (${versTexte(Math.round(depuis10k(refCible, course.distance_km)))})`}
+          </button>
+        )}
         {/* Retirer, c'est retirer la course de son calendrier : elle n'est pas
             qu'un objectif. On le dit avant de le faire. */}
         {confirme ? (

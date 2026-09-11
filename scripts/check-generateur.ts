@@ -1,6 +1,6 @@
 /* Generates a plan for Sam's own inputs and checks it against the rules and
    against the reference workbook's shape. */
-import { genererPlan, verifierEcartQualite } from '../src/data/generateur';
+import { depuis10k, equivalent10k, genererPlan, verifierEcartQualite } from '../src/data/generateur';
 import type { Contraintes, Objectif, ProfilAthlete } from '../src/data/generateur';
 import type { MscStructure } from '../src/data/types';
 import { msc_week as REF } from '../src/data/plan.generated';
@@ -159,6 +159,22 @@ check('un bloc final court raccourcit l’affûtage au lieu de l’annuler',
   !!court && court.a - court.de + 1 === 1
   && serre.avertissements.some((a) => /affûtage ramené à 1/.test(a)),
   serre.blocs.map((b) => `${b.nature} S${b.de}–S${b.a}`).join(' · '));
+
+/* Les deux sens de la conversion se referment l'un sur l'autre : c'est ce qui
+   permet de proposer un chrono au lieu de laisser chacun le calculer — et deux
+   courses finir à la même allure au kilomètre, ce qui est impossible. */
+const allerRetour = [10, 21.0975, 42.195].every((d) => {
+  const t = depuis10k(226, d);
+  return Math.abs(equivalent10k(t, d) - 226) < 0.01;
+});
+check('un chrono proposé pour une distance revient à la même allure 10 km',
+  allerRetour,
+  [10, 21.0975, 42.195].map((d) => `${d}km ${Math.round(depuis10k(226, d))}s`).join(' · '));
+
+/* Et un semi se court plus vite qu'un marathon, pour le même niveau. */
+check('à niveau égal, le semi se court plus vite que le marathon',
+  depuis10k(226, 21.0975) / 21.0975 < depuis10k(226, 42.195) / 42.195,
+  `${(depuis10k(226, 21.0975) / 21.0975).toFixed(1)} s/km · ${(depuis10k(226, 42.195) / 42.195).toFixed(1)} s/km`);
 
 /* --------------------------------------------- le plan suit la semaine type */
 const surMesure = genererPlan(

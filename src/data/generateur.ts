@@ -67,6 +67,14 @@ export function equivalent10k(cible_s: number, distance_km: number): number {
   return (cible_s * Math.pow(10 / distance_km, RIEGEL)) / 10;
 }
 
+/** Le chemin inverse : le chrono qu'une allure 10 km vaut sur une distance.
+    C'est ce qui permet de proposer « et sur ce semi, ça fait 1:23:29 » plutôt
+    que de laisser chacun poser un chrono dans son coin — c'est ainsi qu'on se
+    retrouve avec un semi et un marathon à la même allure. */
+export function depuis10k(allure10k_s: number, distance_km: number): number {
+  return allure10k_s * 10 * Math.pow(distance_km / 10, RIEGEL);
+}
+
 export interface Objectif {
   date: string;
   nom: string;
