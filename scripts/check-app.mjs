@@ -482,6 +482,11 @@ try {
       .join(' · ').slice(0, 80));
   check('l’écran Créer montre le plan généré',
     /Plan généré/i.test(createur) && /semaines/i.test(createur));
+  /* Le plan se bâtit sur la semaine type de l'athlète, et le dit : sans cette
+     phrase, une séance raccourcie par le réamorçage passe pour un bug. */
+  check('et dit qu’il est bâti sur la semaine type de l’athlète',
+    /Bâti sur sa semaine type/i.test(createur),
+    createur.split('\n').find((l) => /Bâti sur sa semaine type/i.test(l))?.slice(0, 90) ?? '');
   check('et, en tête, l’historique Strava d’où l’on part',
     /Historique Strava/i.test(createur), createur.split('\n').find((l) => /Historique/i.test(l)) ?? '');
   check('et propose de l’enregistrer',

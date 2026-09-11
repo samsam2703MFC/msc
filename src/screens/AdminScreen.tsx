@@ -17,7 +17,7 @@ import { Icon } from '../components/Icon';
 import { AccentButton, Card, Colonnes, Grid, Mono, SectionLabel } from '../components/primitives';
 import { DEFICITS_DEFAUT, DISCIPLINES, estMulti, referenceAPied, typeCourse, typesGroupes } from '../data/courses';
 import type { Deficits, TypeCourse } from '../data/courses';
-import type { Lang } from '../data/types';
+import type { Lang, MscCompetition } from '../data/types';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
 import { AthletesHub, SuiviAthlete } from './AthletesScreen';
@@ -635,8 +635,18 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     })),
   );
 
+  /* La semaine type de l'athlète commande le squelette : le plan tombe sur
+     ses jours, ses sports, ses types — et c'est aussi elle qui dit ce que
+     pèse une semaine normale chez lui. Un plancher tapé à la main à côté
+     d'une matrice à 7 h 30 donnait des séances rabotées d'un tiers sans que
+     rien ne le dise. */
+  const structure = db.select('msc_structure');
+  const heuresPosees = structure.reduce((t, c) => t + (c.duree_min ?? 45), 0) / 60;
+
   const [contraintes, setContraintes] = useState<Contraintes>({
-    plancher_heures: seed.plancher_heures,
+    plancher_heures: heuresPosees > 0
+      ? Math.max(Math.round(heuresPosees * 2) / 2, 1)
+      : seed.plancher_heures,
     plancher_km_sortie: seed.plancher_km_sortie,
     reamorcage_semaines: 6,
     affutage_semaines: 3,
@@ -657,9 +667,32 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     debut,
   };
 
-  /* La semaine type de l'athlète commande le squelette : le plan tombe sur
-     ses jours, ses sports, ses types. Sans elle, le squelette par défaut. */
-  const structure = db.select('msc_structure');
+  /* Ses courses à venir, telles que Starts les connaît : de quoi poser un
+     objectif sans rien retaper. Celles déjà posées ne sont pas reproposées. */
+  const aVenir = db
+    .select('msc_competition', (c) => c.date >= debut && !objectifs.some((o) => o.date === c.date))
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 4);
+
+  function reprendreStart(c: MscCompetition) {
+    const t = c.type_course ? typeCourse(c.type_course) : undefined;
+    const km = c.distance_km || t?.distance_km || 10;
+    setObjectifs((prev) => [...prev, {
+      ...OBJECTIF_VIDE,
+      date: c.date,
+      /* Le nom de l'objectif est celui du type ; le vrai nom de la course
+         reste dans Starts, où elle s'y relie. */
+      nom: t?.nom[app.lang] ?? c.nom,
+      type_course: c.type_course ?? OBJECTIF_VIDE.type_course,
+      distance_km: km,
+      /* Starts ne porte pas de chrono visé. Sur une course à pied, l'allure
+         cible de l'athlète en donne un point de départ ; sur un enchaînement,
+         ça ne voudrait rien dire — il se vise partie par partie. */
+      cible_s: estMulti(c.type_course ?? '') ? 0 : Math.round((versSecondes(cible) / 10) * km),
+      principal: !prev.some((o) => o.principal),
+    }]);
+  }
 
   const plan: PlanGenere | null = useMemo(() => {
     if (!objectifs.some((o) => o.date && o.principal)) return null;
@@ -823,7 +856,13 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
         <button
           type="button"
           className="msc-hover-accent"
-          onClick={() => setObjectifs((prev) => [...prev, { ...OBJECTIF_VIDE }])}
+          /* Le premier objectif ajouté est le principal : un plan se construit à
+             rebours depuis une date, et quand il n'y en a qu'une, ce n'est pas
+             à l'utilisateur de le dire. Il reste libre de la déplacer. */
+          onClick={() => setObjectifs((prev) => [
+            ...prev,
+            { ...OBJECTIF_VIDE, principal: !prev.some((o) => o.principal) },
+          ])}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -839,6 +878,30 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
           <Icon name="plus" size={14} />
           {fr ? 'Ajouter une course' : 'Dodaj zawody'}
         </button>
+        {/* Les courses déjà encodées dans Starts. Les retaper ici, c'est les
+            avoir en double avec deux dates qui divergeront : un clic les
+            reprend, et le chrono visé reste à confirmer. */}
+        {aVenir.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 11.5, color: C.inkSecondary }}>
+              {fr ? 'Depuis ses Starts :' : 'Z jego Startów:'}
+            </span>
+            {aVenir.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="msc-hover-accent"
+                onClick={() => reprendreStart(c)}
+                style={{
+                  padding: '6px 10px', borderRadius: R.md, border: `1px solid ${C.border}`,
+                  fontSize: 11.5, color: C.ink,
+                }}
+              >
+                {`${c.nom} · ${c.date}`}
+              </button>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* les contraintes */}
@@ -854,6 +917,17 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
           <Champ label={fr ? 'Affûtage' : 'Tapering'} value={String(contraintes.affutage_semaines)}
             onChange={(v) => setContraintes({ ...contraintes, affutage_semaines: Number(v) || 0 })} mono />
         </Grid>
+        {/* D'où sort le plancher, et sur quoi le plan est bâti. Sans cette
+            ligne, « 41 min » en face de 70 min posées ressemble à un bug. */}
+        <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>
+          {structure.length > 0
+            ? (fr
+              ? `Bâti sur sa semaine type : ${structure.length} créneaux, ${heuresPosees.toFixed(1).replace('.', ',')} h posées — ce sont ses jours, ses sports et ses durées. Le plancher en part ; le réamorçage démarre en dessous, la construction monte au-dessus, l’affûtage redescend.`
+              : `Zbudowany na jego tygodniu wzorcowym: ${structure.length} slotów, ${heuresPosees.toFixed(1).replace('.', ',')} h — jego dni, sporty i czasy. Plancher stąd wychodzi; rozruch startuje niżej, budowa rośnie wyżej, tapering schodzi.`)
+            : (fr
+              ? 'Aucune semaine type posée pour cet athlète : le plan tombe sur le squelette par défaut. Pose-la dans l’onglet « Semaine type » pour qu’il suive ses jours et ses sports.'
+              : 'Brak tygodnia wzorcowego: plan opiera się na domyślnym szkielecie. Ustaw go w zakładce „Tydzień wzorcowy”.')}
+        </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <Bascule label={fr ? 'Natation' : 'Pływanie'} on={contraintes.natation}
             onChange={(v) => setContraintes({ ...contraintes, natation: v })} />
@@ -995,6 +1069,19 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
           </Card>
 
           <Card padding={0} gap={0} style={{ overflow: 'hidden' }}>
+            {/* Ce que montrent ces quatorze lignes : les deux premières
+                semaines, donc les plus légères du plan. Sans le dire, une
+                séance de 41 min en face des 70 min de la semaine type passe
+                pour une erreur, alors que c'est le réamorçage. */}
+            <div style={{ padding: '10px 14px', fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45, borderBottom: `1px solid ${C.borderSoft}` }}>
+              {structure.length > 0
+                ? (fr
+                  ? `Les deux premières semaines — ${db.periode(plan.blocs[0]).nom[app.lang].toLowerCase()}, les plus légères du plan. Les jours et les sports sont ceux de sa semaine type ; les durées y reviennent à ${heuresPosees.toFixed(1).replace('.', ',')} h en S${contraintes.reamorcage_semaines}, puis montent.`
+                  : `Dwa pierwsze tygodnie — ${db.periode(plan.blocs[0]).nom[app.lang].toLowerCase()}, najlżejsze w planie. Dni i sporty pochodzą z tygodnia wzorcowego; czasy wracają do ${heuresPosees.toFixed(1).replace('.', ',')} h w T${contraintes.reamorcage_semaines}, potem rosną.`)
+                : (fr
+                  ? 'Les deux premières semaines — les plus légères du plan.'
+                  : 'Dwa pierwsze tygodnie — najlżejsze w planie.')}
+            </div>
             {sessions.slice(0, 14).map((s) => {
               const t = db.type(s.type);
               return (
@@ -1029,12 +1116,31 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
           </Card>
         </>
       ) : (
-        <Card padding="16px 18px">
+        <Card padding="16px 18px" gap={10}>
           <div style={{ fontSize: 13, color: C.inkSecondary, lineHeight: 1.5 }}>
             {fr
-              ? 'Renseigne au moins un objectif avec une date, et marque-le comme objectif principal : le plan se construit à rebours depuis cette date.'
-              : 'Podaj przynajmniej jeden cel z datą i oznacz go jako główny: plan liczony jest wstecz od tej daty.'}
+              ? 'Le plan se construit à rebours depuis la date de l’objectif principal. Il manque :'
+              : 'Plan liczy się wstecz od daty celu głównego. Brakuje:'}
           </div>
+          {/* Ce qui manque, nommément. « Renseigne un objectif » n'aide pas
+              quelqu'un qui vient d'en renseigner un et ne voit rien venir. */}
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: C.ink, lineHeight: 1.6 }}>
+            {objectifs.length === 0 && (
+              <li>{fr ? 'une course — le bouton « Ajouter une course », à gauche' : 'zawody — przycisk „Dodaj zawody” po lewej'}</li>
+            )}
+            {objectifs.filter((o) => !o.date).map((o, i) => (
+              <li key={`d${i}`}>
+                {fr ? `la date de « ${o.nom || o.type_course} »` : `data „${o.nom || o.type_course}”`}
+              </li>
+            ))}
+            {objectifs.length > 0 && !objectifs.some((o) => o.principal) && (
+              <li>
+                {fr
+                  ? 'l’objectif principal : la bascule « Objectif principal » sur la course qui termine le plan'
+                  : 'cel główny: przełącznik „Cel główny” na zawodach kończących plan'}
+              </li>
+            )}
+          </ul>
         </Card>
       )}
     </>} />

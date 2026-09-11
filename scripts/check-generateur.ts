@@ -2,6 +2,7 @@
    against the reference workbook's shape. */
 import { genererPlan, verifierEcartQualite } from '../src/data/generateur';
 import type { Contraintes, Objectif, ProfilAthlete } from '../src/data/generateur';
+import type { MscStructure } from '../src/data/types';
 import { msc_week as REF } from '../src/data/plan.generated';
 import { msc_objectif as OBJECTIFS } from '../src/data/reference';
 
@@ -33,6 +34,22 @@ const contraintes: Contraintes = {
   salle: true,
   montagne_toutes_les: 3,
 };
+
+/* La semaine type de Sam, celle que la migration pose : c'est elle que le
+   plan doit reproduire — ses jours, ses sports, et ses durées une fois le
+   réamorçage terminé. Sans elle, le contrôle validerait un générateur qui
+   ignore la matrice. */
+const STRUCTURE: MscStructure[] = [
+  { jour: 0, creneau: 1, discipline: 'Hyrox', type_code: 'force', duree_min: 70 },
+  { jour: 1, creneau: 1, discipline: 'Natation', type_code: 'nage', duree_min: 55 },
+  { jour: 1, creneau: 2, discipline: 'Vélo', type_code: 'velo', duree_min: 50 },
+  { jour: 2, creneau: 1, discipline: 'Course à pied', type_code: 'seuil', duree_min: 60 },
+  { jour: 3, creneau: 1, discipline: 'Hyrox', type_code: 'compromis', duree_min: 55 },
+  { jour: 4, creneau: 1, discipline: 'Natation', type_code: 'nage', duree_min: 40 },
+  { jour: 4, creneau: 2, discipline: 'Course à pied', type_code: 'recup', duree_min: 45 },
+  { jour: 5, creneau: 1, discipline: 'Course à pied', type_code: 'longue', duree_min: 75 },
+];
+const HEURES_POSEES = STRUCTURE.reduce((t, c) => t + (c.duree_min ?? 45), 0) / 60;
 
 const plan = genererPlan(athlete, objectifs, contraintes);
 let fails = 0;
@@ -117,6 +134,42 @@ const qualite = plan.sessions.filter((s) => ['seuil', 'allure10', 'vma'].include
 check('aucune qualité avant la fin du réamorçage',
   qualite.every((s) => s.semaine > 6),
   `première: S${qualite[0]?.semaine}`);
+
+/* --------------------------------------------- le plan suit la semaine type */
+const surMesure = genererPlan(
+  athlete,
+  objectifs,
+  { ...contraintes, plancher_heures: HEURES_POSEES },
+  STRUCTURE,
+);
+/* La dernière semaine du réamorçage vaut exactement la semaine posée : c'est
+   le point où « ma semaine normale » et « ce que le plan me demande » se
+   rejoignent, avant que la construction ne monte au-dessus. */
+const REPERE = contraintes.reamorcage_semaines;
+const semaineRepere = surMesure.sessions.filter((x) => x.semaine === REPERE);
+const posesDuJour = (jour: number) => STRUCTURE.filter((c) => c.jour === jour);
+
+check('les jours et les sports du plan sont ceux de la semaine type',
+  [0, 1, 2, 3, 4, 5, 6].every((jour) => {
+    const attendu = posesDuJour(jour).map((c) => c.discipline).sort();
+    const obtenu = semaineRepere
+      .filter((x) => (new Date(`${x.date}T00:00:00Z`).getUTCDay() + 6) % 7 === jour)
+      .filter((x) => x.discipline !== 'Repos')
+      .map((x) => x.discipline).sort();
+    return attendu.join('|') === obtenu.join('|');
+  }),
+  semaineRepere.filter((x) => x.discipline !== 'Repos').map((x) => `${x.jour.fr} ${x.discipline}`).join(' · '));
+
+/* Les durées : hors course à pied, qui a son plancher de kilomètres et peut
+   donc être allongée, la séance dure ce qui a été posé. */
+const horsCap = semaineRepere.filter((x) => x.discipline !== 'Course à pied' && x.discipline !== 'Repos');
+check('et ses durées, une fois le réamorçage fini',
+  horsCap.length > 0 && horsCap.every((x) => {
+    const jour = (new Date(`${x.date}T00:00:00Z`).getUTCDay() + 6) % 7;
+    const pose = posesDuJour(jour).find((c) => c.discipline === x.discipline);
+    return !!pose && Math.abs(x.duree_min - (pose.duree_min ?? 45)) <= 2;
+  }),
+  horsCap.map((x) => `${x.discipline} ${x.duree_min}′`).join(' · '));
 
 console.log('\n=== références de bloc : généré vs classeur ===');
 const CLASSEUR: Record<string, string> = { A: '52:00', B: '47:31', C: '41:36', D: '36:00' };

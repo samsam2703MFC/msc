@@ -1206,6 +1206,33 @@ since is never overwritten. `check:db` compares the natures in the database
 against `src/data/reference.ts`, which is what would catch a plan that lost
 them.
 
+### Le plan part de la semaine type, volume compris
+
+The weekly matrix already gave the plan its days, its sports and its session
+types. It now gives it the volume too: when the athlete has one, the
+generator's **weekly floor starts at the matrix's own total** (8 slots, 7.5 h
+for Sam) instead of a number typed by hand next to it. The last week of the
+rebuild then *is* the matrix, to the minute — `check:plan` asserts exactly
+that, slot by slot, on Sam's own eight — and the periods move around it:
+rebuild below, build above, taper back down.
+
+Running slots are the one exception, and on purpose: `plancher_km_sortie`
+stretches a short run to the minimum distance, so a 45-minute recovery run
+posed in the matrix comes out as 10 km.
+
+The screen says all of it rather than leaving it to be deduced: the
+constraints card names the matrix it is built on ("8 créneaux, 7,5 h posées"),
+or says there is none and the default skeleton applies; and the preview says
+its fourteen lines are the first two weeks — the lightest of the plan — so a
+41-minute session facing a 70-minute slot reads as the rebuild, not as a bug.
+
+An objective is what the plan is built backwards from, so **the first one
+added is marked principal** rather than waiting to be found, and when no plan
+can be generated the right-hand column names what is missing — this race's
+date, or the principal objective — instead of restating the general rule. The
+athlete's races already encoded in Starts can be taken as objectives in one
+click, which is also how their dates stay the same in both places.
+
 ### Les objectifs, discipline par discipline
 
 An athlete has more than one number to chase. `msc_objectif_sport` holds two
