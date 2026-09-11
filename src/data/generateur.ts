@@ -27,7 +27,7 @@
 import { DEFICITS_DEFAUT, comparableAuDixKm, referenceAPied } from './courses';
 import type { Deficits } from './courses';
 import { formatAllure, param } from './engine';
-import { zonesDuType } from './structure';
+import { modele, zonesDuType } from './structure';
 import type {
   Localized,
   MscBloc,
@@ -302,84 +302,52 @@ type Creneau = {
   dur?: boolean;
 };
 
-/* Les types qui comptent comme « durs » : deux d'entre eux ne doivent pas se
-   toucher à moins de 48 h, et c'est ce drapeau qui le dit. */
-const DURS_STRUCTURE = new Set<TypeCode>(['seuil', 'allure10', 'vma', 'longue', 'montagne', 'test']);
+/** Le squelette d'une semaine : un créneau par entraînement, sa part du volume.
 
-/** The week's shape. Quality on Wednesday, long run on Saturday: 72 h apart.
+    La semaine type de l'athlète (`msc_structure`) le donne quand il en a posé
+    une ; sinon c'est `modele()` qui vaut — le même objet que le bouton
+    « Partir du modèle » du back office, et pas une seconde définition qui
+    dériverait de lui.
 
-    Quand l'athlète a une semaine type (`msc_structure`), c'est elle qui
-    commande : chaque créneau garde son jour, son sport et son type, et sa
-    durée habituelle devient sa part du volume. Le squelette ci-dessous ne sert
-    plus qu'aux athlètes qui n'en ont pas encore posé une. */
-function creneaux(contraintes: Contraintes, qualite: TypeCode, structure?: MscStructure[]): Creneau[] {
-  if (structure?.length) {
-    const total = structure.reduce((t, c) => t + (c.duree_min ?? 45), 0) || 1;
-    return structure
-      .slice()
-      .sort((a, b) => a.jour - b.jour || a.creneau - b.creneau)
-      .map((c) => ({
-        jour: c.jour,
-        discipline: c.discipline,
-        type: c.type_code,
-        zones: zonesDuType(c.type_code, c.discipline),
-        part: (c.duree_min ?? 45) / total,
-        dur: c.discipline === 'Course à pied' && DURS_STRUCTURE.has(c.type_code),
-      }));
-  }
-  const out: Creneau[] = [];
-  if (contraintes.salle) {
-    out.push({ jour: 0, discipline: 'Hyrox', type: 'force', zones: [], part: 0.16 });
-  }
-  if (contraintes.natation) {
-    out.push({ jour: 1, discipline: 'Natation', type: 'nage', zones: [], part: 0.12 });
-  }
-  if (contraintes.velo) {
-    out.push({ jour: 1, discipline: 'Vélo', type: 'velo', zones: [], part: 0.1 });
-  }
-  out.push({
-    jour: 2,
-    discipline: 'Course à pied',
-    type: qualite,
-    zones: qualite === 'ef' ? ['ef'] : ['ef', qualite as ZoneCode],
-    part: 0.14,
-    dur: qualite !== 'ef',
-  });
-  if (contraintes.salle) {
-    out.push({ jour: 3, discipline: 'Hyrox', type: 'compromis', zones: [], part: 0.13 });
-  }
-  if (contraintes.natation) {
-    out.push({ jour: 4, discipline: 'Natation', type: 'nage', zones: [], part: 0.09 });
-  }
-  out.push({
-    jour: 4,
-    discipline: 'Course à pied',
-    type: 'recup',
-    zones: ['recup'],
-    part: 0.1,
-  });
-  out.push({
-    jour: 5,
-    discipline: 'Course à pied',
-    type: 'longue',
-    zones: ['ef'],
-    part: 0.16,
-    dur: true,
-  });
-  out.push({ jour: 6, discipline: 'Repos', type: 'repos', zones: [], part: 0 });
-  return out;
-}
+    Les jours sans créneau ne sont pas absents du plan : ils y entrent comme
+    repos. Un plan qui saute le dimanche au lieu de dire « repos » laisse
+    croire qu'on a oublié de le remplir. */
+function creneaux(contraintes: Contraintes, structure?: MscStructure[]): Creneau[] {
+  const semaine = structure?.length ? structure : modele(contraintes);
+  const total = semaine.reduce((t, c) => t + (c.duree_min ?? 45), 0) || 1;
+  const poses: Creneau[] = semaine
+    .slice()
+    .sort((a, b) => a.jour - b.jour || a.creneau - b.creneau)
+    .map((c) => ({
+      jour: c.jour,
+      discipline: c.discipline,
+      type: c.type_code,
+      zones: zonesDuType(c.type_code, c.discipline),
+      part: (c.duree_min ?? 45) / total,
+      dur: c.discipline === 'Course à pied' && DURS.has(c.type_code),
+    }));
 
-/** Which quality session a block calls for. */
-function qualiteDuBloc(indexBloc: number, semaineDansBloc: number): TypeCode {
-  if (indexBloc === 0) return 'ef'; //  rebuild: no quality yet
-  if (indexBloc === 1) return 'seuil'; //  build: threshold is the best value
-  /* Speed blocks alternate race pace and VO2max. */
-  return semaineDansBloc % 3 === 2 ? 'vma' : 'allure10';
+  const occupes = new Set(poses.map((c) => c.jour));
+  for (let jour = 0; jour < 7; jour += 1) {
+    if (!occupes.has(jour)) {
+      poses.push({ jour, discipline: 'Repos', type: 'repos', zones: [], part: 0 });
+    }
+  }
+  return poses.sort((a, b) => a.jour - b.jour);
 }
 
 /** The session types that count as hard for the 48 h rule. */
 const DURS = new Set<TypeCode>(['seuil', 'allure10', 'vma', 'longue', 'montagne', 'course', 'test']);
+
+/* La qualité : ce qui se court plus vite que l'endurance. */
+const QUALITE = new Set<TypeCode>(['seuil', 'allure10', 'vma']);
+
+/* La seule chose que le bloc change à la semaine type : le réamorçage ne
+   porte pas de qualité. Un créneau de seuil y devient de l'endurance — même
+   jour, même sport, même place ; on remet juste la vitesse à plus tard. */
+function selonLeBloc(type: TypeCode, indexBloc: number): TypeCode {
+  return indexBloc === 0 && QUALITE.has(type) ? 'ef' : type;
+}
 
 /** RPE by type — the workbook's own scale. */
 const RPE: Record<string, number> = {
@@ -421,7 +389,7 @@ export function genererPlan(
     const estMontagne =
       contraintes.montagne_toutes_les > 0 && s % contraintes.montagne_toutes_les === 0;
 
-    const grille = creneaux(contraintes, qualiteDuBloc(indexBloc, s - bloc.de), structure);
+    const grille = creneaux(contraintes, structure);
     const totalPart = grille.reduce((t, c) => t + c.part, 0);
 
     for (const creneau of grille) {
@@ -444,7 +412,7 @@ export function genererPlan(
           ? 'repos'
           : creneau.type === 'longue' && estMontagne
             ? 'montagne'
-            : creneau.type;
+            : selonLeBloc(creneau.type, indexBloc);
 
       if (type === 'repos' && !estJourDeCourse) {
         sessions.push(
