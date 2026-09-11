@@ -502,8 +502,51 @@ try {
   check('son allure est calculée, pas stockée', ajoutee?.resultat?.allure_s_km === 282,
     `${ajoutee?.resultat?.allure_s_km} s/km`);
 
+  /* Ce qui fait d'une course un objectif vit sur la course : un chrono visé et
+     la couronne. Avant, ces deux-là ne vivaient que dans le formulaire — on en
+     retirait un, on changeait d'onglet, il revenait. */
+  /* La couronne de l'athlète, avant qu'on y touche : poser la nôtre la lui
+     retire, et sans objectif principal il n'a plus de plan à générer — le
+     contrôle suivant chercherait longtemps pourquoi. On la remet en partant. */
+  const couronneAvant = liste.corps.competitions.find((x: any) => x.principal);
+  const vise = await c.appel('/api/competitions', {
+    method: 'POST',
+    body: JSON.stringify({ ...ajoutee, cible_s: 2700, cible_haute_s: 2760, principal: true }),
+  });
+  const apresCible = await c.appel('/api/competitions');
+  const avecCible = apresCible.corps.competitions.find((x: any) => x.id === creee.corps.id);
+  check('un chrono visé et la couronne s’écrivent sur la course',
+    vise.statut === 200 && avecCible?.cible_s === 2700 && avecCible?.principal === true,
+    `${avecCible?.cible_s} · ${avecCible?.principal}`);
+
+  /* Une seule couronne : la poser ailleurs la retire d'où elle était, plutôt
+     que de refuser et de laisser l'utilisateur la chercher. C'est justement
+     pour ça qu'il faut la remettre où elle était en partant : sans objectif
+     principal, l'athlète n'a plus de plan à générer, et le contrôle suivant
+     chercherait longtemps pourquoi. */
+  const seconde = await c.appel('/api/competitions', {
+    method: 'POST',
+    body: JSON.stringify({
+      date: '2027-01-17', nom: 'Autre corrida', distance_km: 10, cible_s: 2600, principal: true,
+    }),
+  });
+  const apresSeconde = await c.appel('/api/competitions');
+  const anciennes = apresSeconde.corps.competitions.filter((x: any) => x.principal);
+  check('et la couronne reste unique',
+    seconde.statut === 200 && anciennes.length === 1 && anciennes[0].id === seconde.corps.id,
+    anciennes.map((x: any) => x.nom).join(' · '));
+  await c.appel(`/api/competitions?id=${seconde.corps.id}`, { method: 'DELETE' });
+  if (couronneAvant) {
+    await c.appel('/api/competitions', {
+      method: 'POST', body: JSON.stringify({ ...couronneAvant, principal: true }),
+    });
+  }
+
   const suppr = await c.appel(`/api/competitions?id=${creee.corps.id}`, { method: 'DELETE' });
   check('elle se supprime', suppr.statut === 200);
+  const apresSuppr = await c.appel('/api/competitions');
+  check('et elle ne revient pas à la lecture suivante',
+    !apresSuppr.corps.competitions.some((x: any) => x.id === creee.corps.id));
 
   console.log('\n=== enregistrer un plan, et le déplacer ===');
 

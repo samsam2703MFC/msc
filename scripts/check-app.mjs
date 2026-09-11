@@ -484,9 +484,34 @@ try {
     /Plan généré/i.test(createur) && /semaines/i.test(createur));
   /* Le plan se bâtit sur la semaine type de l'athlète, et le dit : sans cette
      phrase, une séance raccourcie par le réamorçage passe pour un bug. */
+  /* Le scénario exact qui manquait : ajouter une course, changer d'onglet,
+     revenir. Tant que la liste ne vivait que dans l'écran, ce qu'on ajoutait
+     disparaissait et ce qu'on retirait revenait. */
+  const lignes = () => page.locator('button').filter({ hasText: /^(Retirer|Usuń)$/ }).count();
+  const avantAjout = await lignes();
+  await page.getByRole('button', { name: /Ajouter une course/i }).click();
+  await page.waitForTimeout(900);
+  const apresAjout = await lignes();
+  await ouvrirOnglet(page, 'Aujourd');
+  await ouvrirMoi(page, 'Mon plan');
+  const auRetour = await lignes();
+  check('une course ajoutée reste là quand on change d’onglet',
+    apresAjout === avantAjout + 1 && auRetour === apresAjout,
+    `${avantAjout} → ${apresAjout} → ${auRetour}`);
+
+  await page.locator('button').filter({ hasText: /^(Retirer|Usuń)$/ }).last().click();
+  await page.waitForTimeout(300);
+  await page.getByRole('button', { name: /Oui, retirer|Tak, usuń/i }).click();
+  await page.waitForTimeout(900);
+  await ouvrirOnglet(page, 'Aujourd');
+  await ouvrirMoi(page, 'Mon plan');
+  check('et une course retirée ne revient pas',
+    (await lignes()) === avantAjout, `${await lignes()} · attendu ${avantAjout}`);
+
+  const createur2 = await page.locator('body').innerText();
   check('et dit qu’il est bâti sur la semaine type de l’athlète',
-    /Bâti sur sa semaine type/i.test(createur),
-    createur.split('\n').find((l) => /Bâti sur sa semaine type/i.test(l))?.slice(0, 90) ?? '');
+    /Bâti sur sa semaine type/i.test(createur2),
+    createur2.split('\n').find((l) => /Bâti sur sa semaine type/i.test(l))?.slice(0, 90) ?? '');
   check('et, en tête, l’historique Strava d’où l’on part',
     /Historique Strava/i.test(createur), createur.split('\n').find((l) => /Historique/i.test(l)) ?? '');
   check('et propose de l’enregistrer',

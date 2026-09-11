@@ -199,9 +199,12 @@ async function plan(cnx: Cnx, athleteId: number) {
      C'est cette séparation qui laisse les résultats survivre au plan. */
   for (const o of msc_objectif) {
     const [rc] = (await cnx.query(
-      `INSERT INTO msc_competition (athlete_id, date, nom, discipline, distance_km, officielle)
-       VALUES (?, ?, ?, 'Course à pied', ?, 1)`,
-      [athleteId, o.date, o.nom.fr, o.distance_km],
+      /* La course porte ce qui en fait un objectif — le chrono visé et la
+         couronne — et l'objectif du plan en garde la trace, semaine comprise. */
+      `INSERT INTO msc_competition (athlete_id, date, nom, discipline, distance_km, officielle,
+         cible_s, cible_haute_s, principal)
+       VALUES (?, ?, ?, 'Course à pied', ?, 1, ?, ?, ?)`,
+      [athleteId, o.date, o.nom.fr, o.distance_km, o.cible_s, o.cible_haute_s, o.principal ? 1 : 0],
     )) as any;
     await cnx.query(
       `INSERT INTO msc_objectif (plan_id, competition_id, semaine, principal, cible_s, cible_haute_s,

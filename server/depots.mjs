@@ -371,6 +371,9 @@ async function lesCompetitions(athleteId) {
     id: c.id, date: c.date, nom: c.nom, lieu: c.lieu ?? undefined, pays: c.pays ?? undefined,
     discipline: c.discipline, type_course: c.type_course ?? undefined, distance_km: Number(c.distance_km),
     denivele_m: nombre(c.denivele_m), officielle: Boolean(c.officielle),
+    /* Ce qui en fait un objectif : le chrono visé et la couronne. */
+    cible_s: nombre(c.cible_s), cible_haute_s: nombre(c.cible_haute_s),
+    principal: Boolean(c.principal), parties: json(c.parties),
     note: c.note ?? undefined,
     resultat: c.temps_s === null || c.temps_s === undefined ? undefined : {
       temps_s: c.temps_s,
@@ -1882,10 +1885,19 @@ async function ecrirePlan(cnx, athleteId, { nom, athlete, methode, blocs, semain
     let vises = 0;
     for (const o of objectifs) {
       if (!ISO.test(String(o.date)) || !o.nom) continue;
-      let [[c]] = await cnx.execute(
-        'SELECT id FROM msc_competition WHERE athlete_id = ? AND date = ? AND nom = ?',
-        [athleteId, o.date, texte(o.nom, 160)],
-      );
+      /* L'objectif dit de quelle course il est fait. À défaut — un plan venu
+         d'un import, ou d'une version d'avant — on la retrouve par sa date et
+         son nom, et on la crée si elle manque. Jamais par le nom seul : un
+         objectif porte le nom de son type, la course porte le sien. */
+      let [[c]] = o.competition_id
+        ? await cnx.execute(
+          'SELECT id FROM msc_competition WHERE athlete_id = ? AND id = ?',
+          [athleteId, entier(o.competition_id, 1, 4294967295)],
+        )
+        : await cnx.execute(
+          'SELECT id FROM msc_competition WHERE athlete_id = ? AND date = ? AND nom = ?',
+          [athleteId, o.date, texte(o.nom, 160)],
+        );
       if (!c) {
         /* Une cyclosportive est une compétition comme une autre : la discipline
            vient de l'objectif quand il la donne, la course à pied sinon. */
@@ -1978,28 +1990,62 @@ export async function calendrier() {
   }));
 }
 
+/* Le chrono visé, et le bout lent de la fourchette. Zéro ou vide veut dire
+   « pas de chrono visé » : la course reste au calendrier sans être un
+   objectif, et le bloc qui la précède vise sa date, pas une allure. */
+function cibles(c) {
+  const basse = Number(c.cible_s) > 0 ? entier(c.cible_s, 1, 86400) : null;
+  if (basse === null) return [null, null];
+  const haute = Number(c.cible_haute_s) > 0 ? entier(c.cible_haute_s, 1, 86400) : basse;
+  return [basse, Math.max(basse, haute)];
+}
+
+/* Les parties d'un enchaînement, telles que le formulaire les vise. Le même
+   objet que msc_objectif.parties : un tableau de { discipline, cible_s }. */
+function parties(c) {
+  return Array.isArray(c.parties) && c.parties.length > 0
+    ? JSON.stringify(c.parties.slice(0, 6).map((x) => ({
+      discipline: texte(x.discipline ?? '', 16),
+      cible_s: entier(x.cible_s, 1, 86400, 0),
+    })))
+    : null;
+}
+
 export async function ecrireCompetition(athleteId, c) {
   return transaction(async (cnx) => {
     let id = c.id;
     if (id) {
       const [r] = await cnx.execute(
         `UPDATE msc_competition SET date = ?, nom = ?, lieu = ?, pays = ?, discipline = ?,
-           type_course = ?, distance_km = ?, denivele_m = ?, officielle = ?, note = ?
+           type_course = ?, distance_km = ?, denivele_m = ?, officielle = ?, note = ?,
+           cible_s = ?, cible_haute_s = ?, principal = ?, parties = ?
          WHERE id = ? AND athlete_id = ?`,
         [c.date, c.nom, c.lieu ?? null, c.pays ?? null, c.discipline ?? 'Course à pied',
          c.type_course ?? null, c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null,
+         ...cibles(c), c.principal ? 1 : 0, parties(c),
          id, athleteId],
       );
       if (r.affectedRows === 0) throw new DepotError('Compétition inconnue.', 404);
     } else {
       const [r] = await cnx.execute(
         `INSERT INTO msc_competition (athlete_id, date, nom, lieu, pays, discipline, type_course,
-           distance_km, denivele_m, officielle, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           distance_km, denivele_m, officielle, note, cible_s, cible_haute_s, principal, parties)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [athleteId, c.date, c.nom, c.lieu ?? null, c.pays ?? null, c.discipline ?? 'Course à pied',
-         c.type_course ?? null, c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null],
+         c.type_course ?? null, c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null,
+         ...cibles(c), c.principal ? 1 : 0, parties(c)],
       );
       id = r.insertId;
+    }
+
+    /* Un seul objectif principal par athlète : le plan se compte à rebours
+       depuis une date, pas deux. Poser la couronne la retire d'où elle était,
+       plutôt que de refuser et de laisser l'utilisateur la chercher. */
+    if (c.principal) {
+      await cnx.execute(
+        'UPDATE msc_competition SET principal = 0 WHERE athlete_id = ? AND id <> ?',
+        [athleteId, id],
+      );
     }
 
     if (c.resultat) {

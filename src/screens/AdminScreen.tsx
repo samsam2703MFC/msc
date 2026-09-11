@@ -65,6 +65,7 @@ function Champ({
   label,
   value,
   onChange,
+  onBlur,
   type = 'text',
   mono = false,
   aide,
@@ -72,6 +73,9 @@ function Champ({
   label: string;
   value: string;
   onChange: (v: string) => void;
+  /* Quand le champ écrit en base, il le fait en sortant : une frappe par
+     requête donnerait un aller-retour par lettre. */
+  onBlur?: (v: string) => void;
   type?: string;
   mono?: boolean;
   aide?: string;
@@ -87,6 +91,7 @@ function Champ({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => onBlur?.(e.target.value)}
         style={{ ...CHAMP, fontFamily: mono ? F.mono : F.body }}
       />
       {aide && <div style={{ fontSize: 10, color: C.inkQuiet }}>{aide}</div>}
@@ -127,14 +132,6 @@ function Bascule({
   );
 }
 
-const OBJECTIF_VIDE: Objectif = {
-  date: '',
-  nom: '',
-  type_course: 'cap_10',
-  cible_s: 2400,
-  distance_km: 10,
-  principal: false,
-};
 
 /* Une liste déroulante de tous les types de course, groupés par discipline.
    Choisir un type pose la distance officielle et, si le nom n'a pas été
@@ -513,14 +510,24 @@ function Periodisation({ app }: { app: App }) {
     const seances = db.select('msc_session', (x) => x.semaine >= b.de && x.semaine <= b.a
       && x.discipline !== 'Repos');
     const durs = seances.filter((x) => DURS.has(x.type)).length;
-    /* La rampe : ce que la dernière semaine du bloc pèse de plus que la
-       première, ramené à la semaine. Sur un bloc d'une seule semaine, il n'y a
-       pas de rampe à montrer — et sur une première semaine vide non plus. */
-    const premiere = semaines[0]?.minutes ?? 0;
-    const derniere = semaines[semaines.length - 1]?.minutes ?? 0;
-    const pas = semaines.length - 1;
-    const rampe = pas > 0 && premiere > 0
-      ? ((derniere / premiere) ** (1 / pas) - 1) * 100
+    /* La rampe : de combien le volume monte d'une semaine à l'autre.
+
+       Première et dernière semaine du bloc ne le disent pas : la dernière est
+       souvent une semaine de course ou de décharge, et une construction à
+       +6 %/sem s'affichait alors « −7 % ». On prend la médiane des rapports
+       d'une semaine à la suivante, les semaines de course retirées : une
+       décharge sur quatre ne déplace pas une médiane, un arrêt de course si. */
+    const courses = new Set(db
+      .select('msc_session', (x) => x.type === 'course' && x.semaine >= b.de && x.semaine <= b.a)
+      .map((x) => x.semaine));
+    const utiles = semaines.filter((_, i) => !courses.has(b.de + i)).map((x) => x.minutes);
+    const rapports = utiles
+      .slice(1)
+      .map((m, i) => (utiles[i] > 0 ? m / utiles[i] : null))
+      .filter((r): r is number => r !== null)
+      .sort((x, y) => x - y);
+    const rampe = rapports.length > 0
+      ? (rapports[Math.floor(rapports.length / 2)] - 1) * 100
       : null;
     return {
       bloc: b,
@@ -624,16 +631,30 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
   const [cible, setCible] = useState(versTexte(seed.ref_cible_s * 10));
   const [debut, setDebut] = useState(seed.debut);
 
-  const [objectifs, setObjectifs] = useState<Objectif[]>(
-    db.select('msc_objectif').map((o) => ({
-      date: o.date,
-      nom: o.nom.fr,
-      cible_s: o.cible_s,
-      cible_haute_s: o.cible_haute_s,
-      distance_km: o.distance_km,
-      principal: o.principal,
-    })),
-  );
+  /* Les objectifs SONT ses courses. Une course de son calendrier avec un
+     chrono visé est un objectif, et celle qui porte la couronne termine le
+     plan — c'est la même chose rangée une seule fois, dans msc_competition.
+
+     Avant, cette liste ne vivait que dans l'écran : on en retirait une, on
+     changeait d'onglet, elle revenait ; on en ajoutait une, elle disparaissait.
+     Rien n'était écrit tant que le plan n'était pas enregistré. */
+  const courses = db
+    .select('msc_competition', (c) => c.date >= debut)
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const objectifs: Objectif[] = courses.map((c) => ({
+    competition_id: c.id,
+    date: c.date,
+    nom: (c.type_course ? typeCourse(c.type_course)?.nom[app.lang] : undefined) ?? c.nom,
+    type_course: c.type_course,
+    discipline: c.discipline,
+    cible_s: c.cible_s ?? 0,
+    cible_haute_s: c.cible_haute_s,
+    parties: c.parties,
+    distance_km: c.distance_km,
+    principal: !!c.principal,
+  }));
 
   /* La semaine type de l'athlète commande le squelette : le plan tombe sur
      ses jours, ses sports, ses types — et c'est aussi elle qui dit ce que
@@ -667,31 +688,24 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     debut,
   };
 
-  /* Ses courses à venir, telles que Starts les connaît : de quoi poser un
-     objectif sans rien retaper. Celles déjà posées ne sont pas reproposées. */
-  const aVenir = db
-    .select('msc_competition', (c) => c.date >= debut && !objectifs.some((o) => o.date === c.date))
-    .slice()
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 4);
-
-  function reprendreStart(c: MscCompetition) {
-    const t = c.type_course ? typeCourse(c.type_course) : undefined;
-    const km = c.distance_km || t?.distance_km || 10;
-    setObjectifs((prev) => [...prev, {
-      ...OBJECTIF_VIDE,
-      date: c.date,
-      /* Le nom de l'objectif est celui du type ; le vrai nom de la course
-         reste dans Starts, où elle s'y relie. */
-      nom: t?.nom[app.lang] ?? c.nom,
-      type_course: c.type_course ?? OBJECTIF_VIDE.type_course,
-      distance_km: km,
-      /* Starts ne porte pas de chrono visé. Sur une course à pied, l'allure
-         cible de l'athlète en donne un point de départ ; sur un enchaînement,
-         ça ne voudrait rien dire — il se vise partie par partie. */
-      cible_s: estMulti(c.type_course ?? '') ? 0 : Math.round((versSecondes(cible) / 10) * km),
-      principal: !prev.some((o) => o.principal),
-    }]);
+  /* Une course de plus : elle est écrite tout de suite, avec une date à
+     corriger plutôt qu'une ligne fantôme. Sans date, elle n'existerait dans
+     aucune table — c'est précisément ce qu'on vient de réparer. */
+  async function ajouterCourse() {
+    const derniere = courses[courses.length - 1]?.date ?? debut;
+    const dans = new Date(Date.parse(`${derniere}T00:00:00Z`) + 8 * 7 * 86_400_000)
+      .toISOString().slice(0, 10);
+    await app.enregistrerCompetition({
+      date: dans,
+      nom: typeCourse('cap_10')?.nom[app.lang] ?? '10 km',
+      discipline: 'Course à pied',
+      type_course: 'cap_10',
+      distance_km: 10,
+      officielle: true,
+      /* La première course posée est l'objectif principal : quand il n'y en a
+         qu'une, ce n'est pas à l'utilisateur de la désigner. */
+      principal: !courses.some((c) => c.principal),
+    });
   }
 
   const plan: PlanGenere | null = useMemo(() => {
@@ -728,8 +742,10 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     }
   }
 
-  const majObjectif = (i: number, patch: Partial<Objectif>) =>
-    setObjectifs((prev) => prev.map((o, j) => (j === i ? { ...o, ...patch } : o)));
+  /* Une modification part en base tout de suite : c'est une course, elle a un
+     identifiant, et l'instantané revient avec. */
+  const majCourse = (c: MscCompetition, patch: Partial<MscCompetition>) =>
+    void app.enregistrerCompetition({ ...c, ...patch });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -786,83 +802,20 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
             ? 'Un objectif, c’est un type de course, une date et un chrono visé. Son nom est celui du type ; le vrai nom d’une course — Rome, l’Alpsman — vit dans Starts, où elle se relie à cet objectif.'
             : 'Cel to typ zawodów, data i cel czasowy. Nazwę bierze z typu; prawdziwa nazwa zawodów żyje w Startach, gdzie wiąże się z tym celem.'}
         </div>
-        {objectifs.map((o, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              padding: 12,
-              borderRadius: 12,
-              border: `1px solid ${o.principal ? C.accent : C.border}`,
-              background: o.principal ? C.accentSoft : 'transparent',
-            }}
-          >
-            <ChoixType
-              valeur={o.type_course}
-              lang={app.lang}
-              onChange={(t) => majObjectif(i, {
-                type_course: t.code,
-                distance_km: t.distance_km,
-                discipline: t.discipline,
-                /* Le nom, c'est le type : « Semi-marathon », « Triathlon M ».
-                   Le vrai nom d'une course — Rome, Alpsman — vit dans Starts,
-                   et s'y relie à cet objectif. */
-                nom: t.nom[app.lang],
-              })}
-            />
-            <Grid cols={3} gap={8}>
-              <Champ label="Date" value={o.date} onChange={(v) => majObjectif(i, { date: v })} type="date" mono />
-              <Champ label="km" value={String(o.distance_km)} onChange={(v) => majObjectif(i, { distance_km: Number(v) || 10 })} mono />
-              <Champ
-                label={fr ? 'Temps visé' : 'Cel czasowy'}
-                value={versTexte(o.cible_s)}
-                onChange={(v) => majObjectif(i, { cible_s: versSecondes(v) })}
-                mono
-                aide={estMulti(o.type_course)
-                  ? (fr ? 'total, transitions comprises' : 'łącznie ze strefami zmian')
-                  : typeCourse(o.type_course)?.exemple}
-              />
-            </Grid>
-            {/* Un enchaînement se vise partie par partie : le total est leur
-                somme plus les transitions, et la partie course, corrigée du
-                déficit, est ce qui règle l'allure des blocs. */}
-            {estMulti(o.type_course) && (
-              <PartiesObjectif
-                objectif={o}
-                lang={app.lang}
-                onChange={(patch) => majObjectif(i, patch)}
-              />
-            )}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Bascule
-                label={fr ? 'Objectif principal' : 'Cel główny'}
-                on={o.principal}
-                onChange={(v) =>
-                  setObjectifs((prev) => prev.map((x, j) => ({ ...x, principal: j === i ? v : false })))
-                }
-              />
-              <button
-                type="button"
-                onClick={() => setObjectifs((prev) => prev.filter((_, j) => j !== i))}
-                style={{ fontSize: 12, color: C.inkQuiet, padding: '9px 11px' }}
-              >
-                {fr ? 'Retirer' : 'Usuń'}
-              </button>
-            </div>
-          </div>
+        {courses.map((c) => (
+          <LigneObjectif
+            key={c.id}
+            course={c}
+            lang={app.lang}
+            refCible={versSecondes(cible) / 10}
+            onChange={(patch) => majCourse(c, patch)}
+            onRetirer={() => void app.supprimerCompetition(c.id)}
+          />
         ))}
         <button
           type="button"
           className="msc-hover-accent"
-          /* Le premier objectif ajouté est le principal : un plan se construit à
-             rebours depuis une date, et quand il n'y en a qu'une, ce n'est pas
-             à l'utilisateur de le dire. Il reste libre de la déplacer. */
-          onClick={() => setObjectifs((prev) => [
-            ...prev,
-            { ...OBJECTIF_VIDE, principal: !prev.some((o) => o.principal) },
-          ])}
+          onClick={() => void ajouterCourse()}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -878,29 +831,8 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
           <Icon name="plus" size={14} />
           {fr ? 'Ajouter une course' : 'Dodaj zawody'}
         </button>
-        {/* Les courses déjà encodées dans Starts. Les retaper ici, c'est les
-            avoir en double avec deux dates qui divergeront : un clic les
-            reprend, et le chrono visé reste à confirmer. */}
-        {aVenir.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            <span style={{ fontSize: 11.5, color: C.inkSecondary }}>
-              {fr ? 'Depuis ses Starts :' : 'Z jego Startów:'}
-            </span>
-            {aVenir.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className="msc-hover-accent"
-                onClick={() => reprendreStart(c)}
-                style={{
-                  padding: '6px 10px', borderRadius: R.md, border: `1px solid ${C.border}`,
-                  fontSize: 11.5, color: C.ink,
-                }}
-              >
-                {`${c.nom} · ${c.date}`}
-              </button>
-            ))}
-          </div>
+        {app.coursesErreur && (
+          <div style={{ fontSize: 12, color: C.negative, lineHeight: 1.4 }}>{app.coursesErreur}</div>
         )}
       </Card>
 
@@ -1144,6 +1076,128 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
         </Card>
       )}
     </>} />
+    </div>
+  );
+}
+
+/* Une ligne d'objectif : une course de son calendrier, et ce qui en fait un
+   objectif — le chrono visé, la couronne.
+
+   Ce qui se tape vit ici le temps de la frappe, et part en base en sortant du
+   champ : une requête par lettre serait ridicule, et ne rien écrire du tout
+   était le bug d'avant. Les listes et les bascules, elles, écrivent tout de
+   suite : il n'y a rien à finir de taper. */
+function LigneObjectif({
+  course, lang, refCible, onChange, onRetirer,
+}: {
+  course: MscCompetition;
+  lang: Lang;
+  /** L'allure cible de l'athlète, s/km : de quoi proposer un chrono. */
+  refCible: number;
+  onChange: (patch: Partial<MscCompetition>) => void;
+  onRetirer: () => void;
+}) {
+  const fr = lang === 'fr';
+  const [date, setDate] = useState(course.date);
+  const [km, setKm] = useState(String(course.distance_km));
+  const [chrono, setChrono] = useState(course.cible_s ? versTexte(course.cible_s) : '');
+  const [confirme, setConfirme] = useState(false);
+
+  /* L'instantané revient après chaque écriture : la ligne se réaligne sur ce
+     que la base a vraiment retenu, plutôt que sur ce qu'on croyait écrire. */
+  useEffect(() => {
+    setDate(course.date);
+    setKm(String(course.distance_km));
+    setChrono(course.cible_s ? versTexte(course.cible_s) : '');
+  }, [course.date, course.distance_km, course.cible_s]);
+
+  const multi = estMulti(course.type_course ?? '');
+
+  return (
+    <div
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 8, padding: 12, borderRadius: 12,
+        border: `1px solid ${course.principal ? C.accent : C.border}`,
+        background: course.principal ? C.accentSoft : 'transparent',
+      }}
+    >
+      <ChoixType
+        valeur={course.type_course}
+        lang={lang}
+        onChange={(t) => onChange({
+          type_course: t.code,
+          distance_km: t.distance_km,
+          discipline: t.discipline,
+          /* Le nom, c'est le type : « Semi-marathon », « Triathlon M ». Le
+             vrai nom — Rome, l'Alpsman — se corrige dans Starts, et reste. */
+          nom: course.nom && course.type_course ? course.nom : t.nom[lang],
+        })}
+      />
+      <Grid cols={3} gap={8}>
+        <Champ label="Date" value={date} onChange={setDate}
+          onBlur={(v) => v && v !== course.date && onChange({ date: v })} type="date" mono />
+        <Champ label="km" value={km} onChange={setKm}
+          onBlur={(v) => Number(v) > 0 && Number(v) !== course.distance_km
+            && onChange({ distance_km: Number(v) })} mono />
+        <Champ
+          label={fr ? 'Temps visé' : 'Cel czasowy'}
+          value={chrono}
+          onChange={setChrono}
+          onBlur={(v) => {
+            const s = versSecondes(v);
+            if (s !== (course.cible_s ?? 0)) onChange({ cible_s: s, cible_haute_s: s || undefined });
+          }}
+          mono
+          aide={multi
+            ? (fr ? 'total, transitions comprises' : 'łącznie ze strefami zmian')
+            : (course.cible_s ? typeCourse(course.type_course)?.exemple
+              : `${fr ? 'à son allure cible' : 'w tempie docelowym'} : ${versTexte(Math.round(refCible * course.distance_km))}`)}
+        />
+      </Grid>
+      {multi && (
+        <PartiesObjectif
+          objectif={{
+            date: course.date, nom: course.nom, type_course: course.type_course,
+            discipline: course.discipline, parties: course.parties,
+            cible_s: course.cible_s ?? 0, cible_haute_s: course.cible_haute_s,
+            distance_km: course.distance_km, principal: !!course.principal,
+          }}
+          lang={lang}
+          onChange={(patch) => onChange({
+            parties: patch.parties ?? course.parties,
+            cible_s: patch.cible_s ?? course.cible_s,
+          })}
+        />
+      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Bascule
+          label={fr ? 'Objectif principal' : 'Cel główny'}
+          on={!!course.principal}
+          onChange={(v) => onChange({ principal: v })}
+        />
+        {/* Retirer, c'est retirer la course de son calendrier : elle n'est pas
+            qu'un objectif. On le dit avant de le faire. */}
+        {confirme ? (
+          <>
+            <span style={{ fontSize: 11.5, color: C.inkSecondary }}>
+              {fr ? `Retirer « ${course.nom} » de ses courses ?` : `Usunąć „${course.nom}” z jego zawodów?`}
+            </span>
+            <button type="button" onClick={onRetirer}
+              style={{ fontSize: 12, color: C.negative, fontWeight: 600, padding: '9px 11px' }}>
+              {fr ? 'Oui, retirer' : 'Tak, usuń'}
+            </button>
+            <button type="button" onClick={() => setConfirme(false)}
+              style={{ fontSize: 12, color: C.inkQuiet, padding: '9px 11px' }}>
+              {fr ? 'Annuler' : 'Anuluj'}
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => setConfirme(true)}
+            style={{ fontSize: 12, color: C.inkQuiet, padding: '9px 11px' }}>
+            {fr ? 'Retirer' : 'Usuń'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

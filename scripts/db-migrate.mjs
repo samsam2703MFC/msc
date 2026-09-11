@@ -91,6 +91,18 @@ try {
        synchros suivantes, qui referaient sinon le mauvais calcul. */
     ['msc_activity', 'appariee_main',
       "ADD COLUMN appariee_main TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'l''athlète a dit lui-même quelle séance c''était — l''appariement automatique ne doit pas le défaire' AFTER manuelle"],
+    /* Une course devient un objectif quand elle porte un chrono visé, et
+       l'objectif principal est celui qui termine le plan. Avant, ces trois
+       champs ne vivaient que dans le formulaire du générateur : changer
+       d'onglet les perdait. */
+    ['msc_competition', 'cible_s',
+      "ADD COLUMN cible_s MEDIUMINT UNSIGNED NULL COMMENT 'le chrono visé : c''est lui qui fait de la course un objectif' AFTER officielle"],
+    ['msc_competition', 'cible_haute_s',
+      "ADD COLUMN cible_haute_s MEDIUMINT UNSIGNED NULL COMMENT 'le bout lent de la fourchette' AFTER cible_s"],
+    ['msc_competition', 'principal',
+      "ADD COLUMN principal TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'la course qui termine le plan — une seule par athlète' AFTER cible_haute_s"],
+    ['msc_competition', 'parties',
+      "ADD COLUMN parties JSON NULL COMMENT 'un enchaînement visé partie par partie : [{ discipline, cible_s }]' AFTER principal"],
     /* Laquelle des quatre périodes le bloc est. Un plan d'avant n'en savait
        rien : « construction » est le défaut le moins faux, et le prochain plan
        généré pose les vraies. */
@@ -243,6 +255,29 @@ try {
 
      C'est une amorce, pas une règle : le jour où le club a ses modèles, ces
      trente lignes se suppriment sans rien casser. */
+  /* Les chronos visés d'avant. Ils vivaient sur msc_objectif, c'est-à-dire
+     accrochés à un plan ; ils vivent maintenant sur la course elle-même, où le
+     formulaire les écrit. On les recopie depuis le plan actif — msc_objectif
+     porte déjà competition_id, donc il n'y a rien à deviner — et seulement sur
+     les courses qui n'en ont pas, pour ne jamais écraser une saisie récente.
+     msc_objectif reste : c'est la trace de ce que le plan visait. */
+  const [aRapatrier] = await cnx.query(
+    `SELECT o.competition_id AS id, o.cible_s, o.cible_haute_s, o.principal
+       FROM msc_objectif o
+       JOIN msc_plan p ON p.id = o.plan_id AND p.actif = 1
+       JOIN msc_competition c ON c.id = o.competition_id
+      WHERE c.cible_s IS NULL`,
+  );
+  for (const o of aRapatrier) {
+    await cnx.query(
+      'UPDATE msc_competition SET cible_s = ?, cible_haute_s = ?, principal = ? WHERE id = ?',
+      [o.cible_s, o.cible_haute_s ?? o.cible_s, o.principal ? 1 : 0, o.id],
+    );
+  }
+  if (aRapatrier.length > 0) {
+    console.log(`~ msc_competition : ${aRapatrier.length} chronos visés repris du plan actif`);
+  }
+
   /* Les périodes d'un plan d'avant. La colonne arrive avec « construction »
      pour tout le monde, ce qui est faux aux deux bouts : un premier bloc sans
      allure imposée EST le réamorçage, et un dernier bloc à la cible EST le

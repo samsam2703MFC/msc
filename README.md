@@ -1226,12 +1226,39 @@ or says there is none and the default skeleton applies; and the preview says
 its fourteen lines are the first two weeks — the lightest of the plan — so a
 41-minute session facing a 70-minute slot reads as the rebuild, not as a bug.
 
-An objective is what the plan is built backwards from, so **the first one
-added is marked principal** rather than waiting to be found, and when no plan
-can be generated the right-hand column names what is missing — this race's
-date, or the principal objective — instead of restating the general rule. The
-athlete's races already encoded in Starts can be taken as objectives in one
-click, which is also how their dates stay the same in both places.
+### Un objectif est une course, et il vit en base
+
+An objective used to live only in the generator's own React state: you removed
+one, changed tab, and it came back; you added one, and it was gone. Nothing was
+written until a plan was saved — which is a bad place to learn it.
+
+So an objective is no longer a separate thing. **It is a race of the athlete's
+calendar** — `msc_competition` — carrying what makes it an objective:
+`cible_s`, `cible_haute_s`, `principal` and, for a multi-sport race, `parties`.
+One row, one truth. A race without a target time is still a race on the
+calendar; with one, it is what the plan is built around, and the block leading
+to it is built on its pace rather than just its date. The crown is unique per
+athlete: setting it somewhere removes it from where it was, in the same
+transaction, rather than refusing and leaving the user to find it.
+
+The editor writes as you go: lists and toggles on the spot, typed fields on
+blur — one request per keystroke would be absurd, writing nothing at all was
+the bug. "Retirer" removes the race from his calendar, so it asks first. The
+first race added is marked principal, and when no plan can be generated the
+right-hand column names what is missing — this race's date, or the principal
+objective — instead of restating the general rule.
+
+A plan saved before this carried its targets on `msc_objectif`, attached to a
+plan. `db-migrate` copies them back onto the races of the **active** plan —
+`msc_objectif.competition_id` already says which race, so nothing is guessed —
+and only onto races that have none. `msc_objectif` stays: it is the record of
+what that plan was aiming at, and a saved plan now binds to its races by id,
+never by name (an objective is named after its type, a race after itself).
+
+`check-api` holds the round-trip — target and crown written on the race, the
+crown unique, a deleted race that does not come back — and `check-app` replays
+the exact scenario: add a race, change tab, it is still there; remove it, it
+stays removed.
 
 ### Les objectifs, discipline par discipline
 

@@ -420,6 +420,14 @@ CREATE TABLE IF NOT EXISTS msc_competition (
   distance_km DECIMAL(6,3) NOT NULL,
   denivele_m  MEDIUMINT NULL,
   officielle  TINYINT(1) NOT NULL DEFAULT 1 COMMENT '0 : une sortie chronométrée qui sert de repère sans être une course',
+  -- Ce qui fait d'une course un objectif : un chrono visé, et la couronne. Sans
+  -- chrono visé, elle reste une course au calendrier ; avec, c'est sur elle que
+  -- le plan se construit. Un seul principal par athlète.
+  cible_s       MEDIUMINT UNSIGNED NULL,
+  cible_haute_s MEDIUMINT UNSIGNED NULL,
+  principal     TINYINT(1) NOT NULL DEFAULT 0,
+  -- Un enchaînement se vise partie par partie : [{ discipline, cible_s }].
+  parties       JSON NULL,
   note        TEXT NULL,
   cree_le     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   maj_le      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),

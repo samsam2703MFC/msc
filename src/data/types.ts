@@ -539,6 +539,15 @@ export interface MscCompetition {
   distance_km: number;
   denivele_m?: number;
   officielle: boolean;
+  /** Le chrono visé. C'est lui qui fait de la course un objectif : sans lui,
+      elle est au calendrier, et le bloc qui la précède vise sa date. */
+  cible_s?: number;
+  /** Le bout lent de la fourchette. */
+  cible_haute_s?: number;
+  /** La course qui termine le plan — une seule par athlète. */
+  principal?: boolean;
+  /** Un enchaînement visé partie par partie. */
+  parties?: Array<{ discipline: string; cible_s: number }>;
   note?: string;
   resultat?: MscResultat;
 }

@@ -70,6 +70,10 @@ export function equivalent10k(cible_s: number, distance_km: number): number {
 export interface Objectif {
   date: string;
   nom: string;
+  /** La course du calendrier dont l'objectif est fait. Le plan enregistré s'y
+      rattache par cet identifiant, jamais par le nom : l'objectif porte le nom
+      du type (« Semi-marathon »), la course le sien (« Rome »). */
+  competition_id?: number;
   /** Le type du catalogue (`courses.ts`) : il donne la distance, et dit si le
       chrono se ramène à une allure 10 km. */
   type_course?: string;
