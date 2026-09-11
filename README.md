@@ -1273,6 +1273,33 @@ returns zero affected rows both when nothing matched and when nothing changed;
 the row stayed in "modified" state, and a modified row has no delete button —
 so the race could no longer be erased either.
 
+### Une seule couture pour dire de quel athlète on parle
+
+The server reads the athlete from `?athlete=` and, failing that, takes the
+**first athlete the account can see**. On a one-athlete account the difference
+is invisible; on the coach's it is not. Four calls carried it — the snapshot,
+the freshness check, the conversations, the profile. Everything else did not:
+competitions, the saved plan, synced activities, the coach's proposal, the
+start ↔ objective link, and — through their own `fetch`, outside `appeler()`
+entirely — the four AI routes and the methodology. The list on screen came
+from the snapshot, which carried the athlete; the write went somewhere else.
+Deleting a race of the displayed athlete found nothing to delete ("Compétition
+inconnue"), a race added appeared nowhere, and a plan saved from the back
+office could land on the wrong athlete.
+
+There is now one seam: `avecAthlete()` in `api.ts` adds the current athlete to
+any request that does not already name one, `appeler()` runs every call
+through it, and the two modules that fetch directly use it too. Routes that
+depend on no athlete receive the parameter and ignore it. The offline queue
+freezes the recipient when it queues, not when it replays: it can restart
+while the coach is looking at someone else, and a write has exactly one
+recipient.
+
+Refreshing follows the same rule: a write that changes shared state reloads
+the snapshot. Writing a journal entry did not, so the current screen was right
+and the rest of the app — the week's colours, the session's state, what the
+coach would read — waited for the next 30-second freshness beat.
+
 ### Un objectif est une course, et il vit en base
 
 An objective used to live only in the generator's own React state: you removed

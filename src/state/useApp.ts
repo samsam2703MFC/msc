@@ -700,11 +700,19 @@ export function useApp() {
         limites: surcharge.limites ?? limites,
         fait: surcharge.fait === undefined ? fait : surcharge.fait,
       });
-      if (api.estDiffere(r) && monte.current) setEnAttente((n) => n + 1);
+      if (api.estDiffere(r)) {
+        if (monte.current) setEnAttente((n) => n + 1);
+      } else {
+        /* Ce qui est écrit doit se voir ailleurs tout de suite : la couleur de
+           la séance dans la semaine, le bilan, ce que le coach lira. Sans ce
+           rechargement, l'écran courant avait raison et le reste attendait le
+           prochain battement de fraîcheur. */
+        await recharger(db.athleteId);
+      }
     } catch (e) {
       if (monte.current) setAnaErreur(message(e));
     }
-  }, [date, fait, limites, note, rpe]);
+  }, [date, fait, limites, note, rpe, recharger]);
 
   /* La coche du jour : un toucher, et c'est écrit. */
   const toggleDone = useCallback(() => {

@@ -30,6 +30,7 @@ import type {
   ZoneCode,
 } from './types';
 import { RACINE_API } from './base';
+import { avecAthlete } from './api';
 import { motDuStatut } from './statut';
 
 const ENDPOINT_ANALYSE = `${RACINE_API}/analyse`;
@@ -288,8 +289,12 @@ export function prochaineSeance(session: MscPlanSession): MscPlanSession | undef
 async function appeler<T>(chemin: string, corps: unknown): Promise<T> {
   let reponse: Response;
   try {
-    reponse = await fetch(chemin, {
+    /* Le coach écrit chez l'athlète affiché, pas chez le premier de la liste :
+       ces quatre routes passaient à côté de `appeler()`, donc à côté de la
+       couture qui nomme l'athlète. */
+    reponse = await fetch(avecAthlete(chemin), {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(corps),
     });

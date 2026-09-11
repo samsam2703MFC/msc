@@ -6,6 +6,7 @@
 
 import type { MscPlanSession, TypeCode } from './types';
 import { RACINE_API } from './base';
+import { avecAthlete } from './api';
 
 export interface MethodeSeance {
   type: string;
@@ -42,8 +43,9 @@ export class MethodeError extends Error {}
 export async function demanderMethode(corps: unknown, signal?: AbortSignal): Promise<Methode> {
   let reponse: Response;
   try {
-    reponse = await fetch(ENDPOINT, {
+    reponse = await fetch(avecAthlete(ENDPOINT), {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(corps),
       signal,

@@ -875,15 +875,21 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     });
   }
 
-  const plan: PlanGenere | null = useMemo(() => {
-    if (!objectifs.some((o) => o.date && o.principal)) return null;
+  /* Ce que la composition rend, y compris quand elle échoue : avaler l'erreur
+     affichait « il manque un objectif » alors qu'il n'en manquait aucun. */
+  const compose = useMemo<{ plan: PlanGenere | null; erreur: string | null }>(() => {
+    if (!objectifs.some((o) => o.date && o.principal)) return { plan: null, erreur: null };
     try {
-      return genererPlan(athlete, objectifs.filter((o) => o.date), contraintes, structure);
-    } catch {
-      return null;
+      return {
+        plan: genererPlan(athlete, objectifs.filter((o) => o.date), contraintes, structure),
+        erreur: null,
+      };
+    } catch (e) {
+      return { plan: null, erreur: e instanceof Error ? e.message : String(e) };
     }
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [nom, actuelle, cible, debut, objectifs, contraintes, app.version]);
+  const plan = compose.plan;
 
   const sessions = useMemo(
     () => (plan && methode ? appliquerMethode(plan.sessions, methode) : (plan?.sessions ?? [])),
@@ -1225,14 +1231,19 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
         </>
       ) : (
         <Card padding="16px 18px" gap={10}>
+          {compose.erreur ? (
+            <div style={{ fontSize: 13, color: C.negative, lineHeight: 1.5 }}>
+              {(fr ? 'Le plan n’a pas pu être composé : ' : 'Nie udało się złożyć planu: ') + compose.erreur}
+            </div>
+          ) : (
           <div style={{ fontSize: 13, color: C.inkSecondary, lineHeight: 1.5 }}>
             {fr
               ? 'Le plan se construit à rebours depuis la date de l’objectif principal. Il manque :'
               : 'Plan liczy się wstecz od daty celu głównego. Brakuje:'}
-          </div>
+          </div>)}
           {/* Ce qui manque, nommément. « Renseigne un objectif » n'aide pas
               quelqu'un qui vient d'en renseigner un et ne voit rien venir. */}
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: C.ink, lineHeight: 1.6 }}>
+          <ul hidden={!!compose.erreur} style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: C.ink, lineHeight: 1.6 }}>
             {objectifs.length === 0 && (
               <li>{fr ? 'une course — le bouton « Ajouter une course », à gauche' : 'zawody — przycisk „Dodaj zawody” po lewej'}</li>
             )}

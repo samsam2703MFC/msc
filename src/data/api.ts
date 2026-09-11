@@ -45,7 +45,7 @@ const BASE = RACINE_API;
    Une seule couture, ici : toute requête dit de qui elle parle. Les routes qui
    ne dépendent d'aucun athlète (santé, paramètres, classement) reçoivent le
    paramètre et l'ignorent. */
-function pour(chemin: string): string {
+export function avecAthlete(chemin: string): string {
   if (!athleteId || /[?&]athlete=/.test(chemin)) return chemin;
   return `${chemin}${chemin.includes('?') ? '&' : '?'}athlete=${athleteId}`;
 }
@@ -53,7 +53,7 @@ function pour(chemin: string): string {
 async function appeler<T>(chemin: string, init: RequestInit = {}): Promise<T> {
   let reponse: Response;
   try {
-    reponse = await fetch(BASE + pour(chemin), {
+    reponse = await fetch(BASE + avecAthlete(chemin), {
       ...init,
       /* Le cookie de session. Sans ça, chaque appel repart anonyme. */
       credentials: 'include',
@@ -122,7 +122,7 @@ async function ecrire<T>(
       id: mutation_id,
       /* L'athlète est gelé ici, pas au rejeu : la file peut repartir alors que
          le coach en regarde un autre, et une écriture n'a qu'un destinataire. */
-      chemin: pour(chemin),
+      chemin: avecAthlete(chemin),
       corps: charge,
       type: init?.type,
       operation,
