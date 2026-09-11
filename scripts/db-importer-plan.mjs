@@ -471,17 +471,22 @@ try {
   rapport(doc, plan);
 
   const nom = `${doc.athlete} — ${plan.semaines.length} semaines, ${plan.blocs.map((b) => b.nom.fr).join(' · ')}`.slice(0, 160);
-  /* Rejouable sans doublon : le même plan déjà actif pour cet athlète n'est
-     pas posé une seconde fois. --forcer pour le reposer quand même. */
+  /* Rejouable sans doublon : le même plan déjà en base pour cet athlète n'est
+     pas posé une seconde fois. --forcer pour le reposer quand même.
+
+     « En base », et non « actif » : le jour où le coach lui en pose un autre,
+     celui-ci cesse d'être actif — et la garde d'avant le réimportait alors à
+     chaque déploiement, reprenant la main sur la décision du coach. Un plan de
+     départ se pose une fois. */
   const dejaLa = await ligne(
-    'SELECT id, debut FROM msc_plan WHERE athlete_id = :a AND nom = :n AND actif = 1',
+    'SELECT id, debut FROM msc_plan WHERE athlete_id = :a AND nom = :n ORDER BY actif DESC, id DESC LIMIT 1',
     { a: athleteId, n: nom },
   );
   if (!ecrire) {
     console.log('\nÀ blanc. Relance avec --ecrire pour poser ce plan comme plan actif' + (refsAEcrire ? ' et ces références sur l’athlète.' : '.'));
     if (dejaLa) console.log(`(déjà en base : plan #${dejaLa.id}, actif — --forcer pour le reposer)`);
   } else if (dejaLa && !args.includes('--forcer')) {
-    console.log(`\nDéjà en base : plan #${dejaLa.id} « ${nom} », actif. Rien à faire (--forcer pour le reposer).`);
+    console.log(`\nDéjà en base : plan #${dejaLa.id} « ${nom} ». Rien à faire (--forcer pour le reposer).`);
   } else {
     if (refsAEcrire) {
       await bd().execute('UPDATE msc_athlete SET ref_actuelle_s = ?, ref_cible_s = ? WHERE id = ?', [refsSecondes[0], refsSecondes[1], athleteId]);

@@ -664,10 +664,15 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
   const structure = db.select('msc_structure');
   const heuresPosees = structure.reduce((t, c) => t + (c.duree_min ?? 45), 0) / 60;
 
-  const [contraintes, setContraintes] = useState<Contraintes>({
-    plancher_heures: heuresPosees > 0
-      ? Math.max(Math.round(heuresPosees * 2) / 2, 1)
-      : seed.plancher_heures,
+  /* Le plancher suit la semaine type tant que le coach n'a pas posé le sien :
+     une valeur figée à l'ouverture de l'écran était fausse dès qu'on venait
+     d'enregistrer la matrice dans l'onglet d'à côté. */
+  const [plancherSaisi, setPlancherSaisi] = useState<number | null>(null);
+  const plancherDeLaMatrice = heuresPosees > 0
+    ? Math.max(Math.round(heuresPosees * 2) / 2, 1)
+    : seed.plancher_heures;
+
+  const [reglages, setReglages] = useState<Omit<Contraintes, 'plancher_heures'>>({
     plancher_km_sortie: seed.plancher_km_sortie,
     reamorcage_semaines: 6,
     affutage_semaines: 3,
@@ -676,6 +681,13 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     salle: true,
     montagne_toutes_les: 3,
   });
+
+  /* Mémoïsé : le plan se recalcule quand les contraintes changent, et un objet
+     neuf à chaque rendu le ferait recalculer pour rien — 261 séances. */
+  const contraintes: Contraintes = useMemo(
+    () => ({ ...reglages, plancher_heures: plancherSaisi ?? plancherDeLaMatrice }),
+    [reglages, plancherSaisi, plancherDeLaMatrice],
+  );
 
   const [methode, setMethode] = useState<Methode | null>(null);
   const [statut, setStatut] = useState<'idle' | 'running' | 'error'>('idle');
@@ -841,13 +853,13 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
         <SectionLabel icon="scale">{fr ? 'Contraintes' : 'Ograniczenia'}</SectionLabel>
         <Grid cols={3} gap={8}>
           <Champ label={fr ? 'Plancher h/sem' : 'Min h/tydz'} value={String(contraintes.plancher_heures)}
-            onChange={(v) => setContraintes({ ...contraintes, plancher_heures: Number(v) || 0 })} mono />
+            onChange={(v) => setPlancherSaisi(Number(v) || 0)} mono />
           <Champ label={fr ? 'Min km/sortie' : 'Min km/bieg'} value={String(contraintes.plancher_km_sortie)}
-            onChange={(v) => setContraintes({ ...contraintes, plancher_km_sortie: Number(v) || 0 })} mono />
+            onChange={(v) => setReglages({ ...reglages, plancher_km_sortie: Number(v) || 0 })} mono />
           <Champ label={fr ? 'Réamorçage' : 'Rozruch'} value={String(contraintes.reamorcage_semaines)}
-            onChange={(v) => setContraintes({ ...contraintes, reamorcage_semaines: Number(v) || 0 })} mono />
+            onChange={(v) => setReglages({ ...reglages, reamorcage_semaines: Number(v) || 0 })} mono />
           <Champ label={fr ? 'Affûtage' : 'Tapering'} value={String(contraintes.affutage_semaines)}
-            onChange={(v) => setContraintes({ ...contraintes, affutage_semaines: Number(v) || 0 })} mono />
+            onChange={(v) => setReglages({ ...reglages, affutage_semaines: Number(v) || 0 })} mono />
         </Grid>
         {/* D'où sort le plancher, et sur quoi le plan est bâti. Sans cette
             ligne, « 41 min » en face de 70 min posées ressemble à un bug. */}
@@ -862,11 +874,11 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <Bascule label={fr ? 'Natation' : 'Pływanie'} on={contraintes.natation}
-            onChange={(v) => setContraintes({ ...contraintes, natation: v })} />
+            onChange={(v) => setReglages({ ...reglages, natation: v })} />
           <Bascule label={fr ? 'Vélo' : 'Rower'} on={contraintes.velo}
-            onChange={(v) => setContraintes({ ...contraintes, velo: v })} />
+            onChange={(v) => setReglages({ ...reglages, velo: v })} />
           <Bascule label={fr ? 'Salle' : 'Siłownia'} on={contraintes.salle}
-            onChange={(v) => setContraintes({ ...contraintes, salle: v })} />
+            onChange={(v) => setReglages({ ...reglages, salle: v })} />
         </div>
       </Card>
 

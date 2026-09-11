@@ -40,7 +40,7 @@ const T = {
     enregistrer: 'Enregistrer la semaine type', enregistre: 'Enregistrée', enCours: 'Enregistrement…',
     modeles: 'Modèles de semaine',
     depart: 'Semaine de départ',
-    modelesAide: 'Un modèle remplit la grille ; rien n’est écrit chez l’athlète tant que la semaine type n’est pas enregistrée.',
+    modelesAide: 'Poser un modèle remplit la grille et l’enregistre comme semaine type de l’athlète. Le plan s’y accorde ensuite.',
     nomModele: 'Nom du modèle',
     enregistrerModele: 'Enregistrer comme modèle',
     supprimer: 'Supprimer',
@@ -62,7 +62,7 @@ const T = {
     enregistrer: 'Zapisz tydzień wzorcowy', enregistre: 'Zapisano', enCours: 'Zapisywanie…',
     modeles: 'Wzorce tygodnia',
     depart: 'Tydzień startowy',
-    modelesAide: 'Wzorzec wypełnia siatkę; u zawodnika nic się nie zapisuje, dopóki nie zapiszesz tygodnia wzorcowego.',
+    modelesAide: 'Wybranie wzorca wypełnia siatkę i zapisuje ją jako tydzień wzorcowy zawodnika. Plan się do niej dostosuje.',
     nomModele: 'Nazwa wzorca',
     enregistrerModele: 'Zapisz jako wzorzec',
     supprimer: 'Usuń',
@@ -120,10 +120,12 @@ export function StructureScreen({ app, large = false }: { app: App; large?: bool
     });
   };
 
-  const enregistrer = async () => {
+  /* La liste à écrire, explicitement : `setCreneaux` ne rend pas la nouvelle
+     valeur tout de suite, et poser un modèle enregistre dans la foulée. */
+  const enregistrer = async (liste: MscStructure[] = creneaux) => {
     setJob('envoi'); setErreur(null);
     try {
-      await api.ecrireStructure(creneaux.map((c) => ({
+      await api.ecrireStructure(liste.map((c) => ({
         jour: c.jour, creneau: c.creneau, discipline: c.discipline,
         type_code: c.type_code, duree_min: c.duree_min,
       })));
@@ -160,7 +162,11 @@ export function StructureScreen({ app, large = false }: { app: App; large?: bool
         <Modeles
           t={t}
           creneaux={creneaux}
-          onPoser={(c) => { setJob('idle'); setCreneaux(c); }}
+          /* Poser un modèle l'enregistre. Le contraire — remplir la grille et
+             attendre un second geste, tout en bas d'une page longue — se
+             lisait comme un bug : on posait son modèle, on changeait d'onglet,
+             et l'athlète n'avait toujours pas de semaine type. */
+          onPoser={(c) => { setCreneaux(c); void enregistrer(c); }}
         />
       )}
 

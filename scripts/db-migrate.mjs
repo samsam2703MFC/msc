@@ -383,6 +383,15 @@ try {
         /* Une régénération ratée ne doit pas faire échouer un déploiement :
            le plan d'avant reste actif, et le coach peut régénérer d'un clic. */
         console.log(`~ plan de ${aRegenerer.nom} non régénéré : ${e.message}`);
+      } finally {
+        /* Et surtout : refermer le pool du paquet. Il en tient un à lui, et
+           tant qu'il est ouvert ce script ne rend pas la main — le
+           déploiement reste pendu là, sans basculer, jusqu'à ce que SSH
+           coupe. C'est arrivé une fois ; ça suffit. */
+        try {
+          const { fermer } = await import(paquet.href);
+          await fermer?.();
+        } catch { /* le paquet n'expose pas de sortie : rien à refermer */ }
       }
     }
   }

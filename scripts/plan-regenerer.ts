@@ -20,6 +20,15 @@ import type { Contraintes, Objectif, ProfilAthlete } from '../src/data/generateu
 import type { MscStructure } from '../src/data/types';
 // @ts-expect-error — le dépôt est en JS, et c'est lui qui parle à la base.
 import * as depots from '../server/depots.mjs';
+// @ts-expect-error — et c'est ce module-ci qui tient le pool de connexions.
+import { fermer } from '../server/bd.mjs';
+
+/* Le paquet embarque sa propre copie du dépôt, donc son propre pool : celui
+   que l'appelant fermerait n'est pas celui-ci. Sans cette sortie, `db:migrate`
+   affichait sa dernière ligne puis ne rendait jamais la main — le pool tenait
+   la boucle d'événements ouverte, la bascule du déploiement n'avait pas lieu,
+   et SSH finissait par couper. */
+export { fermer };
 
 export interface Reglages {
   reamorcage_semaines?: number;
