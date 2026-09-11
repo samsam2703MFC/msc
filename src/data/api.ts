@@ -12,6 +12,7 @@
    et du renvoi après une coupure. */
 
 import * as cache from './cache';
+import { athleteId } from './vives';
 import type { Instantane } from './vives';
 import type { CalendrierEntree, Classement, Conversation, MscActivity, MscCompetition, MscParam } from './types';
 import { RACINE_API } from './base';
@@ -31,10 +32,28 @@ export class ApiError extends Error {
 
 const BASE = RACINE_API;
 
+/* De quel athlète on parle.
+
+   Le serveur le lit dans `?athlete=` et, à défaut, prend le PREMIER athlète
+   visible du compte. Sur un compte qui n'en voit qu'un, la différence ne se
+   voit pas ; sur celui du coach, elle se voit très bien : la liste affichée
+   venait de l'instantané (qui, lui, portait l'athlète), et l'écriture partait
+   chez quelqu'un d'autre. Supprimer une course de l'athlète affiché répondait
+   alors « Compétition inconnue », et une course ajoutée n'apparaissait nulle
+   part — elle avait été créée chez le premier de la liste.
+
+   Une seule couture, ici : toute requête dit de qui elle parle. Les routes qui
+   ne dépendent d'aucun athlète (santé, paramètres, classement) reçoivent le
+   paramètre et l'ignorent. */
+function pour(chemin: string): string {
+  if (!athleteId || /[?&]athlete=/.test(chemin)) return chemin;
+  return `${chemin}${chemin.includes('?') ? '&' : '?'}athlete=${athleteId}`;
+}
+
 async function appeler<T>(chemin: string, init: RequestInit = {}): Promise<T> {
   let reponse: Response;
   try {
-    reponse = await fetch(BASE + chemin, {
+    reponse = await fetch(BASE + pour(chemin), {
       ...init,
       /* Le cookie de session. Sans ça, chaque appel repart anonyme. */
       credentials: 'include',
@@ -101,7 +120,9 @@ async function ecrire<T>(
     if (!estReseau(e)) throw e;
     await cache.filer({
       id: mutation_id,
-      chemin,
+      /* L'athlète est gelé ici, pas au rejeu : la file peut repartir alors que
+         le coach en regarde un autre, et une écriture n'a qu'un destinataire. */
+      chemin: pour(chemin),
       corps: charge,
       type: init?.type,
       operation,
