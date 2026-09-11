@@ -137,6 +137,11 @@ export function useApp() {
      à saisir le cœur de quelqu'un d'autre. Une écriture partie hors ligne
      laisse passer : elle arrivera. */
   const [matinPasse, setMatinPasse] = useState<string | null>(null);
+  /* Le parcours du matin ne s'arrête pas au signal : il enchaîne sur la séance
+     d'hier restée sans réponse, puis sur celle du jour et le mot du coach. Le
+     panneau reste donc ouvert après l'enregistrement, jusqu'à « c'est parti ».
+     `matinRequis` dit qu'il DOIT s'ouvrir ; `matinOuvert` qu'il EST ouvert. */
+  const [matinFini, setMatinFini] = useState<string | null>(null);
   const matinRequis = useMemo(() => {
     if (!db.chargee || db.droit !== 'ecriture') return false;
     if (identite && identite.athletes[0]?.id !== db.athleteId) return false;
@@ -395,8 +400,10 @@ export function useApp() {
     setProfilOpen(false);
     setSessionId(null);
     /* Le matin appartient à celui qui l'a passé : le suivant qui se connecte
-       sur cet appareil doit donner ses deux chiffres, pas hériter des siens. */
+       sur cet appareil doit donner ses deux chiffres et refaire son parcours,
+       pas hériter de ceux du précédent. */
     setMatinPasse(null);
+    setMatinFini(null);
     db.vider();
     /* La copie locale part avec : les données d'un athlète ne doivent pas
        rester lisibles par le suivant qui se connecte sur cet appareil. La file
@@ -894,6 +901,9 @@ export function useApp() {
     [recharger],
   );
 
+  /* « C'est parti » : le parcours est fait pour aujourd'hui, le panneau part. */
+  const finirMatin = useCallback(() => setMatinFini(db.aujourdhuiISO()), []);
+
   /* ------------------------------------------------------------ le reste */
 
   /* Claude reads the session back and answers.
@@ -1118,7 +1128,11 @@ export function useApp() {
     envoyerPhoto,
     confirmerMesure,
     matinRequis,
+    /* Ouvert tant que le parcours n'est pas allé à son terme : le signal seul
+       ne referme plus le panneau, il fait avancer d'une étape. */
+    matinOuvert: (matinRequis || matinPasse === db.aujourdhuiISO()) && matinFini !== db.aujourdhuiISO(),
     validerMatin,
+    finirMatin,
 
     settingsOpen,
     openSettings: useCallback(() => setSettingsOpen(true), []),

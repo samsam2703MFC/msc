@@ -206,8 +206,11 @@ export const msc_source: MscSource[] = [
 
 export const msc_ui: Record<Lang, MscUiStrings> = {
   fr: {
-    screens: { today: "Aujourd'hui", week: 'La semaine', form: 'État de forme', coach: 'Coach', admin: 'Créer' },
-    tabs: { today: "Aujourd'hui", week: 'Semaine', form: 'Forme', coach: 'Coach', admin: 'Créer' },
+    /* Le cinquième onglet, c'est MOI : mon plan, mes starts, mon profil, ma
+       Strava. Le back office n'est plus un onglet — c'est un autre mode,
+       derrière un bouton, pour les comptes qui en ont un. */
+    screens: { today: "Aujourd'hui", week: 'La semaine', form: 'État de forme', coach: 'Coach', admin: 'Mon entraînement' },
+    tabs: { today: "Aujourd'hui", week: 'Semaine', form: 'Forme', coach: 'Coach', admin: 'Moi' },
     doneOn: 'Séance faite', doneOff: 'Marquer la séance faite',
     rpeLabel: 'RPE ressenti', notePlaceholder: 'Sommeil, douleurs, sensations',
     anaLabel: 'Le coach', anaIdle: 'Il en pense quoi le coach ?', anaRunning: 'Le coach lit ta séance…', anaDoneBtn: 'Redemander au coach',
@@ -221,8 +224,8 @@ export const msc_ui: Record<Lang, MscUiStrings> = {
     modalKind: "Type d'entraînement", modalSci: 'Ce que dit la science', modalClose: 'Fermer',
   },
   pl: {
-    screens: { today: 'Dzisiaj', week: 'Tydzień', form: 'Forma', coach: 'Trener', admin: 'Utwórz' },
-    tabs: { today: 'Dzisiaj', week: 'Tydzień', form: 'Forma', coach: 'Trener', admin: 'Utwórz' },
+    screens: { today: 'Dzisiaj', week: 'Tydzień', form: 'Forma', coach: 'Trener', admin: 'Mój trening' },
+    tabs: { today: 'Dzisiaj', week: 'Tydzień', form: 'Forma', coach: 'Trener', admin: 'Ja' },
     doneOn: 'Wykonane', doneOff: 'Oznacz jako wykonane',
     rpeLabel: 'Odczuwany RPE', notePlaceholder: 'Sen, bóle, odczucia',
     anaLabel: 'Trener', anaIdle: 'Co na to trener?', anaRunning: 'Trener czyta twój trening…', anaDoneBtn: 'Zapytaj trenera ponownie',

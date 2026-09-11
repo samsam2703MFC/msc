@@ -25,6 +25,32 @@ const check = (nom, ok, detail = '') => {
   console.log(`${ok ? 'ok  ' : 'FAIL'}  ${nom}${detail ? '  — ' + detail : ''}`);
 };
 
+/* Le matin est un parcours : le signal, la séance d'hier restée sans réponse,
+   celle du jour et le mot du coach, puis « Entrer ». Le contrôle le traverse
+   comme l'athlète — d'un bout à l'autre, sans sauter d'étape. */
+async function traverserLeMatin(page, fc = '44', hrv = '68') {
+  const sheet = page.getByRole('dialog');
+  if (!(await sheet.count())) return;
+  const champs = sheet.locator('input[inputmode="decimal"]');
+  if (await champs.count()) {
+    await champs.nth(0).fill(fc);
+    await champs.nth(1).fill(hrv);
+    await sheet.locator('button[type=submit]').click();
+    await page.waitForTimeout(1800);
+  }
+  /* Les étapes suivantes se passent : « Continuer » jusqu'au bout, puis
+     « Entrer ». Six tours suffisent — il y en a trois au plus. */
+  for (let i = 0; i < 6 && (await page.getByRole('dialog').count()); i += 1) {
+    const entrer = page.getByRole('dialog').getByRole('button', { name: /^Entrer$/ });
+    if (await entrer.count()) { await entrer.click(); await page.waitForTimeout(900); break; }
+    const continuer = page.getByRole('dialog').getByRole('button', { name: /^Continuer$/ });
+    if (!(await continuer.count())) break;
+    await continuer.click();
+    await page.waitForTimeout(700);
+  }
+  await page.waitForTimeout(400);
+}
+
 /* Le back office a deux niveaux, et ces deux fonctions sont le chemin : une
    section du menu (ce qui vaut pour le club ou pour l'application), ou la
    fiche d'un athlète (tout ce qui lui appartient, sous son nom).
@@ -33,9 +59,24 @@ const check = (nom, ok, detail = '') => {
    qui n'existe qu'ici : si le plan du back office change encore, c'est ici
    que ça se voit, en deux fonctions et pas en douze clics. */
 async function ouvrirSection(page, nom) {
-  await page.locator('nav button').last().click();
-  await page.waitForTimeout(600);
+  /* Le back office n'est plus un onglet : on y entre par le bouton du
+     bandeau, et la barre du bas en ressort. */
+  const porte = page.getByRole('button', { name: /^Back office$/ });
+  if (await porte.count()) {
+    await porte.click();
+    await page.waitForTimeout(800);
+  }
   await page.getByRole('tab', { name: nom, ...(typeof nom === 'string' ? { exact: true } : {}) }).first().click();
+  await page.waitForTimeout(900);
+}
+
+/* Et « Moi » : le cinquième onglet de l'application, où l'athlète tient ce qui
+   est à lui — son plan, ses starts, son profil, sa Strava. Rien à voir avec le
+   back office : c'est son application, pas celle du club. */
+async function ouvrirMoi(page, chip) {
+  await page.locator('nav button').last().click();
+  await page.waitForTimeout(700);
+  await page.getByRole('tab', { name: chip, exact: true }).first().click();
   await page.waitForTimeout(900);
 }
 
@@ -151,13 +192,8 @@ try {
   await page.waitForSelector('nav', { timeout: 20000 });
   /* Le premier matin : deux chiffres avant d'entrer, comme pour tout le
      monde. */
-  const matinLibre = page.getByRole('dialog');
-  await matinLibre.waitFor({ timeout: 10000 });
-  await matinLibre.locator('input').nth(0).fill('52');
-  await matinLibre.locator('input').nth(1).fill('60');
-  await matinLibre.getByRole('button', { name: /Enregistrer et entrer/ }).click();
-  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), null, { timeout: 15000 });
-  await page.waitForTimeout(600);
+  await page.getByRole('dialog').waitFor({ timeout: 10000 });
+  await traverserLeMatin(page, '52', '60');
   const inscritTexte = await page.locator('body').innerText();
   check('un athlète crée son compte depuis l’écran de connexion, et entre',
     (await page.locator('nav').count()) === 1 && /Aujourd'hui/.test(inscritTexte),
@@ -213,16 +249,23 @@ try {
   console.log('\n=== le matin ===');
   const matin = page.getByRole('dialog');
   await matin.waitFor({ timeout: 10000 });
-  check('le panneau FC repos + HRV bloque l’entrée', (await matin.count()) === 1);
-  const entrer = matin.getByRole('button', { name: /Enregistrer et entrer/ });
-  check('sans les deux chiffres, il ne part pas', await entrer.isDisabled());
-  await matin.locator('input').nth(0).fill('44');
-  check('avec la FC seule non plus', await entrer.isDisabled());
-  await matin.locator('input').nth(1).fill('68');
-  check('avec les deux, il part', !(await entrer.isDisabled()));
-  await entrer.click();
-  await page.waitForFunction(() => !document.querySelector('[role=dialog]'), null, { timeout: 15000 });
-  check('et il disparaît une fois la mesure rangée', (await page.getByRole('dialog').count()) === 0);
+  check('le parcours du matin bloque l’entrée', (await matin.count()) === 1);
+  const suite = matin.locator('button[type=submit]');
+  check('sans les deux chiffres, il ne part pas', await suite.isDisabled());
+  await matin.locator('input[inputmode="decimal"]').nth(0).fill('44');
+  check('avec la FC seule non plus', await suite.isDisabled());
+  await matin.locator('input[inputmode="decimal"]').nth(1).fill('68');
+  check('avec les deux, il part', !(await suite.isDisabled()));
+  await suite.click();
+  await page.waitForTimeout(1800);
+  const apresSignal = await page.getByRole('dialog').innerText();
+  check('le signal enchaîne sur la suite du parcours, il ne referme pas tout',
+    /Étape 2/.test(apresSignal) && /(Et hier|Aujourd’hui)/.test(apresSignal),
+    apresSignal.split('\n').slice(0, 3).join(' · '));
+  check('et la séance du jour y est, avec le mot du coach à demander',
+    /Demander au coach/.test(apresSignal) || /Et hier/.test(apresSignal));
+  await traverserLeMatin(page);
+  check('« Entrer » ferme le parcours', (await page.getByRole('dialog').count()) === 0);
 
   const aujourdhui = await page.locator('body').innerText();
   check('le plan vient de la base', /S\d+/.test(aujourdhui),
@@ -324,11 +367,10 @@ try {
      que les autres sections lisent. Que la route écrive vraiment, `check:api`
      le prouve — sur un second athlète, justement pour ça. */
   console.log('\n=== enregistrer un plan ===');
-  /* Le plan est à un athlète : on passe par sa fiche — Admin, Athlètes,
-     « Ouvrir », onglet Plan. C'est le chemin que le back office impose
-     depuis qu'une entrée de menu ne dépend plus d'un athlète choisi
-     ailleurs. */
-  await ouvrirFiche(page, 'Plan');
+  /* Mon plan est à moi : cinquième onglet, « Mon plan ». Le plan d'un AUTRE
+     athlète, lui, se règle dans le back office — deux chemins, parce que ce
+     sont deux choses. */
+  await ouvrirMoi(page, 'Mon plan');
   const createur = await page.locator('body').innerText();
   check('l’écran Créer montre le plan généré',
     /Plan généré/i.test(createur) && /semaines/i.test(createur));
@@ -353,7 +395,7 @@ try {
   /* Le back office : encoder une course, la voir apparaître, et voir la courbe
      se tracer une fois qu'il y a deux résultats à comparer. */
   console.log('\n=== le back office ===');
-  await ouvrirFiche(page, 'Starts');
+  await ouvrirMoi(page, 'Mes starts');
   /* Les intitulés de section sont mis en majuscules par le CSS, et innerText
      rend le texte affiché. */
   check('la section Starts s’ouvre sur les compétitions de l’athlète',
@@ -422,8 +464,13 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('nav', { timeout: 20000 });
   await page.waitForTimeout(800);
-  check('l’onglet Créer s’appelle Admin', /Admin/.test(await page.locator('nav').innerText()),
+  /* Devenu admin, le compte gagne une porte — pas un onglet : la barre du bas
+     reste son application, « Moi » compris. */
+  check('la barre du bas ne change pas de rôle : c’est toujours mon application',
+    /Moi/.test(await page.locator('nav').innerText()) && !/Admin/.test(await page.locator('nav').innerText()),
     (await page.locator('nav').innerText()).replace(/\n/g, ' · '));
+  check('et le back office s’ouvre par son bouton, dans le bandeau',
+    (await page.getByRole('button', { name: /^Back office$/ }).count()) === 1);
   await ouvrirSection(page, 'Comptes');
   const comptesTexte = await page.locator('body').innerText();
   check('Comptes liste le compte connecté, avec son athlète et son droit',
@@ -509,12 +556,15 @@ try {
   check('sur un écran large, l’admin a le bureau : deux familles — entraînement, application',
     (await menu.count()) === 1 && /Entraînement/i.test(menuTexte) && /Application/i.test(menuTexte)
       && /Athlètes/.test(menuTexte) && /Calendrier/.test(menuTexte) && /Classement/.test(menuTexte)
-      && /Paramètres/.test(menuTexte) && /Comptes/.test(menuTexte) && /Système/.test(menuTexte)
-      && /Vue athlète/i.test(menuTexte),
+      && /Paramètres/.test(menuTexte) && /Comptes/.test(menuTexte) && /Système/.test(menuTexte),
     menuTexte.replace(/\n+/g, ' · ').slice(0, 200));
   check('et rien qui dépende d’un athlète choisi ailleurs',
     !/Suivi/.test(menuTexte) && !/Starts/.test(menuTexte) && !/Strava/.test(menuTexte),
     menuTexte.replace(/\n+/g, ' · ').slice(0, 120));
+  /* La bascule : le club d'un côté, moi de l'autre. Les deux mondes ne
+     partagent plus le même menu. */
+  check('et une bascule entre le club et moi, plutôt que les deux mêlés',
+    /Le club/.test(menuTexte) && /Moi/.test(menuTexte));
   check('et plus de barre d’onglets', (await page.locator('nav button').count()) > 5);
   check('le hub des athlètes est un tableau sur le bureau', (await page.locator('main table').count()) >= 1);
   /* Et la fiche : tout ce qui est à un athlète, sous son nom, en cinq
@@ -532,9 +582,16 @@ try {
   await menu.getByRole('button', { name: 'Système' }).click();
   await page.waitForTimeout(900);
   check('une section s’ouvre depuis le menu', /cette page/i.test(await page.locator('body').innerText()));
+  /* Et de l'autre côté de la bascule : mon entraînement, mes écrans. */
+  await menu.getByRole('button', { name: /^Moi$/ }).first().click();
+  await page.waitForTimeout(700);
+  const menuMoi = await menu.innerText();
+  check('la bascule « Moi » donne mon entraînement, et rien du club',
+    /Mon entraînement/i.test(menuMoi) && !/Athlètes/.test(menuMoi) && !/Comptes/.test(menuMoi),
+    menuMoi.replace(/\n+/g, ' · ').slice(0, 140));
   await menu.getByRole('button', { name: "Aujourd'hui" }).click();
   await page.waitForTimeout(900);
-  check('et les écrans de l’athlète restent à portée, à leur largeur',
+  check('et mes écrans s’y ouvrent, à leur largeur',
     /Hier|S\d+/.test(await page.locator('body').innerText()));
   await page.setViewportSize({ width: 420, height: 900 });
   await page.reload({ waitUntil: 'domcontentloaded' });

@@ -15,7 +15,7 @@ import { MiseAJour } from './components/MiseAJour';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TypeSheet } from './components/TypeSheet';
-import { AdminScreen } from './screens/AdminScreen';
+import { BackOfficeScreen, MoiScreen } from './screens/AdminScreen';
 import { ChargementScreen, ConnexionScreen, PanneScreen } from './screens/ConnexionScreen';
 import { CoachScreen } from './screens/CoachScreen';
 import { FormScreen } from './screens/FormScreen';
@@ -30,15 +30,15 @@ const TAB_ICONS: Record<ScreenKey, string> = {
   week: 'calendar-days',
   form: 'heart-pulse',
   coach: 'bot',
-  admin: 'plus',
+  admin: 'user',
 };
 
 const MOIS_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const MOIS_PL = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 
-/* Pour un coach ou un admin, le cinquième onglet est le back office, et il le
-   dit : « Admin » plutôt que « Créer » — l'athlète, lui, y crée son plan. */
-function backOffice(app: ReturnType<typeof useApp>): boolean {
+/* Le back office n'est pas un onglet : c'est un autre mode, pour les comptes
+   qui en ont un. La barre du bas, elle, est toujours la même — c'est moi. */
+function aUnBackOffice(app: ReturnType<typeof useApp>): boolean {
   const role = app.identite?.compte.role;
   return role === 'coach' || role === 'admin';
 }
@@ -63,9 +63,7 @@ function eyebrow(app: ReturnType<typeof useApp>): string {
     case 'coach':
       return `${fr ? 'Hebdo' : 'Tygodniowa'}${sem}`;
     case 'admin':
-      return backOffice(app)
-        ? fr ? 'Coach · back office' : 'Trener · zaplecze'
-        : fr ? 'Athlète · objectifs' : 'Zawodnik · cele';
+      return fr ? 'Ce qui est à moi' : 'To, co moje';
   }
 }
 
@@ -103,12 +101,17 @@ function Screen({ app }: { app: ReturnType<typeof useApp> }) {
     case 'coach':
       return <CoachScreen app={app} />;
     case 'admin':
-      return <AdminScreen app={app} />;
+      return <MoiScreen app={app} />;
   }
 }
 
 function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolean }) {
   const ui = db.ui(app.lang);
+  /* Le back office est un mode, pas un onglet : on y entre par le bouton du
+     bandeau, on en sort par la barre du bas — qui, elle, est toujours mon
+     application. Un athlète n'a pas ce bouton du tout. */
+  const [backOffice, setBackOffice] = useState(false);
+  const fr = app.lang === 'fr';
 
   return (
     <div
@@ -179,7 +182,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
               textOverflow: 'ellipsis',
             }}
           >
-            {eyebrow(app)}
+            {backOffice ? (fr ? 'Coach · le club' : 'Trener · klub') : eyebrow(app)}
           </div>
           <h1
             style={{
@@ -192,11 +195,28 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
               lineHeight: 1.15,
             }}
           >
-            {app.screen === 'admin' && backOffice(app) ? (app.lang === 'fr' ? 'Back office' : 'Zaplecze') : ui.screens[app.screen]}
+            {backOffice ? (fr ? 'Back office' : 'Zaplecze') : ui.screens[app.screen]}
           </h1>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        {/* Entrer dans le back office, pour qui en a un. Ce n'est pas « mon »
+            application : c'est celle du club, et le bouton le dit. */}
+        {aUnBackOffice(app) && !backOffice && (
+          <button
+            type="button"
+            className="msc-hover-accent"
+            onClick={() => setBackOffice(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '7px 10px', borderRadius: R.md,
+              border: `1px solid ${C.border}`, color: C.inkSecondary, fontSize: 11, fontWeight: 600,
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            <Icon name="footprints" size={15} />
+            {fr ? 'Back office' : 'Zaplecze'}
+          </button>
+        )}
         {/* Prénom + nom pour les initiales ; sous la pastille, le surnom seul. */}
         <Avatar
           nom={[db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ')}
@@ -241,7 +261,9 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
       </header>
 
       <main className="msc-scroll" style={{ flex: 1, padding: '16px 20px 24px' }}>
-        <Screen app={app} />
+        {backOffice
+          ? <BackOfficeScreen app={app} onQuitter={() => setBackOffice(false)} />
+          : <Screen app={app} />}
       </main>
 
       <nav
@@ -258,12 +280,12 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
         }}
       >
         {ORDER.map((key) => {
-          const active = key === app.screen;
+          const active = key === app.screen && !backOffice;
           return (
             <button
               key={key}
               type="button"
-              onClick={() => app.setScreen(key)}
+              onClick={() => { setBackOffice(false); app.setScreen(key); }}
               aria-current={active ? 'page' : undefined}
               style={{
                 display: 'flex',
@@ -276,9 +298,9 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
                 color: active ? C.accentDeep : C.inkQuiet,
               }}
             >
-              <Icon name={key === 'admin' && backOffice(app) ? 'settings' : TAB_ICONS[key]} size={21} />
+              <Icon name={TAB_ICONS[key]} size={21} />
               <div style={{ fontSize: 10, fontWeight: 600, textAlign: 'center' }}>
-                {key === 'admin' && backOffice(app) ? 'Admin' : ui.tabs[key]}
+                {ui.tabs[key]}
               </div>
             </button>
           );
@@ -287,8 +309,8 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
 
       {app.settingsOpen && <SettingsSheet app={app} />}
       {app.profilOpen && <ProfilSheet app={app} />}
-      {/* par-dessus tout : le matin, deux chiffres avant d'entrer */}
-      {app.matinRequis && <MatinSheet app={app} />}
+      {/* par-dessus tout : le parcours du matin — le signal, hier, aujourd'hui */}
+      {app.matinOuvert && <MatinSheet app={app} />}
       {app.sessionId !== null && <SessionSheet app={app} sessionId={app.sessionId} />}
       {app.typeCode !== null && <TypeSheet app={app} code={app.typeCode} />}
     </div>
@@ -332,7 +354,7 @@ export function App() {
 
   /* Le bureau du coach : une fois connecté, sur un écran large. Les écrans de
      l'athlète y restent accessibles, rendus par le même `Screen`. */
-  if (app.amorce === 'pret' && large && backOffice(app)) {
+  if (app.amorce === 'pret' && large && aUnBackOffice(app)) {
     const ui = db.ui(app.lang);
     return (
       <IOSDevice standalone>
@@ -340,7 +362,9 @@ export function App() {
           app={app}
           ecran={<Screen app={app} />}
           eyebrow={eyebrow(app)}
-          onglets={ORDER.filter((k) => k !== 'admin').map((k) => ({ key: k, icon: TAB_ICONS[k], label: ui.tabs[k] }))}
+          /* Les cinq mêmes que sur le téléphone, « Moi » compris : mon
+             entraînement est mon application, pas un sous-ensemble. */
+          onglets={ORDER.map((k) => ({ key: k, icon: TAB_ICONS[k], label: ui.tabs[k] }))}
         />
       </IOSDevice>
     );

@@ -1030,9 +1030,23 @@ The **Créer** tab carries two things now, behind a segmented control: building 
 plan, and keeping the register of races. A switch rather than a sixth tab — the
 bar already has five, and a back office is not a screen you open every day.
 
-**Two levels, and no third.** The first is six destinations in two families
-whose names say what you do there — `SECTIONS` and `GROUPES` in
-`AdminScreen.tsx`:
+**Two applications, not one with two hats.** The athlete's app is the five
+tabs at the bottom — *Aujourd'hui · Semaine · Forme · Coach · **Moi*** — and it
+is the same bar for everyone, athlete or admin: **it is always me**. « Moi »
+carries what belongs to me and that the four others don't hold — my plan, my
+starts, my profile, my Strava — plus the club's two screens (calendar,
+standings). The back office is **not a tab**: it is another mode, behind a
+*Back office* button in the header (a switch at the top of the desk's menu),
+and only for a `coach` or `admin`. An athlete never sees it at all —
+`sectionsDe` returns nothing for them.
+
+That rule is what the previous layouts kept breaking: entries that were *mine*
+sat in the same menu as entries about *other people*, and a dropdown decided
+which athlete five of them followed.
+
+**Two levels inside the back office, and no third.** The first is six
+destinations in two families whose names say what you do there — `SECTIONS`
+and `GROUPES` in `AdminScreen.tsx`:
 
 | Entraînement | Application |
 |---|---|
@@ -1057,14 +1071,38 @@ it is. Before this, five menu entries silently followed an "athlete on screen"
 picked from a dropdown in the menu — you could not tell, from the menu alone,
 whose plan you were about to edit.
 
-An athlete's own account sees the same first level, minus what is not theirs:
-their section is called **Mon entraînement** and opens straight onto their own
-page, with no list to walk through. For a `coach` or `admin` account the tab
-reads **Admin**. What is the athlete's (weight, references, Strava, profile)
-never sits next to what is the application's (settings, accounts, system), and
-the phone follows the same line: the avatar opens the athlete's profile — with
-the 10 km references and the Strava card — while the gear holds the
-application: language, plan day, the account, the version.
+What is the athlete's (weight, references, Strava, profile) never sits next to
+what is the application's (settings, accounts, system), and the phone follows
+the same line: the avatar opens the athlete's profile — with the 10 km
+references and the Strava card — while the gear holds **Mon application**:
+language, plan day, the account, the version.
+
+### Le matin, en quatre temps
+
+The athlete's day starts with a guided run, once per day, over whatever screen
+they were on (`MatinSheet.tsx`):
+
+1. **Le signal** — resting HR and HRV, weight if you like. Required: without
+   them the coach speaks blind, and nothing opens. Same two bounds-checked
+   fields as before.
+2. **Et hier ?** — the most recent past session (up to a week back) that has
+   neither a tick nor a matched Strava activity, with the full **Bilan**: done,
+   or not done and why. Chosen once when the sheet opens and frozen there —
+   answering removes it from the pending list, and without the freeze the card
+   would jump to the next one under your fingers. Skipped entirely when nothing
+   is pending.
+3. **Aujourd'hui** — today's session, and *le mot du coach* on it: the button
+   asks for a replanning (`/api/glissant`, the same one the Coach screen uses),
+   which reads the signal just typed; the line for today comes back with its
+   action (garder, réduire, allonger, déplacer, sauter), the coach's sentence
+   and an **Appliquer** that writes the adjustment onto the session. Without an
+   Anthropic key the sheet says so and the plan stands as written.
+4. **C'est parti** — what is on for today, and the door.
+
+Steps 2 and 3 carry a *Plus tard*: a walk you cannot skip is a wall, and a wall
+is how an app stops being opened. Step 1 has no exit. The sheet stays mounted
+across the steps (`matinOuvert` in `useApp`, distinct from `matinRequis`), and
+logging out resets the walk — the next person on this phone does their own.
 
 ### Race types, objectives and starts
 

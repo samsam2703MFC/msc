@@ -228,25 +228,19 @@ export const GROUPES: Array<{ code: 'entrainement' | 'application'; titre: Recor
   { code: 'application', titre: { fr: 'Application', pl: 'Aplikacja' }, sections: ['param', 'comptes', 'systeme'] },
 ];
 
-/** Les sections qu'un compte peut ouvrir. Un athlète n'a que la première
-    famille — et sa fiche à lui, puisqu'il ne voit que lui. Un admin a tout. */
+/** Les sections d'un compte. Le back office est au coach et à l'admin : un
+    athlète n'en a pas du tout — son application, c'est ses cinq onglets, et
+    « Moi » y tient tout ce qui lui appartient. */
 export function sectionsDe(role: 'athlete' | 'coach' | 'admin' | undefined): Section[] {
-  const coach = role === 'coach' || role === 'admin';
+  if (role !== 'coach' && role !== 'admin') return [];
   return [
-    'athletes', 'calendrier', 'classement',
-    ...(coach ? (['param'] as Section[]) : []),
+    'athletes', 'calendrier', 'classement', 'param',
     ...(role === 'admin' ? (['comptes', 'systeme'] as Section[]) : []),
   ];
 }
 
-/** Le titre d'une section. « Athlètes » pour qui en gère — même s'il n'y en a
-    qu'un aujourd'hui, il en créera d'autres ; « Mon entraînement » pour un
-    athlète, qui ne gère que lui. Le rôle décide, pas le nombre : un intitulé
-    qui change quand on ajoute quelqu'un serait une surprise de plus. */
-export function titreSection(section: Section, lang: Lang, role: string | undefined): string {
-  if (section === 'athletes' && role !== 'coach' && role !== 'admin') {
-    return lang === 'fr' ? 'Mon entraînement' : 'Mój trening';
-  }
+/** Le titre d'une section du back office. */
+export function titreSection(section: Section, lang: Lang): string {
   return SECTIONS[lang][section];
 }
 
@@ -285,12 +279,7 @@ function Athletes({
 }: {
   app: App; vue: Vue; onVue: (v: Vue) => void; large: boolean;
 }) {
-  const role = app.identite?.compte.role;
-  /* Un athlète ne gère que lui : pas de liste à traverser pour arriver chez
-     lui. Un coach ou un admin passe par la liste, même à un seul athlète —
-     c'est là qu'on en ajoute un. */
-  const seul = role !== 'coach' && role !== 'admin';
-  const onglet = vue.onglet ?? (seul ? 'suivi' : undefined);
+  const onglet = vue.onglet;
   if (!onglet) {
     return (
       <AthletesHub
@@ -305,7 +294,7 @@ function Athletes({
       app={app}
       onglet={onglet}
       onOnglet={(o) => onVue({ section: 'athletes', onglet: o })}
-      onListe={seul ? undefined : () => onVue({ section: 'athletes' })}
+      onListe={() => onVue({ section: 'athletes' })}
       large={large}
     />
   );
@@ -395,10 +384,98 @@ export function FicheAthlete({
   );
 }
 
-/* L'onglet Admin du téléphone : le même plan, dans une barre. Le back office
-   est dessiné pour un écran large — sur un téléphone il reste lisible, mais
-   c'est le bureau qui est sa maison. */
-export function AdminScreen({ app }: { app: App }) {
+/* ------------------------------------------------------------------ moi
+
+   Le cinquième onglet de l'application : ce qui est à moi et que les quatre
+   autres ne portent pas — mon plan, mes starts, mon profil, ma liaison
+   Strava — plus les deux écrans du club, qui regardent tout le monde.
+
+   Ce n'est pas un back office : on n'y gère personne d'autre, il n'y a pas
+   de liste, pas de comptes, pas de réglages de serveur. Le back office est
+   ailleurs, derrière un bouton, et seulement pour qui en a un. */
+
+const MOI_ORDRE = ['plan', 'courses', 'profil', 'strava', 'calendrier', 'classement'] as const;
+type OngletMoi = (typeof MOI_ORDRE)[number];
+
+const MOI_LIBELLE: Record<OngletMoi, Record<Lang, string>> = {
+  plan: { fr: 'Mon plan', pl: 'Mój plan' },
+  courses: { fr: 'Mes starts', pl: 'Moje starty' },
+  profil: { fr: 'Mon profil', pl: 'Mój profil' },
+  strava: { fr: 'Strava', pl: 'Strava' },
+  calendrier: { fr: 'Calendrier', pl: 'Kalendarz' },
+  classement: { fr: 'Classement', pl: 'Ranking' },
+};
+
+const MOI_ICONE: Record<OngletMoi, string> = {
+  plan: 'wand-sparkles', courses: 'flag', profil: 'pencil', strava: 'link',
+  calendrier: 'calendar-days', classement: 'zap',
+};
+
+const MOI_AIDE: Record<OngletMoi, Record<Lang, string>> = {
+  plan: { fr: 'Mes objectifs, mes contraintes, et le plan que le coach en tire.', pl: 'Moje cele, ograniczenia i plan, który z nich wynika.' },
+  courses: { fr: 'Les courses que j’ai faites, et celles qui viennent.', pl: 'Biegi, które zrobiłem, i te, które nadchodzą.' },
+  profil: { fr: 'Mon nom, mes références 10 km, mon coach, ma langue.', pl: 'Moje nazwisko, odniesienia 10 km, trener, język.' },
+  strava: { fr: 'Ma liaison Strava : relier, importer mon historique.', pl: 'Moje połączenie ze Stravą: łączenie, import historii.' },
+  calendrier: { fr: 'Les compétitions du club : qui court quoi, et quand.', pl: 'Zawody klubu: kto biegnie co i kiedy.' },
+  classement: { fr: 'Où j’en suis par rapport aux autres, discipline par discipline.', pl: 'Gdzie jestem względem innych, dyscyplina po dyscyplinie.' },
+};
+
+export function MoiScreen({ app, large = false }: { app: App; large?: boolean }) {
+  const lang = app.lang;
+  const fr = lang === 'fr';
+  const [onglet, setOnglet] = useState<OngletMoi>('plan');
+  const club = onglet === 'calendrier' || onglet === 'classement';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Card padding="12px 16px" gap={10}>
+        <div role="tablist" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {MOI_ORDRE.map((o) => {
+            const actif = o === onglet;
+            return (
+              <button
+                key={o}
+                type="button"
+                role="tab"
+                aria-selected={actif}
+                onClick={() => setOnglet(o)}
+                className={actif ? undefined : 'msc-hover-accent'}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: R.full,
+                  border: `1px solid ${actif ? C.accent : C.border}`,
+                  background: actif ? C.accentSoft : C.surface,
+                  color: actif ? C.accentDeep : C.inkMuted, fontSize: 12, fontWeight: 600,
+                }}
+              >
+                <Icon name={MOI_ICONE[o]} size={13} />
+                {MOI_LIBELLE[o][lang]}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>
+          {MOI_AIDE[onglet][lang]}
+          {club ? ` · ${fr ? 'le club, pas moi' : 'klub, nie ja'}` : ''}
+        </div>
+      </Card>
+
+      {onglet === 'plan' && <Generateur app={app} large={large} />}
+      {onglet === 'courses' && <BackOffice app={app} />}
+      {onglet === 'profil' && <ProfilScreen app={app} onSection={() => setOnglet('strava')} large={large} />}
+      {onglet === 'strava' && <StravaScreen app={app} />}
+      {onglet === 'calendrier' && <CalendrierScreen app={app} />}
+      {onglet === 'classement' && <Classement app={app} />}
+    </div>
+  );
+}
+
+/* --------------------------------------------------------- le back office
+
+   Sur un téléphone : le même plan que le bureau, dans une barre, et une
+   sortie explicite vers son propre entraînement. Ce n'est pas un onglet :
+   on y entre, on en sort, et pendant qu'on y est on ne joue pas à être
+   l'athlète — on regarde ses données. */
+export function BackOfficeScreen({ app, onQuitter }: { app: App; onQuitter?: () => void }) {
   const role = app.identite?.compte.role ?? 'athlete';
   const sections = sectionsDe(role);
   const [vue, setVue] = useState<Vue>({ section: 'athletes' });
@@ -442,12 +519,24 @@ export function AdminScreen({ app }: { app: App }) {
               boxShadow: vue.section === cle ? C.shadowCard : 'none',
             }}
           >
-            {titreSection(cle, app.lang, role)}
+            {titreSection(cle, app.lang)}
           </button>
         ))}
       </div>
 
       <SectionAdmin app={app} vue={vue} onVue={setVue} />
+
+      {onQuitter && (
+        <button
+          type="button"
+          className="msc-hover-surface"
+          onClick={onQuitter}
+          style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.inkMuted, fontSize: 12, fontWeight: 600 }}
+        >
+          <Icon name="chevron-right" size={13} style={{ transform: 'rotate(180deg)' }} />
+          {app.lang === 'fr' ? 'Revenir à mon entraînement' : 'Wróć do mojego treningu'}
+        </button>
+      )}
     </div>
   );
 }

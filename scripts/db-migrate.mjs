@@ -177,11 +177,15 @@ try {
      clé par clé ; les mêmes textes que tables.ts, à garder identiques. */
   const LIBELLES = [
     ['fr', { anaLabel: 'Le coach', anaIdle: 'Il en pense quoi le coach ?',
-             anaRunning: 'Le coach lit ta séance…', anaDoneBtn: 'Redemander au coach' }],
+             anaRunning: 'Le coach lit ta séance…', anaDoneBtn: 'Redemander au coach',
+             /* Le cinquième onglet n'est plus « Créer » ni « Admin » : c'est moi. */
+             'screens.admin': 'Mon entraînement', 'tabs.admin': 'Moi' }],
     ['pl', { anaLabel: 'Trener', anaIdle: 'Co na to trener?',
-             anaRunning: 'Trener czyta twój trening…', anaDoneBtn: 'Zapytaj trenera ponownie' }],
+             anaRunning: 'Trener czyta twój trening…', anaDoneBtn: 'Zapytaj trenera ponownie',
+             'screens.admin': 'Mój trening', 'tabs.admin': 'Ja' }],
   ];
   for (const [langue, cles] of LIBELLES) {
+    /* Une clé pointée (« screens.admin ») est un chemin dans le JSON. */
     const paires = Object.entries(cles).flatMap(([k, v]) => [`$.${k}`, v]);
     const [r] = await cnx.query(
       `UPDATE msc_ui SET chaines = JSON_SET(chaines, ${Object.keys(cles).map(() => '?, ?').join(', ')})
