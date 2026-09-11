@@ -9,6 +9,8 @@ import { useEffect, useState } from 'react';
 import * as api from '../data/api';
 import type { AthleteAdmin, AthleteVisible, CompteAdmin } from '../data/api';
 import type { Lang } from '../data/types';
+import { versChrono } from '../data/engine';
+import { EPREUVES, SPORTS, SPORT_REFERENCE } from '../data/structure';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { Card, Colonnes, SectionLabel } from '../components/primitives';
@@ -46,9 +48,13 @@ const T = {
       { v: 'compte' as Mode, l: 'Un compte seul', d: 'Un autre admin, ou un login pour un athlète encodé avant sans compte.' },
     ],
     blocAthlete: 'L’athlète', blocCompte: 'Le compte', recap: 'Récapitulatif',
-    athleteAide: 'Les allures sont celles du 10 km, en min/km — entre 2:00 et 15:00. Le plan part de l’allure actuelle et vise la cible.',
+    athleteAide: 'Ses sports d’abord : ils disent ce qu’on lui demande ensuite. Les allures 10 km ne se posent qu’à celui qui court.',
     allureAide: 'mm:ss, entre 2:00 et 15:00', emailAide: 'Un email complet, avec son @.',
     prenom: 'Prénom', actuelle: 'Allure 10 km actuelle', cible: 'Allure 10 km visée', debut: 'Début du plan',
+    sports: 'Ses sports', sportsAide: 'Ce qu’il fait vraiment — un cycliste n’a pas d’allure 10 km, et on ne la lui demande pas. Au moins un.',
+    sansCourse: 'Il ne court pas : pas de référence 10 km à poser. Son plan travaille en durées et en zones d’effort, et les allures resteront « — » tant qu’il n’y aura pas de séance à pied.',
+    objectifs: 'Où il en est, sport par sport', objectifsAide: 'Facultatif : le temps d’aujourd’hui et le temps visé sur l’épreuve étalon. Ça se remplit aussi plus tard, dans son profil.',
+    aujourdhui: 'aujourd’hui', vise: 'visé',
     compteRelie: 'Relié au compte', nomCompte: 'Nom du compte',
     recapAide: 'Tout est vérifié puis écrit d’un coup : si quelque chose cloche, rien n’est créé.',
     suivant: 'Suivant', precedent: 'Retour', creer: 'Créer', creation: 'Création…', recommencer: 'En créer un autre',
@@ -83,9 +89,13 @@ const T = {
       { v: 'compte' as Mode, l: 'Tylko konto', d: 'Kolejny admin albo login dla zawodnika wpisanego wcześniej bez konta.' },
     ],
     blocAthlete: 'Zawodnik', blocCompte: 'Konto', recap: 'Podsumowanie',
-    athleteAide: 'Tempa dotyczą 10 km, w min/km — między 2:00 a 15:00. Plan wychodzi od obecnego tempa i celuje w docelowe.',
+    athleteAide: 'Najpierw jego sporty: one mówią, o co pytamy dalej. Tempa 10 km dotyczą tylko biegacza.',
     allureAide: 'mm:ss, między 2:00 a 15:00', emailAide: 'Pełny e-mail, z @.',
     prenom: 'Imię', actuelle: 'Obecne tempo 10 km', cible: 'Docelowe tempo 10 km', debut: 'Start planu',
+    sports: 'Jego sporty', sportsAide: 'To, co naprawdę robi — kolarz nie ma tempa 10 km i nikt go o nie nie pyta. Co najmniej jeden.',
+    sansCourse: 'Nie biega: brak odniesienia 10 km. Plan pracuje na czasie i strefach, a tempa zostaną „—”.',
+    objectifs: 'Gdzie jest, sport po sporcie', objectifsAide: 'Opcjonalnie: dzisiejszy czas i czas docelowy na próbie wzorcowej. Można uzupełnić później, w profilu.',
+    aujourdhui: 'dziś', vise: 'cel',
     compteRelie: 'Powiązane z kontem', nomCompte: 'Nazwa konta',
     recapAide: 'Wszystko jest sprawdzane i zapisywane naraz: jeśli coś nie gra, nic nie powstaje.',
     suivant: 'Dalej', precedent: 'Wstecz', creer: 'Utwórz', creation: 'Tworzenie…', recommencer: 'Utwórz kolejnego',
@@ -142,6 +152,50 @@ function Champ({
         />
       </label>
       {aide && <span style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>{aide}</span>}
+    </div>
+  );
+}
+
+/* Ses sports : plusieurs à la fois, au moins un. Même langage visuel que
+   `Choix`, mais on en coche autant qu'on veut — un triathlète en fait trois. */
+function Sports({
+  label, aide, lang, valeur, onChange,
+}: {
+  label: string; aide: string; lang: Lang; valeur: string[]; onChange: (v: string[]) => void;
+}) {
+  const basculer = (code: string) => {
+    const dedans = valeur.includes(code);
+    /* Le dernier ne se décoche pas : un athlète sans sport n'existe pas. */
+    if (dedans && valeur.length === 1) return;
+    onChange(dedans ? valeur.filter((x) => x !== code) : [...valeur, code]);
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={{ fontSize: 11, color: C.inkSecondary }}>{label}</span>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {SPORTS.map((sp) => {
+          const on = valeur.includes(sp.code);
+          return (
+            <button
+              key={sp.code}
+              type="button"
+              aria-pressed={on}
+              onClick={() => basculer(sp.code)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 11px', borderRadius: R.full, fontSize: 12, fontWeight: 600,
+                border: `1px solid ${on ? C.accent : C.border}`,
+                background: on ? C.accentSoft : C.surface,
+                color: on ? C.accentDeep : C.inkSecondary,
+              }}
+            >
+              <Icon name={on ? 'circle-check' : sp.icon} size={13} />
+              {sp.nom[lang]}
+            </button>
+          );
+        })}
+      </div>
+      <span style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>{aide}</span>
     </div>
   );
 }
@@ -437,6 +491,13 @@ export function Assistant({
   const [prenom, setPrenom] = useState('');
   const [actuelle, setActuelle] = useState('');
   const [cible, setCible] = useState('');
+  /* Ses sports : c'est la première question, parce que c'est elle qui décide
+     des suivantes. Un cycliste n'a pas d'allure 10 km ; la lui demander, c'est
+     l'obliger à inventer un chiffre pour passer l'étape. */
+  const [sports, setSports] = useState<string[]>([SPORT_REFERENCE]);
+  /* Le temps d'aujourd'hui et le temps visé sur l'épreuve étalon de chaque
+     autre sport — « 1500 m », « 40 km ». Facultatifs. */
+  const [objectifs, setObjectifs] = useState<Record<string, { actuel: string; cible: string }>>({});
   const [debut, setDebut] = useState(new Date().toISOString().slice(0, 10));
   const [email, setEmail] = useState('');
   const [nomCompte, setNomCompte] = useState('');
@@ -454,7 +515,9 @@ export function Assistant({
   const etapes: Etape[] = ['quoi', ...(avecAthlete ? (['athlete'] as Etape[]) : []), ...(avecCompte ? (['compte'] as Etape[]) : []), 'recap'];
   const courante = etapes[Math.min(indice, etapes.length - 1)];
 
-  const valideAthlete = nom.trim() !== '' && allureOk(actuelle) && allureOk(cible);
+  const court = sports.includes(SPORT_REFERENCE);
+  const valideAthlete = nom.trim() !== '' && sports.length > 0
+    && (!court || (allureOk(actuelle) && allureOk(cible)));
   const valideCompte = emailOk(email) && mdp !== '' && (avecAthlete || nomCompte.trim() !== '');
   const peutSuivre = courante === 'athlete' ? valideAthlete : courante === 'compte' ? valideCompte : true;
   const nomDuCompte = avecAthlete ? [prenom.trim(), nom.trim()].filter(Boolean).join(' ') : nomCompte.trim();
@@ -464,6 +527,7 @@ export function Assistant({
   const recommencer = () => {
     setMode(modeInitial); setIndice(0); setResultat(null); setErreur(null);
     setNom(''); setPrenom(''); setActuelle(''); setCible(''); setEmail(''); setNomCompte(''); setMdp('');
+    setSports([SPORT_REFERENCE]); setObjectifs({});
     setCompteId(''); setAthleteId(''); setRole('athlete'); setDroit('ecriture');
   };
 
@@ -471,7 +535,16 @@ export function Assistant({
     setJob('saving'); setErreur(null);
     try {
       const r = await api.inscrire({
-        athlete: avecAthlete ? { nom: nom.trim(), prenom: prenom.trim() || null, actuelle: actuelle.trim(), cible: cible.trim(), debut } : null,
+        athlete: avecAthlete ? {
+          nom: nom.trim(), prenom: prenom.trim() || null,
+          actuelle: court ? actuelle.trim() : '', cible: court ? cible.trim() : '',
+          debut, sports,
+          objectifs: sports.filter((x) => x !== SPORT_REFERENCE).map((x) => ({
+            discipline: x,
+            actuel_s: versChrono(objectifs[x]?.actuel ?? '') || null,
+            cible_s: versChrono(objectifs[x]?.cible ?? '') || null,
+          })),
+        } : null,
         compte: avecCompte ? { email: email.trim(), nom: nomDuCompte, role, mot_de_passe: mdp } : null,
         droit,
         compte_id: !avecCompte && compteId ? Number(compteId) : null,
@@ -560,11 +633,47 @@ export function Assistant({
             <Champ label={t.nom} value={nom} onChange={setNom} autoComplete="off" />
             <Champ label={t.prenom} value={prenom} onChange={setPrenom} autoComplete="off" />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-            <Champ label={t.actuelle} value={actuelle} onChange={setActuelle} mono inputMode="decimal" aide={actuelle && !allureOk(actuelle) ? t.allureAide : '4:15'} />
-            <Champ label={t.cible} value={cible} onChange={setCible} mono inputMode="decimal" aide={cible && !allureOk(cible) ? t.allureAide : '3:50'} />
-            <Champ label={t.debut} value={debut} onChange={setDebut} type="date" mono />
-          </div>
+          <Sports label={t.sports} aide={t.sportsAide} lang={lang} valeur={sports} onChange={setSports} />
+          {court ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              <Champ label={t.actuelle} value={actuelle} onChange={setActuelle} mono inputMode="decimal" aide={actuelle && !allureOk(actuelle) ? t.allureAide : '4:15'} />
+              <Champ label={t.cible} value={cible} onChange={setCible} mono inputMode="decimal" aide={cible && !allureOk(cible) ? t.allureAide : '3:50'} />
+              <Champ label={t.debut} value={debut} onChange={setDebut} type="date" mono />
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, maxWidth: 220 }}>
+                <Champ label={t.debut} value={debut} onChange={setDebut} type="date" mono />
+              </div>
+              <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.sansCourse}</div>
+            </>
+          )}
+          {/* Les autres sports : où il en est sur leur épreuve étalon. Facultatif —
+              un athlète qu'on encode un lundi soir n'a pas toujours ses chronos
+              sous la main, et son profil les prendra plus tard. */}
+          {sports.some((x) => x !== SPORT_REFERENCE) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 11, color: C.inkSecondary }}>{t.objectifs}</span>
+              {sports.filter((x) => x !== SPORT_REFERENCE).map((x) => (
+                <div key={x} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 1fr 1fr', gap: 8, alignItems: 'end' }}>
+                  <span style={{ fontSize: 12, color: C.ink, paddingBottom: 9 }}>
+                    {`${SPORTS.find((sp) => sp.code === x)?.nom[lang] ?? x} · ${EPREUVES[x]?.libelle ?? ''}`}
+                  </span>
+                  <Champ
+                    label={t.aujourdhui} mono inputMode="decimal"
+                    value={objectifs[x]?.actuel ?? ''}
+                    onChange={(v) => setObjectifs((o) => ({ ...o, [x]: { actuel: v, cible: o[x]?.cible ?? '' } }))}
+                  />
+                  <Champ
+                    label={t.vise} mono inputMode="decimal"
+                    value={objectifs[x]?.cible ?? ''}
+                    onChange={(v) => setObjectifs((o) => ({ ...o, [x]: { actuel: o[x]?.actuel ?? '', cible: v } }))}
+                  />
+                </div>
+              ))}
+              <span style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>{t.objectifsAide}</span>
+            </div>
+          )}
           {!avecCompte && (
             <>
               <Selection label={t.compteRelie} value={compteId} onChange={setCompteId} vide={t.personne}
@@ -598,7 +707,12 @@ export function Assistant({
 
       {courante === 'recap' && (
         <Bloc titre={t.recap}>
-          {avecAthlete && <Ligne label={t.blocAthlete} valeur={`${[prenom.trim(), nom.trim()].filter(Boolean).join(' ')} · ${actuelle} → ${cible} /km · ${t.debut.toLowerCase()} ${debut}`} />}
+          {avecAthlete && <Ligne label={t.blocAthlete} valeur={[
+            [prenom.trim(), nom.trim()].filter(Boolean).join(' '),
+            sports.map((x) => SPORTS.find((sp) => sp.code === x)?.nom[lang] ?? x).join(', '),
+            court ? `${actuelle} → ${cible} /km` : null,
+            `${t.debut.toLowerCase()} ${debut}`,
+          ].filter(Boolean).join(' · ')} />}
           {avecCompte && <Ligne label={t.blocCompte} valeur={`${email.trim()} · ${t.roles[role]} · ${nomDuCompte}`} />}
           {avecAthlete && avecCompte && <Ligne label={t.acces} valeur={t.droits[droit]} />}
           {!avecCompte && <Ligne label={t.compteRelie} valeur={compteRelie ? `${compteRelie.email} (${t.droits[droit]})` : t.personne} />}

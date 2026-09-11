@@ -709,6 +709,17 @@ try {
   await page.getByLabel('Allure 10 km visée', { exact: true }).fill('4:00');
   await page.waitForTimeout(200);
   check('… et passe une fois l’athlète renseigné', !(await suivant.isDisabled()));
+  /* Ses sports commandent la suite. Un cycliste n'a pas d'allure 10 km : la
+     lui demander, c'est l'obliger à inventer un chiffre pour passer l'étape. */
+  const chip = (nom) => page.locator('button[aria-pressed]').filter({ hasText: nom }).last();
+  await chip('Vélo').click();
+  await chip('Course à pied').click();
+  await page.waitForTimeout(300);
+  const etapeAthlete = await page.locator('body').innerText();
+  check('et ses sports disent ce qu’on lui demande : un cycliste, pas d’allure 10 km',
+    !/Allure 10 km actuelle/.test(etapeAthlete) && /Il ne court pas/.test(etapeAthlete)
+      && /40 km/.test(etapeAthlete) && !(await suivant.isDisabled()),
+    etapeAthlete.split('\n').find((l) => /ne court pas/.test(l))?.slice(0, 70) ?? '');
   /* Strava est à l'athlète : sa liaison, son historique, son application à
      lui. Les paramètres de l'application — la clé, l'application Strava
      commune — sont réunis dans Réglages. */

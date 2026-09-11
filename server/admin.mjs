@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { hacher } from './auth.mjs';
 import { bd, ligne, lignes, scellementPret, transaction } from './bd.mjs';
 import { etatDemoTous, retirerDemo } from './demo.mjs';
+import { ecrireObjectifSport } from './depots.mjs';
 import * as params from './params.mjs';
 import * as strava from './strava.mjs';
 
@@ -213,12 +214,55 @@ export function secondesParKm(x, libelle = 'allure') {
   return v;
 }
 
+/* Les sports que l'application connaît — ceux de la semaine type. Un athlète
+   en fait au moins un, et ce sont eux qui disent ce qu'on lui demande :
+   l'allure 10 km n'a de sens que pour celui qui court. */
+const SPORTS = ['Course à pied', 'Natation', 'Vélo', 'Hyrox'];
+const SPORT_COURSE = 'Course à pied';
+
+function sportsPropres(x) {
+  const liste = Array.isArray(x) ? x.map((s) => String(s).trim()).filter((s) => SPORTS.includes(s)) : [];
+  /* Rien de coché : on retombe sur la course à pied, qui est le cas courant
+     et le seul que l'application savait faire jusqu'ici. */
+  return liste.length ? [...new Set(liste)] : [SPORT_COURSE];
+}
+
+/**
+ * Les deux références 10 km d'un athlète, telles que ses sports les rendent
+ * nécessaires. Il court : on les lit et on les vérifie. Il ne court pas —
+ * un cycliste, un nageur : il n'y a pas d'allure de course à inventer, et
+ * zéro dit « pas de référence » au reste de l'application, qui affiche « — »
+ * au lieu d'un chiffre faux.
+ */
+function referencesDe(source, sports) {
+  if (!sports.includes(SPORT_COURSE)) return { actuelle: 0, cible: 0 };
+  const actuelle = secondesParKm(source.actuelle, 'actuelle');
+  const cible = secondesParKm(source.cible, 'cible');
+  if (cible > actuelle) throw new AdminError('L’allure cible doit être au moins aussi rapide que l’actuelle.');
+  return { actuelle, cible };
+}
+
+/* Les objectifs des autres sports, tels que l'onboarding les propose : un
+   temps d'aujourd'hui et un temps visé sur l'épreuve étalon. Vides, ils ne
+   valent rien et ne s'écrivent pas — c'est ecrireObjectifSport qui le dit. */
+function objectifsPropres(x, sports) {
+  if (!Array.isArray(x)) return [];
+  return x
+    .filter((o) => o && sports.includes(String(o.discipline)) && String(o.discipline) !== SPORT_COURSE)
+    .filter((o) => o.actuel_s || o.cible_s)
+    .map((o) => ({
+      discipline: String(o.discipline),
+      actuel_s: o.actuel_s || null,
+      cible_s: o.cible_s || null,
+    }));
+}
+
 export async function creerAthlete(corps) {
   const nom = nomPropre(corps.nom);
   const prenom = corps.prenom ? String(corps.prenom).trim().slice(0, 80) : null;
-  const actuelle = secondesParKm(corps.actuelle, 'actuelle');
-  const cible = secondesParKm(corps.cible, 'cible');
-  if (cible > actuelle) throw new AdminError('L’allure cible doit être au moins aussi rapide que l’actuelle.');
+  const sports = sportsPropres(corps.sports);
+  const { actuelle, cible } = referencesDe(corps, sports);
+  const objectifs = objectifsPropres(corps.objectifs, sports);
   const debut = /^\d{4}-\d{2}-\d{2}$/.test(String(corps.debut ?? ''))
     ? corps.debut
     : new Date().toISOString().slice(0, 10);
@@ -230,6 +274,7 @@ export async function creerAthlete(corps) {
     [nom, prenom, actuelle, cible, debut],
   );
   const id = r.insertId;
+  for (const o of objectifs) await ecrireObjectifSport(id, o);
   if (corps.compte_id) {
     await ecrireAcces({ compte_id: corps.compte_id, athlete_id: id, droit: corps.droit ?? 'ecriture' });
   }
@@ -373,13 +418,13 @@ export async function inscrire(corps = {}) {
 
   let a = null;
   if (avecAthlete) {
-    const actuelle = secondesParKm(corps.athlete.actuelle, 'actuelle');
-    const cible = secondesParKm(corps.athlete.cible, 'cible');
-    if (cible > actuelle) throw new AdminError('L’allure cible doit être au moins aussi rapide que l’actuelle.');
+    const sports = sportsPropres(corps.athlete.sports);
+    const { actuelle, cible } = referencesDe(corps.athlete, sports);
     a = {
       nom: nomPropre(corps.athlete.nom),
       prenom: corps.athlete.prenom ? String(corps.athlete.prenom).trim().slice(0, 80) : null,
       actuelle, cible,
+      objectifs: objectifsPropres(corps.athlete.objectifs, sports),
       debut: /^\d{4}-\d{2}-\d{2}$/.test(String(corps.athlete.debut ?? ''))
         ? corps.athlete.debut
         : new Date().toISOString().slice(0, 10),
@@ -425,6 +470,7 @@ export async function inscrire(corps = {}) {
           [compteId && droit === 'ecriture' ? compteId : null, a.nom, a.prenom, a.actuelle, a.cible, a.debut],
         );
         athleteId = r.insertId;
+        for (const o of a.objectifs) await ecrireObjectifSport(athleteId, o, cnx);
       }
       if (compteId && athleteId) {
         await cnx.execute(

@@ -563,7 +563,15 @@ export function supprimerAthlete(id: number, corps: { nom: string; compte?: bool
 /** Un athlète et son compte d'un seul geste — ou l'un des deux, relié à
     l'autre s'il existe déjà. Tout ou rien : le serveur écrit en transaction. */
 export function inscrire(corps: {
-  athlete?: { nom: string; prenom?: string | null; actuelle: string; cible: string; debut?: string } | null;
+  athlete?: {
+    nom: string; prenom?: string | null;
+    /* Vides quand il ne court pas : il n'y a alors pas de référence 10 km. */
+    actuelle: string; cible: string; debut?: string;
+    /** Ses sports — ce sont eux qui disent si les allures ont un sens. */
+    sports?: string[];
+    /** Où il en est sur l'épreuve étalon des autres sports, en secondes. */
+    objectifs?: Array<{ discipline: string; actuel_s: number | null; cible_s: number | null }>;
+  } | null;
   compte?: { email: string; nom?: string; role: CompteAdmin['role']; mot_de_passe: string } | null;
   droit?: AthleteVisible['droit'];
   compte_id?: number | null;

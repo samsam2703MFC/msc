@@ -42,12 +42,16 @@ export { athlete, premiereSemaine, derniereSemaine } from './vives';
     workbook the athlete already has — block C interpolates to x.6 s/km and the
     spreadsheet displays 5:44, not 5:45. */
 export function formatAllure(secondes: number): string {
+  /* Zéro, c'est « pas de référence » : un athlète qui ne court pas n'a pas
+     d'allure 10 km, et en afficher une serait l'inventer. */
+  if (!(secondes > 0)) return '—';
   const s = Math.floor(secondes);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}/km`;
 }
 
 /** mm:ss for a 10 km at this pace — how the workbook states each block. */
 export function format10k(secondesParKm: number): string {
+  if (!(secondesParKm > 0)) return '—';
   const total = Math.floor(secondesParKm * 10);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
@@ -158,7 +162,10 @@ export function allureSecondes(
   blocCode: string,
   who: MscAthlete = athleteCourant,
 ): number {
-  return reference(blocCode, who) + zone(zoneCode).ecart_s;
+  /* Sans référence — il ne court pas — il n'y a pas d'allure à calculer :
+     zéro traverse le calcul et s'affiche « — ». */
+  const ref = reference(blocCode, who);
+  return ref > 0 ? ref + zone(zoneCode).ecart_s : 0;
 }
 
 export function allure(
