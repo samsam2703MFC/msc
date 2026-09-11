@@ -83,9 +83,6 @@ async function ouvrirOnglet(page, nom) {
 async function ouvrirSection(page, nom) {
   await redimensionner(page, BUREAU);
   const menu = page.getByRole('navigation', { name: 'Back office' });
-  /* La bascule : on parle du club, pas de moi. */
-  const club = menu.getByRole('button', { name: /^Le club$/ });
-  if (await club.count()) { await club.click(); await page.waitForTimeout(300); }
   await menu.getByRole('button', { name: nom, ...(typeof nom === 'string' ? { exact: true } : {}) }).first().click();
   await page.waitForTimeout(900);
 }
@@ -626,8 +623,9 @@ try {
   const menu = page.getByRole('navigation', { name: 'Back office' });
   const menuTexte = (await menu.count()) ? await menu.innerText() : '';
   /* Le menu ne porte que ce qui ne dépend de personne : deux familles, six
-     entrées, plus les écrans de l'athlète. Ce qui appartient à quelqu'un —
-     son suivi, son plan, son Strava — est dans sa fiche, pas ici. */
+     entrées. Ce qui appartient à quelqu'un — son suivi, son plan, son
+     Strava — est dans sa fiche, pas ici ; et mon entraînement à moi n'est pas
+     dans le back office du tout. */
   check('sur un écran large, l’admin a le bureau : deux familles — entraînement, application',
     (await menu.count()) === 1 && /Entraînement/i.test(menuTexte) && /Application/i.test(menuTexte)
       && /Athlètes/.test(menuTexte) && /Calendrier/.test(menuTexte) && /Classement/.test(menuTexte)
@@ -636,10 +634,12 @@ try {
   check('et rien qui dépende d’un athlète choisi ailleurs',
     !/Suivi/.test(menuTexte) && !/Starts/.test(menuTexte) && !/Strava/.test(menuTexte),
     menuTexte.replace(/\n+/g, ' · ').slice(0, 120));
-  /* La bascule : le club d'un côté, moi de l'autre. Les deux mondes ne
-     partagent plus le même menu. */
-  check('et une bascule entre le club et moi, plutôt que les deux mêlés',
-    /Le club/.test(menuTexte) && /Moi/.test(menuTexte));
+  /* Le back office est au coach, et à lui seul : mon entraînement n'y est
+     pas, pas même derrière une bascule. Il est sur mon téléphone. */
+  check('et rien de mon entraînement : ni bascule, ni mes cinq écrans',
+    !/Le club/.test(menuTexte) && !/Mon entraînement/.test(menuTexte)
+      && !/Dupki/.test(menuTexte) && !/Aujourd'hui/.test(menuTexte),
+    menuTexte.replace(/\n+/g, ' · ').slice(0, 160));
   check('et plus de barre d’onglets', (await page.locator('nav button').count()) > 5);
   check('le hub des athlètes est un tableau sur le bureau', (await page.locator('main table').count()) >= 1);
   /* Et la fiche : tout ce qui est à un athlète, sous son nom, en cinq
@@ -728,17 +728,8 @@ try {
   await menu.getByRole('button', { name: 'Système' }).click();
   await page.waitForTimeout(900);
   check('une section s’ouvre depuis le menu', /cette page/i.test(await page.locator('body').innerText()));
-  /* Et de l'autre côté de la bascule : mon entraînement, mes écrans. */
-  await menu.getByRole('button', { name: /^Moi$/ }).first().click();
-  await page.waitForTimeout(700);
-  const menuMoi = await menu.innerText();
-  check('la bascule « Moi » donne mon entraînement, et rien du club',
-    /Mon entraînement/i.test(menuMoi) && !/Athlètes/.test(menuMoi) && !/Comptes/.test(menuMoi),
-    menuMoi.replace(/\n+/g, ' · ').slice(0, 140));
-  await menu.getByRole('button', { name: "Aujourd'hui" }).click();
-  await page.waitForTimeout(900);
-  check('et mes écrans s’y ouvrent, à leur largeur',
-    /Hier|S\d+/.test(await page.locator('body').innerText()));
+  /* Mon entraînement, lui, est resté sur le téléphone — et le même compte l'y
+     retrouve entier. */
   await page.setViewportSize({ width: 420, height: 900 });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('nav', { timeout: 20000 });

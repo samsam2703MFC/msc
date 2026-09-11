@@ -324,19 +324,12 @@ export function App() {
   const framed = useMedia(FRAME_QUERY);
   const large = useMedia(BUREAU_QUERY);
 
-  /* Le bureau du coach : une fois connecté, sur un écran large. Les écrans de
-     l'athlète y restent accessibles, rendus par le même `Screen`. */
+  /* Le bureau du coach : une fois connecté, sur un écran large. Le back
+     office, et rien d'autre — mon entraînement est sur mon téléphone. */
   if (app.amorce === 'pret' && large && aUnBureau(app)) {
     return (
       <IOSDevice standalone>
-        <Bureau
-          app={app}
-          ecran={<Screen app={app} />}
-          eyebrow={eyebrow(app)}
-          /* Les cinq mêmes que sur le téléphone, « Moi » compris : mon
-             entraînement est mon application, pas un sous-ensemble. */
-          onglets={ORDRE.map((k) => ({ key: k, icon: ICONES[k], label: ONGLET[k][app.lang] }))}
-        />
+        <Bureau app={app} />
       </IOSDevice>
     );
   }

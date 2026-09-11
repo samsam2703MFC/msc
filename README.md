@@ -1373,13 +1373,20 @@ and an unknown model (`coach.modele`) get their own messages too.
 The phone is the athlete's application: five tabs, one hand, installable.
 The coach works sitting down, so a `coach` or `admin` account on a screen at
 least 1024 px wide gets **le bureau** instead of the phone shell
-(`src/Bureau.tsx`): a menu on the left carrying the same two families as the
-phone — *Entraînement* (Athlètes, Calendrier, Classement), *Application*
-(Paramètres, Comptes, Système) — then, behind a *Le club / Moi* switch, the
-athlete's own five screens rendered in a 520 px column because they
-were drawn for a hand, and at the foot *Mon application* (the gear) and the
-sign-out. Nothing in that menu depends on a chosen athlete: their five tabs
-live on their page, reached from the list. The desk opens on Athlètes, and an
+(`src/Bureau.tsx`): a menu on the left carrying two families — *Entraînement*
+(Athlètes, Calendrier, Classement) and *Application* (Paramètres, Comptes,
+Système) — and at the foot *Mon application* (the gear) and the sign-out.
+
+**The back office is the coach's, and only the coach's.** My own training is
+not in that menu, not even behind a switch: that switch was the last piece of
+mixing left, and it is gone. What a coach needs to see of themselves, they see
+the way the club sees it — their line in Athlètes, and their own page. Their
+five tabs are on their phone, which is the point of a PWA. The athlete's sheets
+went with it: the morning run-through, a session, a training-type card open on
+the phone, not over the club's desk.
+
+Nothing in the menu depends on a chosen athlete: what belongs to someone lives
+on their page, reached from the list. The desk opens on Athlètes, and an
 athlete's page carries their name as the page title. The desk is laid out for a desk: the athletes hub is a table, Plan
 puts the athlete, objectives and constraints beside the generated plan, Suivi
 puts the coach card beside the weight curve, Profil the form beside the

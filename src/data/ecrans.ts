@@ -2,12 +2,12 @@
    leur nom dans la barre et le titre de la page.
 
    Ils vivaient dans msc_ui, en base, avec une migration pour les renommer.
-   Cinq mots ne méritent pas ça : les voici en clair, au seul endroit où le
-   téléphone et le bureau les lisent tous les deux. */
+   Cinq mots ne méritent pas ça : les voici en clair. Le bureau ne les lit
+   pas — c'est le back office, et l'entraînement de l'athlète n'y est pas. */
 
 import type { Lang, ScreenKey } from './types';
 
-/** L'ordre de la barre du bas — et du menu « Mon entraînement » au bureau. */
+/** L'ordre de la barre du bas. */
 export const ORDRE: ScreenKey[] = ['today', 'week', 'coach', 'dupki', 'moi'];
 
 export const ICONES: Record<ScreenKey, string> = {

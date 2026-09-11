@@ -1,11 +1,13 @@
-/* Le bureau : le back office sur un écran large, pour un coach ou un admin.
+/* Le bureau : le back office, et rien d'autre.
 
-   Le téléphone est l'application de l'athlète — cinq onglets, une main. Le
-   coach, lui, travaille assis : un menu à gauche qui liste tout le back
-   office, une page large à droite où un tableau a la place de ses colonnes.
-   Les écrans de l'athlète restent à portée, dans le même menu, rendus dans
-   une colonne à leur taille : ils ont été dessinés pour une main, on ne les
-   étire pas.
+   Deux applications, deux appareils. Le téléphone est celle de l'athlète —
+   cinq onglets, une main, mon entraînement. Le bureau est celle du club : un
+   menu à gauche qui liste tout le back office, une page large à droite où un
+   tableau a la place de ses colonnes.
+
+   Mon entraînement n'est donc pas ici, pas même derrière une bascule : c'était
+   le dernier mélange qui restait. Ce que le coach a à voir de lui-même, il le
+   voit comme le club le voit — sa ligne dans Athlètes, et sa fiche.
 
    Rien ici ne décide de quoi que ce soit : les sections, les rôles, les
    données sont ceux de l'application ; ce fichier ne fait que les disposer. */
@@ -13,28 +15,20 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import * as db from './data/db';
-import { TITRE } from './data/ecrans';
-import type { ScreenKey } from './data/types';
 import { C, F, R } from './design/theme';
 import { Icon } from './components/Icon';
 import { Avatar } from './components/Avatar';
-import { MatinSheet } from './components/MatinSheet';
 import { MiseAJour } from './components/MiseAJour';
 import { ProfilSheet } from './components/ProfilSheet';
-import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
-import { TypeSheet } from './components/TypeSheet';
 import { GROUPES, ICONES_SECTION, SectionAdmin, sectionsDe, titreSection } from './screens/AdminScreen';
 import type { Vue } from './screens/AdminScreen';
 import type { App } from './state/useApp';
 
 const T = {
-  fr: { backOffice: 'Back office', monEntrainement: 'Mon entraînement', club: 'Le club', moi: 'Moi', mesEcrans: 'Mon application', deconnexion: 'Déconnexion', version: 'version', horsLigne: 'Hors ligne · copie locale', attente: 'en attente d’envoi', roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } },
-  pl: { backOffice: 'Zaplecze', monEntrainement: 'Mój trening', club: 'Klub', moi: 'Ja', mesEcrans: 'Moja aplikacja', deconnexion: 'Wyloguj', version: 'wersja', horsLigne: 'Offline · kopia lokalna', attente: 'czeka na wysłanie', roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } },
+  fr: { backOffice: 'Back office', mesEcrans: 'Mon application', deconnexion: 'Déconnexion', version: 'version', horsLigne: 'Hors ligne · copie locale', attente: 'en attente d’envoi', roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } },
+  pl: { backOffice: 'Zaplecze', mesEcrans: 'Moja aplikacja', deconnexion: 'Wyloguj', version: 'wersja', horsLigne: 'Offline · kopia lokalna', attente: 'czeka na wysłanie', roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } },
 } as const;
-
-/* Où l'on en est dans le back office. Mes écrans, eux, sont dans `app.screen`
-   comme sur le téléphone : deux états séparés pour deux mondes séparés. */
 
 function Entree({
   icon, label, actif, onClick,
@@ -71,35 +65,19 @@ function Groupe({ titre, children }: { titre: string; children: ReactNode }) {
   );
 }
 
-export function Bureau({
-  app, ecran, eyebrow, onglets,
-}: {
-  app: App;
-  /** L'écran de l'athlète courant (Aujourd'hui, Semaine…), rendu par App. */
-  ecran: ReactNode;
-  eyebrow: string;
-  onglets: Array<{ key: ScreenKey; icon: string; label: string }>;
-}) {
+export function Bureau({ app }: { app: App }) {
   const lang = app.lang;
   const t = T[lang];
   const role = app.identite?.compte.role;
   const sections = sectionsDe(role);
-  /* Deux mondes, et une bascule entre les deux — jamais les deux dans le même
-     menu. Le back office parle des autres et de l'application ; mon
-     entraînement ne parle que de moi. On entre par le back office : sur un
-     grand écran, c'est pour ça qu'on s'assoit. */
-  const [mode, setMode] = useState<'club' | 'moi'>('club');
   const [vue, setVue] = useState<Vue>({ section: 'athletes' });
 
   /* La fiche d'un athlète porte son nom en titre : c'est de lui qu'il s'agit,
      et le menu, lui, ne parle que du club et de l'application. */
   const fiche = vue.section === 'athletes' && vue.onglet;
-  const titre = mode === 'moi'
-    ? TITRE[app.screen][lang]
-    : fiche
-      ? [db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ') || db.athlete.nom
-      : titreSection(vue.section, lang);
-  const sur = mode === 'moi' ? eyebrow : t.backOffice;
+  const titre = fiche
+    ? [db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ') || db.athlete.nom
+    : titreSection(vue.section, lang);
 
   return (
     <div
@@ -130,29 +108,7 @@ export function Bureau({
           </div>
         </div>
 
-        {/* La bascule : le club, ou moi. Deux mondes qui ne se mélangent
-            plus — c'était ça, le désordre : des entrées « à moi » au milieu
-            d'entrées « aux autres ». */}
-        <div style={{ display: 'flex', gap: 3, padding: 3, margin: '0 8px', borderRadius: R.full, background: C.surfaceAlt, border: `1px solid ${C.border}` }}>
-          {([['club', t.club], ['moi', t.moi]] as const).map(([m, libelle]) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              aria-pressed={mode === m}
-              style={{
-                flex: 1, padding: '6px 8px', borderRadius: R.full, fontSize: 12, fontWeight: 600,
-                background: mode === m ? C.surface : 'transparent',
-                color: mode === m ? C.ink : C.inkSecondary,
-                boxShadow: mode === m ? C.shadowCard : 'none',
-              }}
-            >
-              {libelle}
-            </button>
-          ))}
-        </div>
-
-        {mode === 'club' ? GROUPES.map((g) => {
+        {GROUPES.map((g) => {
           const siennes = g.sections.filter((x) => sections.includes(x));
           if (siennes.length === 0) return null;
           return (
@@ -168,21 +124,7 @@ export function Bureau({
               ))}
             </Groupe>
           );
-        }) : (
-          /* Mon entraînement : mes écrans, les mêmes que sur mon téléphone,
-             et « Moi » pour mon plan, mes starts, mon profil, ma Strava. */
-          <Groupe titre={t.monEntrainement}>
-            {onglets.map((o) => (
-              <Entree
-                key={o.key}
-                icon={o.icon}
-                label={o.label}
-                actif={app.screen === o.key}
-                onClick={() => app.setScreen(o.key)}
-              />
-            ))}
-          </Groupe>
-        )}
+        })}
 
         <div style={{ flex: 1 }} />
 
@@ -213,7 +155,7 @@ export function Bureau({
                 {[app.enLigne ? null : t.horsLigne, app.enAttente > 0 ? `${app.enAttente} ${t.attente}` : null].filter(Boolean).join(' · ')}
               </div>
             )}
-            <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.teal, fontWeight: 600 }}>{sur}</div>
+            <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.teal, fontWeight: 600 }}>{t.backOffice}</div>
             <h1 style={{ margin: 0, fontFamily: F.display, fontSize: 24, fontWeight: 600, letterSpacing: '-0.01em', color: C.ink, lineHeight: 1.15 }}>
               {titre}
             </h1>
@@ -229,23 +171,17 @@ export function Bureau({
         </header>
 
         <main className="msc-scroll" style={{ flex: 1, padding: '24px 32px 40px' }}>
-          {mode === 'club' ? (
-            <div style={{ maxWidth: 1400 }}>
-              <SectionAdmin app={app} vue={vue} large onVue={setVue} />
-            </div>
-          ) : (
-            /* Mes écrans, à la largeur pour laquelle ils sont dessinés — pas
-               étirés sur tout l'écran. */
-            <div style={{ maxWidth: 520 }}>{ecran}</div>
-          )}
+          <div style={{ maxWidth: 1400 }}>
+            <SectionAdmin app={app} vue={vue} large onVue={setVue} />
+          </div>
         </main>
       </div>
 
+      {/* Deux feuilles seulement : le réglage de mon application, et le profil
+          de l'athlète affiché. Le matin, une séance, une fiche de type — c'est
+          l'application de l'athlète, elle est sur son téléphone. */}
       {app.settingsOpen && <SettingsSheet app={app} />}
       {app.profilOpen && <ProfilSheet app={app} />}
-      {app.matinOuvert && <MatinSheet app={app} />}
-      {app.sessionId !== null && <SessionSheet app={app} sessionId={app.sessionId} />}
-      {app.typeCode !== null && <TypeSheet app={app} code={app.typeCode} />}
     </div>
   );
 }
