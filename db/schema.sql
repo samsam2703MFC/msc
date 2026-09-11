@@ -577,6 +577,34 @@ CREATE TABLE IF NOT EXISTS msc_activity_bloc (
   CONSTRAINT fk_bloc_activity FOREIGN KEY (activity_id) REFERENCES msc_activity (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- La semaine type d'un athlète : ce qui ne change pas d'une semaine à l'autre.
+--
+-- Sept jours, deux créneaux par jour (le matin et le soir, ou la première et
+-- la seconde séance). Chaque créneau porte un sport fixe et un type
+-- d'entraînement ; la durée est celle qu'il fait d'habitude, et sert de part
+-- dans le volume de la semaine. Les allures, elles, ne sont pas stockées :
+-- elles se calculent du type et des références 10 km de l'athlète — les
+-- stocker serait en avoir deux versions, dont une fausse.
+--
+-- C'est la matrice que le générateur suit pour poser un plan, et que le coach
+-- suit pour recalculer chaque jour : il change la quantité et l'intensité,
+-- jamais le sport du créneau.
+CREATE TABLE IF NOT EXISTS msc_structure (
+  athlete_id INT UNSIGNED NOT NULL,
+  jour       TINYINT UNSIGNED NOT NULL COMMENT '0 = lundi … 6 = dimanche',
+  creneau    TINYINT UNSIGNED NOT NULL COMMENT '1 = le premier de la journée, 2 = le second',
+  discipline VARCHAR(32) NOT NULL COMMENT 'Course à pied, Natation, Vélo, Hyrox, Repos',
+  type_code  VARCHAR(16) NOT NULL,
+  duree_min  SMALLINT UNSIGNED NULL COMMENT 'la durée habituelle — sa part dans le volume de la semaine',
+  maj_le     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (athlete_id, jour, creneau),
+  KEY ix_structure_type (type_code),
+  CONSTRAINT fk_structure_athlete FOREIGN KEY (athlete_id) REFERENCES msc_athlete (id) ON DELETE CASCADE,
+  CONSTRAINT fk_structure_type FOREIGN KEY (type_code) REFERENCES msc_type (code),
+  CONSTRAINT ck_structure_jour CHECK (jour BETWEEN 0 AND 6),
+  CONSTRAINT ck_structure_creneau CHECK (creneau BETWEEN 1 AND 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Le journal : le RPE ressenti et la note, saisis à la main chaque jour. C'est
 -- la moitié de la charge de Foster, et la seule que Strava ne donnera jamais.
 CREATE TABLE IF NOT EXISTS msc_journal (

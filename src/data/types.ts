@@ -94,6 +94,20 @@ export interface MscActivity {
   duree_s?: number;
 }
 
+/** Un créneau de la semaine type : un jour, un rang dans la journée, un sport
+    fixe et un type d'entraînement. Les allures ne sont pas là : elles se
+    calculent du type et des références de l'athlète. */
+export interface MscStructure {
+  /** 0 = lundi … 6 = dimanche. */
+  jour: number;
+  /** 1 = le premier créneau de la journée, 2 = le second. */
+  creneau: 1 | 2;
+  discipline: string;
+  type_code: TypeCode;
+  /** La durée habituelle, qui fait sa part dans le volume de la semaine. */
+  duree_min?: number;
+}
+
 export interface MscJournal {
   date: string;
   session_id: number;

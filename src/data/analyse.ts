@@ -689,6 +689,16 @@ export function demanderGlissant(aujourdhui: string, lang: Lang = 'fr'): Promise
     },
     passees,
     prochains,
+    /* La semaine type : le coach replanifie DANS cette matrice — il change la
+       quantité et l'intensité, jamais le sport du créneau. Sans elle, il
+       replanifie comme avant, à partir du plan seul. */
+    structure: db.select('msc_structure')
+      .slice()
+      .sort((a, b) => a.jour - b.jour || a.creneau - b.creneau)
+      .map((c) => ({
+        jour: c.jour, creneau: c.creneau, discipline: c.discipline,
+        type: c.type_code, duree_min: c.duree_min ?? null,
+      })),
     regles: db.select('msc_regle').map((r) => `${r.si[lang]} → ${r.alors[lang]} (${r.gravite})`),
   });
 }

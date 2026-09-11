@@ -27,6 +27,7 @@ import { ParamScreen } from './ParamScreen';
 import { ComptesScreen } from './ComptesScreen';
 import { SystemeScreen } from './SystemeScreen';
 import { StravaScreen } from './StravaScreen';
+import { StructureScreen } from './StructureScreen';
 import { Historique } from '../components/Historique';
 
 /** « 3:20:00 », « 41:40 » ou « 2500 » → secondes. Un marathon se vise en
@@ -193,18 +194,19 @@ export type Section = keyof typeof SECTIONS.fr;
 
 /** Les onglets de la fiche d'un athlète — le second niveau, et le seul. */
 export const ONGLETS = {
-  fr: { suivi: 'Suivi', plan: 'Plan', courses: 'Starts', profil: 'Profil', strava: 'Strava' },
-  pl: { suivi: 'Podgląd', plan: 'Plan', courses: 'Starty', profil: 'Profil', strava: 'Strava' },
+  fr: { suivi: 'Suivi', structure: 'Semaine type', plan: 'Plan', courses: 'Starts', profil: 'Profil', strava: 'Strava' },
+  pl: { suivi: 'Podgląd', structure: 'Tydzień wzorcowy', plan: 'Plan', courses: 'Starty', profil: 'Profil', strava: 'Strava' },
 } as const;
 
 export type Onglet = keyof typeof ONGLETS.fr;
 
-export const ONGLETS_ORDRE: Onglet[] = ['suivi', 'plan', 'courses', 'profil', 'strava'];
+export const ONGLETS_ORDRE: Onglet[] = ['suivi', 'structure', 'plan', 'courses', 'profil', 'strava'];
 
 /* Ce que chaque onglet répond, en une ligne : la fiche le dit sous le nom de
    l'athlète, pour qu'on n'ait pas à ouvrir les cinq pour trouver le bon. */
 const ONGLET_AIDE: Record<Onglet, Record<Lang, string>> = {
   suivi: { fr: 'Ce qui a été fait : forme, charge, poids, séances de la semaine.', pl: 'Co zostało zrobione: forma, obciążenie, waga, treningi tygodnia.' },
+  structure: { fr: 'La semaine type : sept jours, deux créneaux, un sport et un type par créneau. C’est elle que le coach suit chaque jour.', pl: 'Tydzień wzorcowy: siedem dni, dwa okna, sport i typ w każdym. To nią kieruje się trener każdego dnia.' },
   plan: { fr: 'Le plan : objectifs, contraintes, et le plan que le coach en tire.', pl: 'Plan: cele, ograniczenia i plan, który z nich wynika.' },
   courses: { fr: 'Les starts : les courses déjà faites, et celles qui viennent.', pl: 'Starty: biegi już zrobione i nadchodzące.' },
   profil: { fr: 'L’identité : nom, références 10 km, coach choisi, langue.', pl: 'Dane: nazwisko, odniesienia 10 km, wybrany trener, język.' },
@@ -217,7 +219,8 @@ export const ICONES_SECTION: Record<Section, string> = {
 };
 
 export const ICONES_ONGLET: Record<Onglet, string> = {
-  suivi: 'heart-pulse', plan: 'wand-sparkles', courses: 'flag', profil: 'pencil', strava: 'link',
+  suivi: 'heart-pulse', structure: 'calendar-days', plan: 'wand-sparkles',
+  courses: 'flag', profil: 'pencil', strava: 'link',
 };
 
 /* Deux familles, dans cet ordre : ce que le club fait, puis ce que
@@ -376,6 +379,7 @@ export function FicheAthlete({
       </Card>
 
       {onglet === 'suivi' && <SuiviAthlete app={app} large={large} />}
+      {onglet === 'structure' && <StructureScreen app={app} large={large} />}
       {onglet === 'plan' && <Generateur app={app} large={large} />}
       {onglet === 'courses' && <BackOffice app={app} />}
       {onglet === 'profil' && (
@@ -596,15 +600,19 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     debut,
   };
 
+  /* La semaine type de l'athlète commande le squelette : le plan tombe sur
+     ses jours, ses sports, ses types. Sans elle, le squelette par défaut. */
+  const structure = db.select('msc_structure');
+
   const plan: PlanGenere | null = useMemo(() => {
     if (!objectifs.some((o) => o.date && o.principal)) return null;
     try {
-      return genererPlan(athlete, objectifs.filter((o) => o.date), contraintes);
+      return genererPlan(athlete, objectifs.filter((o) => o.date), contraintes, structure);
     } catch {
       return null;
     }
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [nom, actuelle, cible, debut, objectifs, contraintes]);
+  }, [nom, actuelle, cible, debut, objectifs, contraintes, app.version]);
 
   const sessions = useMemo(
     () => (plan && methode ? appliquerMethode(plan.sessions, methode) : (plan?.sessions ?? [])),

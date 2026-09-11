@@ -598,7 +598,7 @@ const ETAT_EN_CLAIR = {
   fait: 'FAITE', partiel: 'FAITE AUTREMENT', manque: 'MANQUÉE', aujourdhui: 'AUJOURD’HUI', prevu: 'à venir', repos: 'repos',
 };
 
-function contexteGlissant({ athlete, aujourdhui, jour, semaine, bloc, matin, passees, prochains, regles }) {
+function contexteGlissant({ athlete, aujourdhui, jour, semaine, bloc, matin, passees, prochains, structure, regles }) {
   const lignes = [
     `Athlète : ${athlete.nom}. Référence 10 km actuelle ${athlete.ref_actuelle} → cible ${athlete.ref_cible}.`,
     `Aujourd'hui : ${jour} ${aujourdhui} · semaine ${semaine} · bloc ${bloc}.`,
@@ -641,6 +641,22 @@ function contexteGlissant({ athlete, aujourdhui, jour, semaine, bloc, matin, pas
       ? ` · pas faite parce que : ${s.raisons.map((r) => RAISON_EN_CLAIR[r] ?? r).join(', ')}`
       : '';
     lignes.push(`  ${s.id}  ${s.jour} ${s.date} · ${s.titre} · ${s.type} · prévu ${s.duree_min} min${s.natation_m ? ` · ${s.natation_m} m` : ''} · ${etat}${strava}${rpe}${bloque}${pourquoi}`);
+  }
+
+  /* La semaine type : la matrice de l'athlète. C'est une contrainte, pas une
+     information — le sport d'un créneau ne se négocie pas, sinon la structure
+     ne veut plus rien dire. */
+  if (structure?.length) {
+    const JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    lignes.push('', 'Sa semaine type — la structure qu’il a choisie, et que tu SUIS :');
+    for (const c of structure) {
+      lignes.push(`  ${JOURS[c.jour] ?? c.jour} · créneau ${c.creneau} · ${c.discipline} · ${c.type}${c.duree_min ? ` · ${c.duree_min} min d’habitude` : ''}`);
+    }
+    lignes.push(
+      '  Tu changes la QUANTITÉ (durée, volume) et l’INTENSITÉ (type plus facile),',
+      '  jamais le SPORT d’un créneau : un créneau natation reste de la natation.',
+      '  Un jour absent de cette liste est un jour de repos : n’y pose rien.',
+    );
   }
 
   lignes.push('', 'Les sept prochains jours, tels que le plan les prévoit. Une ligne ne peut nommer qu’un de ces id :');

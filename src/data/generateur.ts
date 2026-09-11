@@ -27,11 +27,13 @@
 import { DEFICITS_DEFAUT, comparableAuDixKm, referenceAPied } from './courses';
 import type { Deficits } from './courses';
 import { formatAllure, param } from './engine';
+import { zonesDuType } from './structure';
 import type {
   Localized,
   MscBloc,
   MscPlanSession,
   MscPlanWeek,
+  MscStructure,
   TypeCode,
   ZoneCode,
 } from './types';
@@ -300,8 +302,31 @@ type Creneau = {
   dur?: boolean;
 };
 
-/** The week's shape. Quality on Wednesday, long run on Saturday: 72 h apart. */
-function creneaux(contraintes: Contraintes, qualite: TypeCode): Creneau[] {
+/* Les types qui comptent comme « durs » : deux d'entre eux ne doivent pas se
+   toucher à moins de 48 h, et c'est ce drapeau qui le dit. */
+const DURS_STRUCTURE = new Set<TypeCode>(['seuil', 'allure10', 'vma', 'longue', 'montagne', 'test']);
+
+/** The week's shape. Quality on Wednesday, long run on Saturday: 72 h apart.
+
+    Quand l'athlète a une semaine type (`msc_structure`), c'est elle qui
+    commande : chaque créneau garde son jour, son sport et son type, et sa
+    durée habituelle devient sa part du volume. Le squelette ci-dessous ne sert
+    plus qu'aux athlètes qui n'en ont pas encore posé une. */
+function creneaux(contraintes: Contraintes, qualite: TypeCode, structure?: MscStructure[]): Creneau[] {
+  if (structure?.length) {
+    const total = structure.reduce((t, c) => t + (c.duree_min ?? 45), 0) || 1;
+    return structure
+      .slice()
+      .sort((a, b) => a.jour - b.jour || a.creneau - b.creneau)
+      .map((c) => ({
+        jour: c.jour,
+        discipline: c.discipline,
+        type: c.type_code,
+        zones: zonesDuType(c.type_code, c.discipline),
+        part: (c.duree_min ?? 45) / total,
+        dur: c.discipline === 'Course à pied' && DURS_STRUCTURE.has(c.type_code),
+      }));
+  }
   const out: Creneau[] = [];
   if (contraintes.salle) {
     out.push({ jour: 0, discipline: 'Hyrox', type: 'force', zones: [], part: 0.16 });
@@ -366,6 +391,9 @@ export function genererPlan(
   athlete: ProfilAthlete,
   objectifs: Objectif[],
   contraintes: Contraintes,
+  /* La semaine type de l'athlète. Absente, le squelette par défaut s'applique
+     — c'est ce qui se passait avant qu'elle existe. */
+  structure?: MscStructure[],
 ): PlanGenere {
   const { blocs, semaines_total, avertissements } = periodiser(athlete, objectifs, contraintes);
   const depart = lundi(athlete.debut);
@@ -393,7 +421,7 @@ export function genererPlan(
     const estMontagne =
       contraintes.montagne_toutes_les > 0 && s % contraintes.montagne_toutes_les === 0;
 
-    const grille = creneaux(contraintes, qualiteDuBloc(indexBloc, s - bloc.de));
+    const grille = creneaux(contraintes, qualiteDuBloc(indexBloc, s - bloc.de), structure);
     const totalPart = grille.reduce((t, c) => t + c.part, 0);
 
     for (const creneau of grille) {

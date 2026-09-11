@@ -579,6 +579,28 @@ try {
       && /Profil/.test(ficheTexte) && /Strava/.test(ficheTexte)
       && /Tous les athlètes/.test(ficheTexte),
     ficheTexte.split('\n').slice(0, 3).join(' · '));
+  /* La semaine type : la matrice que le coach suit. Sept jours, deux créneaux,
+     un sport et un type par créneau, et les allures qui en découlent. */
+  await page.getByRole('tab', { name: 'Semaine type', exact: true }).click();
+  await page.waitForTimeout(1000);
+  const matrice = await page.locator('main').innerText();
+  check('la semaine type est une matrice : sept jours, deux créneaux',
+    /LUNDI/.test(matrice) && /DIMANCHE/.test(matrice)
+      && /1er créneau/.test(matrice) && /2e créneau/.test(matrice)
+      && (await page.getByRole('combobox').count()) >= 28,
+    `${await page.getByRole('combobox').count()} listes déroulantes`);
+  await page.getByRole('button', { name: /Partir du modèle/ }).click();
+  await page.waitForTimeout(600);
+  const remplie = await page.locator('main').innerText();
+  check('le modèle remplit la grille, avec les allures cibles des créneaux à pied',
+    /Volume de la semaine type/.test(remplie) && /Allures cibles/.test(remplie)
+      && /\d+:\d\d\/km/.test(remplie),
+    remplie.split('\n').find((l) => /Allures cibles/.test(l))?.slice(0, 90) ?? '');
+  await page.getByRole('button', { name: /Enregistrer la semaine type/ }).click();
+  await page.waitForTimeout(1500);
+  const [[rangee]] = await bd().execute('SELECT COUNT(*) AS n FROM msc_structure WHERE athlete_id = 1');
+  check('et elle s’enregistre, créneau par créneau', Number(rangee.n) >= 5, `${rangee.n} créneaux`);
+
   /* Et la sortie définitive : dans SA fiche, sous son profil, jamais d'un
      seul bouton — on dit ce qui sera détruit, et le nom se tape. */
   await page.getByRole('tab', { name: 'Profil', exact: true }).click();

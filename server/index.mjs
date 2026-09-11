@@ -537,6 +537,15 @@ async function router(req, res, url) {
       depots.ecrireJournal(athlete_id, corps, cnx)));
   }
 
+  /* La semaine type : sept jours, deux créneaux, un sport et un type par
+     créneau. Écrite d'un bloc — c'est une matrice, pas une liste de gestes. */
+  if (chemin === '/api/structure' && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const corps = await lireCorps(req, 16_000);
+    return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'structure', (cnx) =>
+      depots.ecrireStructure(athlete_id, corps.creneaux, cnx)));
+  }
+
   if (chemin === '/api/mesure' && req.method === 'POST') {
     const { athlete_id } = await athleteDe(req, url, 'ecriture');
     const corps = await lireCorps(req, 16_000);

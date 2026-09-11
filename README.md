@@ -1116,6 +1116,47 @@ is how an app stops being opened. Step 1 has no exit. The sheet stays mounted
 across the steps (`matinOuvert` in `useApp`, distinct from `matinRequis`), and
 logging out resets the walk — the next person on this phone does their own.
 
+### La semaine type — the matrix the coach follows
+
+An athlete's week has a shape that does not change: Tuesday is the swim,
+Wednesday is the quality run, Saturday is the long one. That shape is now data
+— `msc_structure`, seven days × two slots, each slot carrying **a fixed sport**
+and **a training type** picked from a dropdown, plus the duration it usually
+takes. It is edited in the back office, in the athlete's **Semaine type** tab.
+
+Three things come out of one matrix, and the screen shows them in the order
+they are decided:
+
+| | |
+|---|---|
+| **la structure** | which day, which slot, which sport — what does not move |
+| **le type** | what is done there, from a list proper to that sport (`typesPour`) |
+| **les allures** | computed from the type and the athlete's 10 km references, never stored |
+
+The paces are deliberately *not* in the table: storing them would mean holding
+two versions of the same number, one of which goes stale the day the athlete
+gets faster. `zonesDuType()` in `src/data/structure.ts` maps a type to its
+zones — the same rule the generator applies when it places a session — and the
+cell renders `db.allure(zone, bloc)` for the current block. Outside running
+there is no per-kilometre pace to give, and the cell says so rather than
+printing a running pace on a swim.
+
+Two things follow it:
+
+- **The generator.** `creneaux()` in `generateur.ts` reads the matrix when
+  there is one: each slot keeps its day, sport and type, and its usual duration
+  becomes its share of the week's volume. The old hardcoded skeleton remains
+  for athletes who have not set one.
+- **The coach, every day.** The rolling-days prompt carries the matrix, and
+  says what it is for: *you change the quantity and the intensity, never the
+  sport of a slot; a day absent from the list is a rest day, put nothing
+  there.* That is the difference between a coach that replans and one that
+  improvises.
+
+An empty slot is rest — it is not stored, it is read from the absence. Writing
+the matrix replaces it whole (`POST /api/structure`): it is one decision, not a
+stream of keystrokes, so the screen edits locally and saves on a button.
+
 ### Race types, objectives and starts
 
 One catalogue, `src/data/courses.ts`, names every race an athlete can aim at

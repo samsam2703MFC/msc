@@ -231,6 +231,14 @@ export function ecrireJournal(corps: EcritureJournal) {
   return ecrire<{ journal_id: number }>('/journal', corps, 'journal');
 }
 
+/** La semaine type, écrite d'un bloc : ce qui est envoyé remplace ce qui est
+    rangé. Un créneau vide ne s'envoie pas — un jour sans rien, c'est le repos. */
+export function ecrireStructure(creneaux: Array<{
+  jour: number; creneau: 1 | 2; discipline: string; type_code: string; duree_min?: number;
+}>) {
+  return ecrire<{ creneaux: number }>('/structure', { creneaux }, 'structure');
+}
+
 export interface EcritureMesure {
   date: string;
   poids_kg?: number;

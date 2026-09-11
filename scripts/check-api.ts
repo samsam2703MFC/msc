@@ -303,6 +303,33 @@ try {
     JSON.stringify(relu5?.raisons) === '[]' && JSON.stringify(relu5?.limites) === JSON.stringify(['jambes']),
     JSON.stringify({ raisons: relu5?.raisons, limites: relu5?.limites }));
 
+  /* La semaine type : sept jours, deux créneaux, et c'est la matrice entière
+     qui s'écrit — un créneau retiré de l'envoi disparaît, un « repos » ne se
+     range pas (un jour sans rien EST le repos). */
+  const semaineType = await c.appel('/api/structure', {
+    method: 'POST',
+    body: JSON.stringify({ creneaux: [
+      { jour: 1, creneau: 1, discipline: 'Natation', type_code: 'nage', duree_min: 55 },
+      { jour: 2, creneau: 1, discipline: 'Course à pied', type_code: 'seuil', duree_min: 60 },
+      { jour: 2, creneau: 2, discipline: 'Hyrox', type_code: 'force', duree_min: 45 },
+      { jour: 6, creneau: 1, discipline: 'Repos', type_code: 'repos', duree_min: 0 },
+      { jour: 9, creneau: 1, discipline: 'Course à pied', type_code: 'ef', duree_min: 40 },
+    ] }),
+  });
+  check('la semaine type s’écrit, sans le repos ni un jour qui n’existe pas',
+    semaineType.statut === 200 && semaineType.corps.creneaux === 3,
+    JSON.stringify(semaineType.corps));
+  const avecStructure = await c.appel('/api/db/instantane');
+  const matrice = avecStructure.corps.msc_structure ?? [];
+  check('et l’instantané la porte, rangée par jour et par créneau',
+    matrice.length === 3 && matrice[0].jour === 1 && matrice[0].type_code === 'nage'
+      && matrice[2].jour === 2 && matrice[2].creneau === 2 && matrice[2].duree_min === 45,
+    JSON.stringify(matrice));
+  const videe = await c.appel('/api/structure', { method: 'POST', body: JSON.stringify({ creneaux: [] }) });
+  const apresVidage = (await c.appel('/api/db/instantane')).corps.msc_structure ?? [];
+  check('l’envoyer vide l’efface : la matrice est remplacée, pas fusionnée',
+    videe.statut === 200 && apresVidage.length === 0, JSON.stringify(apresVidage));
+
   /* Les sept prochains jours : la route vérifie sa forme, puis demande au
      coach — sans clé Anthropic ici, c'est le 401 qui dit lequel des trois cas
      on est ; avec une clé, une replanification rangée. */

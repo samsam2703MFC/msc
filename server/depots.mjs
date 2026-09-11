@@ -181,7 +181,7 @@ async function lePlan(planId) {
 }
 
 async function leVecu(athleteId) {
-  const [activites, blocs, journal, douleurs, limites, raisons, mesures, attente] = await Promise.all([
+  const [activites, blocs, journal, douleurs, limites, raisons, structure, mesures, attente] = await Promise.all([
     lignes('SELECT * FROM msc_activity WHERE athlete_id = :a ORDER BY date, id', { a: athleteId }),
     lignes(
       `SELECT b.* FROM msc_activity_bloc b JOIN msc_activity a ON a.id = b.activity_id
@@ -196,6 +196,9 @@ async function leVecu(athleteId) {
     lignes(
       `SELECT r.* FROM msc_journal_raison r JOIN msc_journal j ON j.id = r.journal_id
        WHERE j.athlete_id = :a ORDER BY r.raison`, { a: athleteId }),
+    lignes(
+      'SELECT jour, creneau, discipline, type_code, duree_min FROM msc_structure WHERE athlete_id = :a ORDER BY jour, creneau',
+      { a: athleteId }),
     lignes(
       "SELECT * FROM msc_mesure WHERE athlete_id = :a AND etat = 'confirme' ORDER BY date",
       { a: athleteId }),
@@ -228,6 +231,12 @@ async function leVecu(athleteId) {
   }
 
   return {
+    /* La semaine type : sept jours, deux créneaux. Les écrans la lisent comme
+       le reste, et le générateur en fait son squelette. */
+    msc_structure: structure.map((c) => ({
+      jour: c.jour, creneau: c.creneau, discipline: c.discipline,
+      type_code: c.type_code, duree_min: c.duree_min ?? undefined,
+    })),
     msc_activity: activites.map((a) => ({
       id_strava: Number(a.id_strava ?? a.id),
       session_id: a.session_id ?? undefined,
@@ -847,6 +856,39 @@ export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil,
     }
   }
   return { journal_id: journalId };
+}
+
+/** La semaine type d'un athlète, remplacée d'un bloc.
+
+    Un tableau de créneaux, et c'est tout ce qui reste : écrire la matrice,
+    c'est la poser telle qu'elle est à l'écran, pas fusionner deux états. Un
+    créneau au type « repos » n'est pas rangé — un jour sans rien EST le
+    repos, et une ligne « repos » se compterait dans le volume. */
+export async function ecrireStructure(athleteId, creneaux, cnx) {
+  const q = cnx ?? (await import('./bd.mjs')).bd();
+  const gardes = [];
+  for (const c of creneaux ?? []) {
+    const jour = Number(c?.jour);
+    const creneau = Number(c?.creneau);
+    if (!Number.isInteger(jour) || jour < 0 || jour > 6) continue;
+    if (creneau !== 1 && creneau !== 2) continue;
+    const type = String(c?.type_code ?? '').slice(0, 16);
+    if (!type || type === 'repos') continue;
+    const discipline = String(c?.discipline ?? '').slice(0, 32);
+    if (!discipline || discipline === 'Repos') continue;
+    const duree = Number(c?.duree_min);
+    gardes.push([jour, creneau, discipline, type,
+      Number.isFinite(duree) && duree > 0 ? Math.min(Math.round(duree), 600) : null]);
+  }
+  await q.execute('DELETE FROM msc_structure WHERE athlete_id = ?', [athleteId]);
+  for (const [jour, creneau, discipline, type, duree] of gardes) {
+    await q.execute(
+      `INSERT INTO msc_structure (athlete_id, jour, creneau, discipline, type_code, duree_min)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [athleteId, jour, creneau, discipline, type, duree],
+    );
+  }
+  return { creneaux: gardes.length };
 }
 
 /** Le poids et la FC de repos du jour. */
