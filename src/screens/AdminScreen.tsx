@@ -5,7 +5,7 @@
    placement need nothing but the form. Asking Claude for the methodology is a
    second, optional step that fills in what each session actually is. */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import * as db from '../data/db';
 import { genererPlan } from '../data/generateur';
 import type { Contraintes, Objectif, PlanGenere, ProfilAthlete } from '../data/generateur';
@@ -17,7 +17,7 @@ import { Icon } from '../components/Icon';
 import { AccentButton, Card, Colonnes, Grid, Mono, SectionLabel } from '../components/primitives';
 import { DEFICITS_DEFAUT, DISCIPLINES, estMulti, referenceAPied, typeCourse, typesGroupes } from '../data/courses';
 import type { Deficits, TypeCourse } from '../data/courses';
-import type { Lang, MscCompetition } from '../data/types';
+import type { Lang, MscCompetition, NaturePeriode } from '../data/types';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
 import { AthletesHub, SuiviAthlete } from './AthletesScreen';
@@ -496,44 +496,75 @@ export function MoiScreen({ app, large = false }: { app: App; large?: boolean })
    fait en lignes. */
 const DURS = new Set(['seuil', 'allure10', 'vma', 'longue', 'montagne', 'course', 'test']);
 
-function Periodisation({ app }: { app: App }) {
+/* Les périodes du plan, et ce qui les façonne.
+
+   Une ligne par période ; on la déroule pour voir ses semaines une à une, ce
+   que chacune pèse et ce qui la distingue — un pas de plus, une décharge, une
+   semaine de course. Les réglages qui donnent cette forme sont là aussi, à
+   côté de ce qu'ils font : une rampe qu'on lit sans pouvoir la changer oblige
+   à la deviner ailleurs.
+
+   Le tableau montre le plan qu'on est en train de composer dès qu'il y en a
+   un — c'est celui qu'on règle. Sans objectif, il montre le plan actif : où
+   l'athlète en est aujourd'hui. */
+function Periodisation({
+  app, plan, contraintes, onReglage,
+}: {
+  app: App;
+  plan?: PlanGenere | null;
+  contraintes?: Contraintes;
+  onReglage?: (patch: Partial<Contraintes>) => void;
+}) {
   const lang = app.lang;
   const fr = lang === 'fr';
-  const blocs = db.select('msc_bloc');
-  if (blocs.length === 0) return null;
-  const courant = db.derniereSemaine > 0 && app.semaine > 0 ? db.blocDeSemaine(app.semaine).code : null;
+  const [ouverte, setOuverte] = useState<string | null>(null);
 
-  const lignes = blocs.map((b) => {
+  /* Deux sources, une seule forme : le plan composé, ou celui de la base. */
+  const source = plan
+    ? {
+      blocs: plan.blocs,
+      heures: (n: number) => plan.semaines.find((w) => w.semaine === n)?.heures ?? 0,
+      seances: (de: number, a: number) => plan.sessions
+        .filter((x) => x.semaine >= de && x.semaine <= a && x.discipline !== 'Repos'),
+      courses: new Set(plan.sessions.filter((x) => x.type === 'course').map((x) => x.semaine)),
+    }
+    : {
+      blocs: db.select('msc_bloc'),
+      heures: (n: number) => db.bilanSemaine(n).prevu.minutes / 60,
+      seances: (de: number, a: number) => db.select('msc_session', (x) => x.semaine >= de
+        && x.semaine <= a && x.discipline !== 'Repos'),
+      courses: new Set(db.select('msc_session', (x) => x.type === 'course').map((x) => x.semaine)),
+    };
+
+  if (source.blocs.length === 0) return null;
+  const courant = !plan && db.derniereSemaine > 0 && app.semaine > 0
+    ? db.blocDeSemaine(app.semaine).code
+    : null;
+
+  const lignes = source.blocs.map((b) => {
     const semaines = [];
-    for (let n = b.de; n <= b.a; n += 1) semaines.push(db.bilanSemaine(n).prevu);
-    const minutes = semaines.reduce((t, x) => t + x.minutes, 0);
-    const seances = db.select('msc_session', (x) => x.semaine >= b.de && x.semaine <= b.a
-      && x.discipline !== 'Repos');
+    for (let n = b.de; n <= b.a; n += 1) {
+      semaines.push({ semaine: n, heures: source.heures(n), course: source.courses.has(n) });
+    }
+    const seances = source.seances(b.de, b.a);
     const durs = seances.filter((x) => DURS.has(x.type)).length;
-    /* La rampe : de combien le volume monte d'une semaine à l'autre.
 
-       Première et dernière semaine du bloc ne le disent pas : la dernière est
-       souvent une semaine de course ou de décharge, et une construction à
-       +6 %/sem s'affichait alors « −7 % ». On prend la médiane des rapports
-       d'une semaine à la suivante, les semaines de course retirées : une
-       décharge sur quatre ne déplace pas une médiane, un arrêt de course si. */
-    const courses = new Set(db
-      .select('msc_session', (x) => x.type === 'course' && x.semaine >= b.de && x.semaine <= b.a)
-      .map((x) => x.semaine));
-    const utiles = semaines.filter((_, i) => !courses.has(b.de + i)).map((x) => x.minutes);
+    /* La rampe : de combien le volume monte d'une semaine à l'autre. On prend
+       la médiane des rapports, les semaines de course retirées — première
+       contre dernière donnait « −7 % » sur une construction à +6 %, parce que
+       la dernière est souvent une semaine de course ou de décharge. */
+    const utiles = semaines.filter((x) => !x.course).map((x) => x.heures);
     const rapports = utiles
       .slice(1)
-      .map((m, i) => (utiles[i] > 0 ? m / utiles[i] : null))
+      .map((h, i) => (utiles[i] > 0 ? h / utiles[i] : null))
       .filter((r): r is number => r !== null)
       .sort((x, y) => x - y);
-    const rampe = rapports.length > 0
-      ? (rapports[Math.floor(rapports.length / 2)] - 1) * 100
-      : null;
+
     return {
       bloc: b,
-      n: semaines.length,
-      heures: minutes / 60,
-      rampe,
+      semaines,
+      heures: semaines.reduce((t, x) => t + x.heures, 0),
+      rampe: rapports.length > 0 ? (rapports[Math.floor(rapports.length / 2)] - 1) * 100 : null,
       seances: seances.length,
       qualite: seances.length > 0 ? Math.round((durs / seances.length) * 100) : 0,
     };
@@ -544,16 +575,21 @@ function Periodisation({ app }: { app: App }) {
     textAlign: 'left', padding: '6px 8px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
     textTransform: 'uppercase', color: C.inkSecondary, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap',
   };
+  const pourcent = (v: number | null, suffixe = '') => (v === null
+    ? '—'
+    : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)} %${suffixe}`);
 
   return (
     <Card padding="14px 16px" gap={10}>
       <SectionLabel icon="route" color={C.teal}>
-        {fr ? 'Les périodes du plan' : 'Okresy planu'}
+        {plan
+          ? (fr ? 'Les périodes du plan à venir' : 'Okresy przyszłego planu')
+          : (fr ? 'Les périodes du plan' : 'Okresy planu')}
       </SectionLabel>
       <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.45 }}>
         {fr
-          ? 'Chaque période a sa place entre ta référence d’aujourd’hui et ton objectif : c’est la part, et c’est elle qui donne l’allure de référence du bloc. La rampe dit de combien le volume monte d’une semaine à l’autre.'
-          : 'Każdy okres ma swoje miejsce między dzisiejszym odniesieniem a celem: to jest udział, i to on daje tempo odniesienia bloku. Rampa mówi, o ile rośnie objętość z tygodnia na tydzień.'}
+          ? 'Chaque période a sa place entre ta référence d’aujourd’hui et ton objectif : c’est la part, et c’est elle qui donne l’allure de référence du bloc. Ouvre une période pour voir ses semaines — et régler ce qui leur donne cette forme.'
+          : 'Każdy okres ma swoje miejsce między dzisiejszym odniesieniem a celem: to jest udział, i to on daje tempo odniesienia bloku. Otwórz okres, by zobaczyć jego tygodnie — i ustawić to, co nadaje im kształt.'}
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
@@ -569,43 +605,63 @@ function Periodisation({ app }: { app: App }) {
           <tbody>
             {lignes.map((l) => {
               const ici = l.bloc.code === courant;
+              const ouvert = ouverte === l.bloc.code;
+              const ref = plan
+                ? db.athlete.ref_actuelle_s - (db.athlete.ref_actuelle_s - db.athlete.ref_cible_s) * l.bloc.part
+                : db.reference(l.bloc.code);
               return (
-                <tr key={l.bloc.code} style={{ background: ici ? C.accentSoft : 'transparent' }}>
-                  <td style={cellule}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Mono size={12} color={C.teal}>{l.bloc.code}</Mono>
-                      <span style={{ fontWeight: 600, color: C.ink }}>{db.periode(l.bloc).nom[lang]}</span>
-                      {ici && (
-                        <span style={{ fontSize: 9.5, fontWeight: 700, color: C.accentDeep, textTransform: 'uppercase' }}>
-                          {fr ? 'ici' : 'tu'}
-                        </span>
-                      )}
-                    </div>
-                    {/* Le nom que le bloc porte, quand il dit autre chose que
-                        sa période — « Vers le semi de Lille » vaut mieux que
-                        « Construction » répété quatre fois. */}
-                    <div style={{ fontSize: 11, color: C.inkQuiet, whiteSpace: 'normal' }}>
-                      {[l.bloc.nom[lang] === db.periode(l.bloc).nom[lang] ? null : l.bloc.nom[lang],
-                        l.bloc.quoi?.[lang] || db.periode(l.bloc).quoi[lang]]
-                        .filter(Boolean).join(' · ')}
-                    </div>
-                  </td>
-                  <td style={cellule}>
-                    <Mono size={12} color={C.inkBody}>{`${l.bloc.de} → ${l.bloc.a}`}</Mono>
-                    <span style={{ fontSize: 11, color: C.inkQuiet }}>{` (${l.n})`}</span>
-                  </td>
-                  <td style={cellule}><Mono size={12} color={C.ink}>{`${Math.round(l.bloc.part * 100)} %`}</Mono></td>
-                  <td style={cellule}><Mono size={12} color={C.ink}>{db.format10k(db.reference(l.bloc.code))}</Mono></td>
-                  <td style={cellule}><Mono size={12} color={C.inkBody}>{`${l.heures.toFixed(0)} h`}</Mono></td>
-                  <td style={cellule}>
-                    <Mono size={12} color={l.rampe == null ? C.inkQuiet : l.rampe >= 0 ? C.accentDeep : C.warning}>
-                      {l.rampe == null ? '—' : `${l.rampe >= 0 ? '+' : '−'}${Math.abs(l.rampe).toFixed(1)} %`}
-                    </Mono>
-                    <span style={{ fontSize: 10, color: C.inkQuiet }}>{fr ? '/sem' : '/tydz'}</span>
-                  </td>
-                  <td style={cellule}><Mono size={12} color={C.inkBody}>{String(l.seances)}</Mono></td>
-                  <td style={cellule}><Mono size={12} color={C.inkBody}>{`${l.qualite} %`}</Mono></td>
-                </tr>
+                <Fragment key={l.bloc.code}>
+                  <tr
+                    onClick={() => setOuverte(ouvert ? null : l.bloc.code)}
+                    style={{ background: ici ? C.accentSoft : 'transparent', cursor: 'pointer' }}
+                  >
+                    <td style={cellule}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name={ouvert ? 'chevron-down' : 'chevron-right'} size={13} />
+                        <Mono size={12} color={C.teal}>{l.bloc.code}</Mono>
+                        <span style={{ fontWeight: 600, color: C.ink }}>{db.periode(l.bloc).nom[lang]}</span>
+                        {ici && (
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: C.accentDeep, textTransform: 'uppercase' }}>
+                            {fr ? 'ici' : 'tu'}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.inkQuiet, whiteSpace: 'normal' }}>
+                        {[l.bloc.nom[lang] === db.periode(l.bloc).nom[lang] ? null : l.bloc.nom[lang],
+                          l.bloc.quoi?.[lang] || db.periode(l.bloc).quoi[lang]]
+                          .filter(Boolean).join(' · ')}
+                      </div>
+                    </td>
+                    <td style={cellule}>
+                      <Mono size={12} color={C.inkBody}>{`${l.bloc.de} → ${l.bloc.a}`}</Mono>
+                      <span style={{ fontSize: 11, color: C.inkQuiet }}>{` (${l.semaines.length})`}</span>
+                    </td>
+                    <td style={cellule}><Mono size={12} color={C.ink}>{`${Math.round(l.bloc.part * 100)} %`}</Mono></td>
+                    <td style={cellule}><Mono size={12} color={C.ink}>{db.format10k(ref)}</Mono></td>
+                    <td style={cellule}><Mono size={12} color={C.inkBody}>{`${l.heures.toFixed(0)} h`}</Mono></td>
+                    <td style={cellule}>
+                      <Mono size={12} color={l.rampe === null ? C.inkQuiet : l.rampe >= 0 ? C.accentDeep : C.warning}>
+                        {pourcent(l.rampe)}
+                      </Mono>
+                      <span style={{ fontSize: 10, color: C.inkQuiet }}>{fr ? '/sem' : '/tydz'}</span>
+                    </td>
+                    <td style={cellule}><Mono size={12} color={C.inkBody}>{String(l.seances)}</Mono></td>
+                    <td style={cellule}><Mono size={12} color={C.inkBody}>{`${l.qualite} %`}</Mono></td>
+                  </tr>
+                  {ouvert && (
+                    <tr>
+                      <td colSpan={8} style={{ ...cellule, whiteSpace: 'normal', background: C.surfaceAlt }}>
+                        <SemainesDeLaPeriode
+                          semaines={l.semaines}
+                          lang={lang}
+                          nature={l.bloc.nature}
+                          contraintes={contraintes}
+                          onReglage={onReglage}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -617,6 +673,105 @@ function Periodisation({ app }: { app: App }) {
           : `Od ${db.format10k(db.athlete.ref_actuelle_s)} do ${db.format10k(db.athlete.ref_cible_s)} na 10 km: udział okresu mówi, gdzie cię stawia na tej drodze.`}
       </div>
     </Card>
+  );
+}
+
+/* Le détail d'une période : ses semaines, et les réglages qui leur donnent
+   cette forme. Les réglages ne s'affichent que sur un plan qu'on compose —
+   sur un plan déjà enregistré, il n'y a plus rien à régler, il y a à
+   régénérer. */
+function SemainesDeLaPeriode({
+  semaines, lang, nature, contraintes, onReglage,
+}: {
+  semaines: Array<{ semaine: number; heures: number; course: boolean }>;
+  lang: Lang;
+  nature: NaturePeriode;
+  contraintes?: Contraintes;
+  onReglage?: (patch: Partial<Contraintes>) => void;
+}) {
+  const fr = lang === 'fr';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {semaines.map((w, i) => {
+          const avant = semaines[i - 1]?.heures;
+          const pas = avant && avant > 0 ? (w.heures / avant - 1) * 100 : null;
+          return (
+            <div
+              key={w.semaine}
+              style={{
+                display: 'flex', flexDirection: 'column', gap: 2, minWidth: 84,
+                padding: '6px 8px', borderRadius: R.md,
+                border: `1px solid ${w.course ? C.accent : C.border}`,
+                background: w.course ? C.accentSoft : C.surface,
+              }}
+            >
+              <Mono size={11} color={C.inkQuiet}>{`S${w.semaine}`}</Mono>
+              <Mono size={13} color={C.ink}>{`${w.heures.toFixed(1)} h`}</Mono>
+              <Mono size={10} color={w.course ? C.accentDeep : pas === null ? C.inkQuiet : pas >= 0 ? C.accentDeep : C.warning}>
+                {w.course
+                  ? (fr ? 'course' : 'zawody')
+                  : pas === null ? '—' : `${pas >= 0 ? '+' : '−'}${Math.abs(pas).toFixed(0)} %`}
+              </Mono>
+            </div>
+          );
+        })}
+      </div>
+      {onReglage && contraintes && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
+          {nature === 'reamorcage' && (
+            <>
+              <Reglage label={fr ? 'Départ (% du plancher)' : 'Start (% podłogi)'}
+                valeur={contraintes.reamorcage_depart_pct ?? 55}
+                onChange={(v) => onReglage({ reamorcage_depart_pct: v })} />
+              <Reglage label={fr ? 'Semaines' : 'Tygodnie'} valeur={contraintes.reamorcage_semaines}
+                onChange={(v) => onReglage({ reamorcage_semaines: v })} />
+            </>
+          )}
+          {(nature === 'construction' || nature === 'pic') && (
+            <>
+              <Reglage label={fr ? 'Rampe (%/sem)' : 'Rampa (%/tydz)'} valeur={contraintes.rampe_pct ?? 6}
+                onChange={(v) => onReglage({ rampe_pct: v })} />
+              <Reglage label={fr ? 'Décharge : 1 sem. sur' : 'Odciążenie: 1 tydz. na'}
+                valeur={contraintes.decharge_cadence ?? 4}
+                onChange={(v) => onReglage({ decharge_cadence: v })} />
+              <Reglage label={fr ? 'Décharge (−%)' : 'Odciążenie (−%)'} valeur={contraintes.decharge_pct ?? 20}
+                onChange={(v) => onReglage({ decharge_pct: v })} />
+            </>
+          )}
+          {nature === 'affutage' && (
+            <>
+              <Reglage label={fr ? 'Pente (−%/sem)' : 'Spadek (−%/tydz)'} valeur={contraintes.affutage_pct ?? 25}
+                onChange={(v) => onReglage({ affutage_pct: v })} />
+              <Reglage label={fr ? 'Semaines' : 'Tygodnie'} valeur={contraintes.affutage_semaines}
+                onChange={(v) => onReglage({ affutage_semaines: v })} />
+            </>
+          )}
+          <Reglage label={fr ? 'Semaine de course (% du plancher)' : 'Tydzień zawodów (% podłogi)'}
+            valeur={contraintes.semaine_course_pct ?? 55}
+            onChange={(v) => onReglage({ semaine_course_pct: v })} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Un réglage : un nombre, et rien d'autre. Il agit tout de suite — le plan se
+   recompose sous le tableau, ce qui est la seule façon de savoir ce que le
+   chiffre fait. */
+function Reglage({ label, valeur, onChange }: {
+  label: string; valeur: number; onChange: (v: number) => void;
+}) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 10.5, color: C.inkSecondary }}>
+      {label}
+      <input
+        type="number"
+        value={String(valeur)}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        style={{ ...CHAMP, fontFamily: F.mono, width: 84, padding: '6px 8px', fontSize: 12 }}
+      />
+    </label>
   );
 }
 
@@ -763,7 +918,16 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
     {/* Le plan qu'il suit aujourd'hui, période par période — avant celui qu'on
         lui construirait. On lit d'abord où il en est. */}
-    <Periodisation app={app} />
+    <Periodisation
+      app={app}
+      plan={plan}
+      contraintes={contraintes}
+      onReglage={(patch) => {
+        const { plancher_heures: sol, ...reste } = patch;
+        if (sol !== undefined) setPlancherSaisi(sol);
+        if (Object.keys(reste).length > 0) setReglages((r) => ({ ...r, ...reste }));
+      }}
+    />
 
     <Colonnes large={large} ratio="minmax(0, 5fr) minmax(0, 6fr)" gauche={<>
       {/* d'où l'on part : ce que Strava sait de l'athlète */}

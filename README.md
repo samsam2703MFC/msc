@@ -1170,6 +1170,23 @@ number of sessions and the share of them that are hard. The row the athlete is
 living in is highlighted, and the footer restates the road: *from 52:00 to
 38:00 over 10 km*.
 
+**A period opens.** Clicking a row shows its weeks one by one — what each
+weighs, and the step from the one before, with race weeks marked — and, next to
+them, the settings that give them that shape: the ramp per week, the deload
+(one week in N, minus how much), where the rebuild starts, how steeply the
+taper falls, what a race week weighs. They act immediately: the plan recomposes
+under the table, which is the only way to learn what a number does. A ramp you
+can read but not change is a ramp you have to guess about somewhere else.
+
+Those settings are optional fields on `Contraintes`: absent, the defaults in
+`generateur.ts` apply, so "+6 % per week" is written once rather than in two
+places, one of which would eventually lie. Every one is clamped — a 400 typed
+by accident must not produce a plan nobody can follow.
+
+The table shows the plan **being composed** as soon as there is one, since
+that is the one being tuned; with no objective it shows the active plan, where
+the athlete is today.
+
 A table rather than six cards, because periods are read by comparison, and
 comparison happens in rows. Everything in it is computed from the plan already
 in the snapshot — nothing new is stored to display it.

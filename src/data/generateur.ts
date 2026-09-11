@@ -116,6 +116,22 @@ export interface Contraintes {
   salle: boolean;
   /** A mountain long run every N weeks, 0 to switch it off. */
   montagne_toutes_les: number;
+
+  /* La forme du volume, en pour cent. Absentes, ce sont les valeurs par
+     défaut ci-dessus : les rendre facultatives évite d'avoir deux endroits où
+     lire « +6 % par semaine », dont un qui finirait par mentir. */
+  /** Ce que le volume gagne d'une semaine à l'autre, hors réamorçage. */
+  rampe_pct?: number;
+  /** Une semaine allégée toutes les N. 0 pour aucune. */
+  decharge_cadence?: number;
+  /** Ce qu'une semaine de décharge perd. */
+  decharge_pct?: number;
+  /** Où part le réamorçage, en pour cent du plancher. */
+  reamorcage_depart_pct?: number;
+  /** Ce qu'une semaine d'affûtage perd sur la précédente. */
+  affutage_pct?: number;
+  /** Ce que pèse une semaine de course. */
+  semaine_course_pct?: number;
 }
 
 export interface ProfilAthlete {
@@ -312,6 +328,12 @@ export function periodiser(
 
 /* ------------------------------------------------------------------ volume */
 
+/** Un pour cent réglé à la main, borné : un « 400 » tapé par accident ne doit
+    pas produire un plan que personne ne peut suivre. */
+function pourcent(v: number | undefined, defaut: number): number {
+  return Number.isFinite(v) ? Math.min(Math.max(Number(v), 0), 60) : defaut;
+}
+
 /** Hours per week: ramp inside the block, deload every fourth, drop for races,
     and come back down through the taper. */
 export function courbeVolume(
@@ -325,9 +347,17 @@ export function courbeVolume(
   const plancher = contraintes.plancher_heures;
   const out: number[] = [];
 
+  /* Les réglages, ou leurs valeurs par défaut — une seule fois, ici. */
+  const rampe = 1 + pourcent(contraintes.rampe_pct, (RAMPE - 1) * 100) / 100;
+  const cadence = Math.max(0, Math.round(contraintes.decharge_cadence ?? CADENCE_DECHARGE));
+  const decharge = 1 - pourcent(contraintes.decharge_pct, (1 - DECHARGE) * 100) / 100;
+  const depart = pourcent(contraintes.reamorcage_depart_pct, 55) / 100;
+  const pente = 1 - pourcent(contraintes.affutage_pct, (1 - AFFUTAGE) * 100) / 100;
+  const course = pourcent(contraintes.semaine_course_pct, SEMAINE_COURSE * 100) / 100;
+
   for (let s = 1; s <= semaines; s++) {
     if (semainesDeCourse.has(s)) {
-      out.push(Math.round(plancher * SEMAINE_COURSE * 10) / 10);
+      out.push(Math.round(plancher * course * 10) / 10);
       continue;
     }
 
@@ -336,21 +366,21 @@ export function courbeVolume(
        entière en est une. */
     if (s >= affutageDe) {
       const precedent = out[s - 2] ?? plancher;
-      out.push(Math.round(precedent * AFFUTAGE * 10) / 10);
+      out.push(Math.round(precedent * pente * 10) / 10);
       continue;
     }
 
     let heures: number;
     if (s <= reamorcage) {
-      /* Rebuild ramps from just over half the floor up to it. */
+      /* Rebuild ramps from its starting share of the floor up to the floor. */
       const part = reamorcage <= 1 ? 1 : (s - 1) / (reamorcage - 1);
-      heures = plancher * (0.55 + 0.45 * part);
+      heures = plancher * (depart + (1 - depart) * part);
     } else {
       const precedent = out[s - 2] ?? plancher;
-      heures = Math.max(precedent * RAMPE, plancher);
+      heures = Math.max(precedent * rampe, plancher);
     }
 
-    if (s % CADENCE_DECHARGE === 0) heures *= DECHARGE;
+    if (cadence > 0 && s % cadence === 0) heures *= decharge;
     out.push(Math.round(Math.max(heures, s <= reamorcage ? 0 : plancher) * 10) / 10);
   }
   return out;

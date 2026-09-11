@@ -476,6 +476,16 @@ try {
     createur.split('\n').find((l) => /Réamorçage/i.test(l))?.slice(0, 70) ?? '');
   /* Et il les nomme par leur nature, pas par le nom du bloc : le plan du
      classeur s'ouvre sur un réamorçage et finit sur un pic. */
+  /* Dérouler une période : ses semaines une à une, et les réglages qui leur
+     donnent cette forme — la rampe se lisait sans pouvoir se changer. */
+  await page.locator('tr').filter({ hasText: /Réamorçage/ }).first().click();
+  await page.waitForTimeout(400);
+  const deroulee = await page.locator('body').innerText();
+  check('ouvrir une période montre ses semaines et ce qui les règle',
+    /S1\b/.test(deroulee) && /Départ \(% du plancher\)/i.test(deroulee)
+      && /Semaine de course/i.test(deroulee),
+    deroulee.split('\n').find((l) => /Départ \(%/i.test(l)) ?? '');
+
   check('et il nomme chaque période — réamorçage, construction, pic',
     /Réamorçage/i.test(createur) && /Construction/i.test(createur) && /\bPic\b/i.test(createur),
     createur.split('\n').filter((l) => /^(Réamorçage|Construction|Pic|Affûtage)/i.test(l.trim()))
