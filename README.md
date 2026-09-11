@@ -1302,6 +1302,14 @@ Pace is not a column of the table and will not be: it is computed from the
 session's type and its period's reference. Storing it would mean two versions,
 one of them wrong the day the athlete gets faster.
 
+A row opens: touching it unfolds the session's breakdown underneath — the same
+`Deroule` the athlete's session sheet shows, not a second version — with the
+warm-up, the repeated blocks, their recoveries, the paces and the heart-rate
+ranges. One row open at a time. A session with no breakdown — a swim, a ride,
+a strength session — shows its detail text instead of nothing. The panel is
+stuck to the left edge of the table's scroll box: the table is wider than a
+phone, and a breakdown you have to scroll sideways to read is not read.
+
 ### Le plan part de la semaine type, volume compris
 
 The weekly matrix already gave the plan its days, its sports and its session
@@ -1673,7 +1681,13 @@ What is there today: the engine's tolerances (drift, pace gap, overload), the
 form thresholds (resting HR delta, HRV drop, the HRV baseline window) and the
 form curves' constants (the base's 42 days, fatigue's 7, the window shown),
 the coach model, the Anthropic key, the Strava application, the password
-floor. The browser gets the
+floor, and the six transformation tiers' thresholds — **shown as the tiers
+themselves**, each with the head an athlete wears there, its name and the
+power it takes, above the settings that move them: setting "palier 4: 60/100"
+without seeing what tier 4 is was setting it blind. The names and thresholds
+come from the ranking, which reads these same settings, so changing one
+changes the list and there are never two versions of what a « Super Guerrier
+2 » is. The browser gets the
 non-secret subset in the snapshot (`msc_param`) and reads it through
 `db.param(cle, defaut)`; the server reads through `param(cle)` with a
 fifteen-second cache that a write invalidates.
@@ -1809,12 +1823,13 @@ password — it is never read back — and sets the right on each athlete
 their login, once — lives in **Athlètes**; Comptes carries the same assistant
 started at "un compte seul", for a coach, an admin or a login for an athlete
 encoded earlier. Its steps: **Quoi** (an athlete and their account, an
-athlete alone, an account alone), **Athlète** (name, first name, the two
-10 km paces in `mm:ss`, the plan's start), **Compte** (email, password, role,
+athlete alone, an account alone), **Athlète** (name, first name, **his
+sports**, then what his sports call for, and the plan's start), **Compte**
+(email, password, role,
 the account named after the athlete, the right on the athlete), **Récap**,
 then **Créer**. Each step only shows its fields and only lets a valid one
 through — a pace outside 2:00–15:00 /km or an email without its @ keeps
-Suivant greyed — and the last panel offers what a coach does next: **Relier
+Suivant greyed, and so does an athlete with no sport at all — and the last panel offers what a coach does next: **Relier
 Strava** and **Écrire son plan**, which display the new athlete and open the
 matching section. An athlete alone can be attached to an existing account, an
 account alone to an existing athlete. The server revalidates everything and
@@ -1823,6 +1838,24 @@ refuses the whole thing rather than leaving an orphan account, and
 `check:api` asserts exactly that; `check:app` drives the first two steps. The
 paces go through the same gate as the command line, and a password through
 the same `securite.mdp_min`.
+
+**His sports decide what the step asks.** Marcin only rides, and races a
+triathlon now and then; the step used to demand a current and a target 10 km
+pace and kept **Suivant** grey until it got them, so encoding him meant making
+two numbers up. The first question is now which sports he does — course à
+pied, natation, vélo, Hyrox, as many as apply, at least one. Pick running and
+the two 10 km references are asked exactly as before: they are what gives
+every pace of his plan. Leave it out and nothing is asked, because there is
+nothing to ask — the plan works in durations and effort zones, and the
+application shows `—` wherever a pace would be written. **Zero, in the two
+references, means "no reference"**: `allureSecondes` stops computing from a
+null reference, and `formatAllure` and `format10k` render `—` rather than a
+`0:00/km`. The other sports take, optionally, where he stands on their
+yardstick event — 40 km on the bike, 1500 m in the water — into
+`msc_objectif_sport`, where the profile already reads them; two empty times
+write nothing, because an empty row is not an objective. Free sign-up still
+asks for both paces (pre-filled 5:30 → 5:00): it addresses an athlete
+registering alone, and his profile corrects them.
 
 Two things the screen refuses, because the back office must never close from
 the inside: an admin cannot deactivate their own account or take their own
