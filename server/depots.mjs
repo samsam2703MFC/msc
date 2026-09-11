@@ -2015,17 +2015,33 @@ export async function ecrireCompetition(athleteId, c) {
   return transaction(async (cnx) => {
     let id = c.id;
     if (id) {
-      const [r] = await cnx.execute(
-        `UPDATE msc_competition SET date = ?, nom = ?, lieu = ?, pays = ?, discipline = ?,
-           type_course = ?, distance_km = ?, denivele_m = ?, officielle = ?, note = ?,
-           cible_s = ?, cible_haute_s = ?, principal = ?, parties = ?
-         WHERE id = ? AND athlete_id = ?`,
-        [c.date, c.nom, c.lieu ?? null, c.pays ?? null, c.discipline ?? 'Course à pied',
-         c.type_course ?? null, c.distance_km, c.denivele_m ?? null, c.officielle === false ? 0 : 1, c.note ?? null,
-         ...cibles(c), c.principal ? 1 : 0, parties(c),
-         id, athleteId],
+      /* « Elle n'existe pas » et « rien n'a changé » sont deux choses
+         différentes, et MySQL rend zéro ligne affectée dans les deux cas.
+         On regarde donc d'abord si la course est là : sans ça, valider une
+         ligne sans la modifier répondait « Compétition inconnue », la ligne
+         restait en état modifié — et une ligne modifiée n'a pas de bouton de
+         suppression. On ne pouvait donc plus l'effacer. */
+      const [[existe]] = await cnx.execute(
+        'SELECT id FROM msc_competition WHERE id = ? AND athlete_id = ?', [id, athleteId],
       );
-      if (r.affectedRows === 0) throw new DepotError('Compétition inconnue.', 404);
+      if (!existe) throw new DepotError('Compétition inconnue.', 404);
+
+      /* Ce qui fait l'objectif — chrono visé, couronne, parties — ne s'écrit
+         que si l'appel le porte. L'écran des Starts, lui, n'envoie que la
+         course : une absence vaut « n'y touche pas », pas « efface ». */
+      const champs = ['date = ?', 'nom = ?', 'lieu = ?', 'pays = ?', 'discipline = ?',
+        'type_course = ?', 'distance_km = ?', 'denivele_m = ?', 'officielle = ?', 'note = ?'];
+      const valeurs = [c.date, c.nom, c.lieu ?? null, c.pays ?? null, c.discipline ?? 'Course à pied',
+        c.type_course ?? null, c.distance_km, c.denivele_m ?? null,
+        c.officielle === false ? 0 : 1, c.note ?? null];
+      if ('cible_s' in c) { champs.push('cible_s = ?', 'cible_haute_s = ?'); valeurs.push(...cibles(c)); }
+      if ('principal' in c) { champs.push('principal = ?'); valeurs.push(c.principal ? 1 : 0); }
+      if ('parties' in c) { champs.push('parties = ?'); valeurs.push(parties(c)); }
+
+      await cnx.execute(
+        `UPDATE msc_competition SET ${champs.join(', ')} WHERE id = ? AND athlete_id = ?`,
+        [...valeurs, id, athleteId],
+      );
     } else {
       const [r] = await cnx.execute(
         `INSERT INTO msc_competition (athlete_id, date, nom, lieu, pays, discipline, type_course,

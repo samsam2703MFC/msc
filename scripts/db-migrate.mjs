@@ -11,6 +11,7 @@
        npm run db:migrate -- --reset      # détruit et recrée. Demande confirmation.
 */
 
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import mysql from 'mysql2/promise';
@@ -342,6 +343,47 @@ try {
         );
       }
       console.log(`+ msc_structure ${a.nom} : ${AMORCE_CRENEAUX.length} créneaux (amorce)`);
+    }
+  }
+
+  /* Le plan de l'athlète de l'amorce, régénéré une fois pour qu'il finisse par
+     un affûtage. Les plans d'avant montaient en volume jusqu'à la semaine de
+     course : les périodes existent depuis peu, et un plan déjà en base ne se
+     réécrit pas tout seul.
+
+     Trois gardes, et c'est tout : l'athlète nommé, un plan actif qui n'a pas
+     déjà d'affûtage, et le paquet du générateur présent (il n'est là qu'après
+     un déploiement — en développement, `npm run plan:regenerer` fait pareil).
+     L'ancien plan n'est pas supprimé : ses séances restent, et le journal
+     comme les activités qui les visent avec.
+
+     C'est une amorce, pas une règle : quand ce plan-ci aura son affûtage, ces
+     vingt lignes se suppriment sans rien casser. */
+  const [[aRegenerer]] = await cnx.query(
+    `SELECT a.id, a.nom FROM msc_athlete a
+       JOIN msc_plan p ON p.athlete_id = a.id AND p.actif = 1
+      WHERE a.nom = ?
+        AND NOT EXISTS (SELECT 1 FROM msc_bloc b WHERE b.plan_id = p.id AND b.nature = 'affutage')
+        AND EXISTS (SELECT 1 FROM msc_competition c
+                     WHERE c.athlete_id = a.id AND c.principal = 1 AND c.date > a.debut)`,
+    [AMORCE_ATHLETE],
+  );
+  if (aRegenerer) {
+    const paquet = new URL('../outils/plan-regenerer.mjs', import.meta.url);
+    if (!existsSync(paquet)) {
+      console.log(`~ plan de ${aRegenerer.nom} : à régénérer, mais outils/plan-regenerer.mjs n'est pas là`);
+    } else {
+      try {
+        const { regenererPlan } = await import(paquet.href);
+        const r = await regenererPlan(aRegenerer.id);
+        console.log(`+ plan #${r.plan_id} pour ${aRegenerer.nom} : ${r.seances} séances, ${r.semaines} semaines`);
+        console.log(`  ${r.periodes}`);
+        for (const av of r.avertissements) console.log(`  ⚠ ${av}`);
+      } catch (e) {
+        /* Une régénération ratée ne doit pas faire échouer un déploiement :
+           le plan d'avant reste actif, et le coach peut régénérer d'un clic. */
+        console.log(`~ plan de ${aRegenerer.nom} non régénéré : ${e.message}`);
+      }
     }
   }
 

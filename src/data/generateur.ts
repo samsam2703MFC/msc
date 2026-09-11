@@ -284,7 +284,7 @@ export function periodiser(
     }
     const coupe = dernier.a - combien + 1;
     fusionnes.push({
-      code: codes[fusionnes.length] ?? `T${fusionnes.length}`,
+      code: `+${fusionnes.length}`,
       de: coupe,
       a: dernier.a,
       /* Même référence que le pic : on n'affûte pas vers une allure plus
@@ -300,6 +300,12 @@ export function periodiser(
       `Le bloc final ne dure que ${dernier.a - dernier.de + 1} semaines : trop court pour détacher un affûtage.`,
     );
   }
+
+  /* Les lettres, à la fin et dans l'ordre des semaines. Les poser au fur et à
+     mesure laissait un trou dès qu'un bloc était fondu — et la lettre suivante
+     retombait sur une déjà prise, ce que la base refuse (uq_bloc_plan_code).
+     Un code n'est qu'une étiquette : rien ne le lit avant cette ligne. */
+  fusionnes.forEach((b, i) => { b.code = codes[i] ?? `B${i}`; });
 
   return { blocs: fusionnes, semaines_total: total, avertissements };
 }

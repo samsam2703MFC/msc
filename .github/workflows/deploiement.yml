@@ -59,6 +59,10 @@ jobs:
           # laisse la machine de production sans outil de build, ce qui était le
           # but du découpage.
           npm run db:seed:paquet
+          # Le générateur de plan, empaqueté de la même façon : il vit dans
+          # src/, qui ne part pas au serveur, et la migration a besoin de lui
+          # pour régénérer un plan sans qu'on soit devant l'écran.
+          npm run plan:paquet
 
       - name: la clé
         env:

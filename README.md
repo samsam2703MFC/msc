@@ -1228,6 +1228,34 @@ or says there is none and the default skeleton applies; and the preview says
 its fourteen lines are the first two weeks — the lightest of the plan — so a
 41-minute session facing a 70-minute slot reads as the rebuild, not as a bug.
 
+### Régénérer un plan sans être devant l'écran
+
+The generator lives in `src/data/generateur.ts`, which is to say in the
+browser: the coach composes a plan, looks at it, then saves it. But it needs
+nothing from the browser — no DOM, no network — so `npm run plan:paquet`
+bundles it with `scripts/plan-regenerer.ts` into `outils/plan-regenerer.mjs`,
+the same trick the workbook seed already uses, and the deploy ships it. The
+production machine still has no build tooling.
+
+`regenererPlan(athleteId)` reads exactly what the screen reads — the same
+snapshot: the athlete's two references and start date, his weekly matrix, and
+his races carrying a target time — and writes a plan through the same
+`enregistrerPlan` the API uses. The previous plan is not deleted: its sessions
+stay, and the journal and activities aiming at them with it. Run it by hand
+with `npm run plan:regenerer -- Verheyden`, or let `db-migrate` do it once:
+it regenerates the named athlete's plan only when that plan has no `affutage`
+period and he has a principal objective still ahead of him, and a failure
+there is logged rather than failing the deploy.
+
+Two bugs surfaced the first time it ran on real data, both worth naming: block
+codes were assigned as blocks were built, so a merged block left a hole and the
+next letter landed on one already taken — `uq_bloc_plan_code` rejected the
+whole plan. Codes are now lettered at the end, in week order. And a race
+re-validated without a change reported "Compétition inconnue", because MySQL
+returns zero affected rows both when nothing matched and when nothing changed;
+the row stayed in "modified" state, and a modified row has no delete button —
+so the race could no longer be erased either.
+
 ### Un objectif est une course, et il vit en base
 
 An objective used to live only in the generator's own React state: you removed

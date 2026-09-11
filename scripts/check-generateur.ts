@@ -135,6 +135,14 @@ check('aucune qualité avant la fin du réamorçage',
   qualite.every((s) => s.semaine > 6),
   `première: S${qualite[0]?.semaine}`);
 
+/* Les codes de bloc sont uniques — la base l'exige (uq_bloc_plan_code), et un
+   bloc fondu laisse un trou dans la suite des lettres. Le plan de Sam en fond
+   un : c'est exactement le cas qui rendait deux « E ». */
+const codesUniques = new Set(plan.blocs.map((b) => b.code));
+check('chaque période a son propre code',
+  codesUniques.size === plan.blocs.length,
+  plan.blocs.map((b) => b.code).join(' '));
+
 /* Un objectif qui tombe trois semaines après la course d'avant : le bloc final
    ne peut pas céder trois semaines d'affûtage. Il en cède une — un affûtage
    court vaut mieux que pas d'affûtage, et le plan le dit. */

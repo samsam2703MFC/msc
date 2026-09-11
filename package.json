@@ -21,6 +21,8 @@
     "db:seed": "npx esbuild scripts/db-seed.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/db-seed.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/db-seed.mjs",
     "db:seed:paquet": "npx esbuild scripts/db-seed.ts --bundle --platform=node --format=esm --outfile=outils/db-seed.mjs --log-level=error --external:mysql2",
     "db:seed:serveur": "node --env-file-if-exists=.env outils/db-seed.mjs",
+    "plan:paquet": "npx esbuild scripts/plan-regenerer.ts --bundle --platform=node --format=esm --outfile=outils/plan-regenerer.mjs --log-level=error --external:mysql2",
+    "plan:regenerer": "npx esbuild scripts/plan-regenerer.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/plan-regenerer.mjs --log-level=error --external:mysql2 && node --env-file-if-exists=.env node_modules/.tmp/plan-regenerer.mjs",
     "compte": "node --env-file-if-exists=.env scripts/compte.mjs",
     "param": "node --env-file-if-exists=.env scripts/param.mjs",
     "db:importer-plan": "node --env-file-if-exists=.env scripts/db-importer-plan.mjs",

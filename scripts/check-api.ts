@@ -536,17 +536,48 @@ try {
     seconde.statut === 200 && anciennes.length === 1 && anciennes[0].id === seconde.corps.id,
     anciennes.map((x: any) => x.nom).join(' · '));
   await c.appel(`/api/competitions?id=${seconde.corps.id}`, { method: 'DELETE' });
-  if (couronneAvant) {
-    await c.appel('/api/competitions', {
-      method: 'POST', body: JSON.stringify({ ...couronneAvant, principal: true }),
-    });
-  }
+
+  /* Valider une ligne sans l'avoir modifiée : MySQL ne change rien, ce qui
+     n'est pas la même chose que « elle n'existe pas ». Le contraire laissait la
+     ligne en état modifié dans l'écran des Starts — donc sans sa corbeille. */
+  const revalidee = await c.appel('/api/competitions', {
+    method: 'POST', body: JSON.stringify(avecCible),
+  });
+  check('revalider une course sans la changer n’est pas une erreur',
+    revalidee.statut === 200, `${revalidee.statut} · ${revalidee.corps.erreur ?? ''}`);
+
+  /* Et l'écran des Starts, qui ne connaît pas les objectifs, n'envoie ni chrono
+     visé ni couronne : ne pas les effacer pour autant. */
+  const depuisStarts = await c.appel('/api/competitions', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: creee.corps.id, date: '2026-12-06', nom: 'Corrida du contrôle',
+      lieu: 'Ailleurs', distance_km: 10,
+    }),
+  });
+  const apresStarts = await c.appel('/api/competitions');
+  const gardee = apresStarts.corps.competitions.find((x: any) => x.id === creee.corps.id);
+  check('une course enregistrée depuis Starts garde son chrono visé',
+    depuisStarts.statut === 200 && gardee?.cible_s === 2700 && gardee?.lieu === 'Ailleurs',
+    `${gardee?.cible_s} · ${gardee?.lieu}`);
 
   const suppr = await c.appel(`/api/competitions?id=${creee.corps.id}`, { method: 'DELETE' });
   check('elle se supprime', suppr.statut === 200);
   const apresSuppr = await c.appel('/api/competitions');
   check('et elle ne revient pas à la lecture suivante',
     !apresSuppr.corps.competitions.some((x: any) => x.id === creee.corps.id));
+
+  /* La couronne, remise où elle était — en dernier, quand plus aucune écriture
+     ne la déplacera. Sans objectif principal, l'athlète n'a plus de plan à
+     générer, et le contrôle du navigateur chercherait longtemps pourquoi. */
+  if (couronneAvant) {
+    await c.appel('/api/competitions', {
+      method: 'POST', body: JSON.stringify({ ...couronneAvant, principal: true }),
+    });
+    const rendue = await c.appel('/api/competitions');
+    check('et la couronne de l’athlète est rendue à sa course',
+      rendue.corps.competitions.find((x: any) => x.id === couronneAvant.id)?.principal === true);
+  }
 
   console.log('\n=== enregistrer un plan, et le déplacer ===');
 
