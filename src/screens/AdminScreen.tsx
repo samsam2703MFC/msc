@@ -485,6 +485,129 @@ export function MoiScreen({ app, large = false }: { app: App; large?: boolean })
   );
 }
 
+/* La périodisation du plan actif, en un tableau.
+
+   Un plan n'est pas une suite de semaines : c'est quatre périodes qui ne
+   demandent pas la même chose, et chacune a sa place sur le chemin de la
+   référence d'aujourd'hui vers l'objectif. `part` dit exactement ça —
+   A 0 %, B 28 %, C 65 %, D 100 % — et la référence du bloc s'en déduit,
+   elle ne se stocke pas.
+
+   Tout est calculé depuis le plan déjà chargé : les semaines du bloc, ce
+   qu'elles pèsent, la rampe d'une semaine à l'autre, la part de qualité. Un
+   tableau plutôt que six cartes — on compare des périodes, et comparer se
+   fait en lignes. */
+const DURS = new Set(['seuil', 'allure10', 'vma', 'longue', 'montagne', 'course', 'test']);
+
+function Periodisation({ app }: { app: App }) {
+  const lang = app.lang;
+  const fr = lang === 'fr';
+  const blocs = db.select('msc_bloc');
+  if (blocs.length === 0) return null;
+  const courant = db.derniereSemaine > 0 && app.semaine > 0 ? db.blocDeSemaine(app.semaine).code : null;
+
+  const lignes = blocs.map((b) => {
+    const semaines = [];
+    for (let n = b.de; n <= b.a; n += 1) semaines.push(db.bilanSemaine(n).prevu);
+    const minutes = semaines.reduce((t, x) => t + x.minutes, 0);
+    const seances = db.select('msc_session', (x) => x.semaine >= b.de && x.semaine <= b.a
+      && x.discipline !== 'Repos');
+    const durs = seances.filter((x) => DURS.has(x.type)).length;
+    /* La rampe : ce que la dernière semaine du bloc pèse de plus que la
+       première, ramené à la semaine. Sur un bloc d'une seule semaine, il n'y a
+       pas de rampe à montrer — et sur une première semaine vide non plus. */
+    const premiere = semaines[0]?.minutes ?? 0;
+    const derniere = semaines[semaines.length - 1]?.minutes ?? 0;
+    const pas = semaines.length - 1;
+    const rampe = pas > 0 && premiere > 0
+      ? ((derniere / premiere) ** (1 / pas) - 1) * 100
+      : null;
+    return {
+      bloc: b,
+      n: semaines.length,
+      heures: minutes / 60,
+      rampe,
+      seances: seances.length,
+      qualite: seances.length > 0 ? Math.round((durs / seances.length) * 100) : 0,
+    };
+  });
+
+  const cellule: React.CSSProperties = { padding: '7px 8px', borderTop: `1px solid ${C.borderSoft}`, whiteSpace: 'nowrap' };
+  const entete: React.CSSProperties = {
+    textAlign: 'left', padding: '6px 8px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+    textTransform: 'uppercase', color: C.inkSecondary, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap',
+  };
+
+  return (
+    <Card padding="14px 16px" gap={10}>
+      <SectionLabel icon="route" color={C.teal}>
+        {fr ? 'Les périodes du plan' : 'Okresy planu'}
+      </SectionLabel>
+      <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.45 }}>
+        {fr
+          ? 'Chaque période a sa place entre ta référence d’aujourd’hui et ton objectif : c’est la part, et c’est elle qui donne l’allure de référence du bloc. La rampe dit de combien le volume monte d’une semaine à l’autre.'
+          : 'Każdy okres ma swoje miejsce między dzisiejszym odniesieniem a celem: to jest udział, i to on daje tempo odniesienia bloku. Rampa mówi, o ile rośnie objętość z tygodnia na tydzień.'}
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
+          <thead>
+            <tr>
+              {[fr ? 'Période' : 'Okres', fr ? 'Semaines' : 'Tygodnie', fr ? 'Part' : 'Udział',
+                fr ? 'Réf. 10 km' : 'Odn. 10 km', fr ? 'Volume' : 'Objętość', fr ? 'Rampe' : 'Rampa',
+                fr ? 'Séances' : 'Sesje', fr ? 'Qualité' : 'Jakość'].map((h) => (
+                <th key={h} scope="col" style={entete}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lignes.map((l) => {
+              const ici = l.bloc.code === courant;
+              return (
+                <tr key={l.bloc.code} style={{ background: ici ? C.accentSoft : 'transparent' }}>
+                  <td style={cellule}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Mono size={12} color={C.teal}>{l.bloc.code}</Mono>
+                      <span style={{ fontWeight: 600, color: C.ink }}>{l.bloc.nom[lang]}</span>
+                      {ici && (
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: C.accentDeep, textTransform: 'uppercase' }}>
+                          {fr ? 'ici' : 'tu'}
+                        </span>
+                      )}
+                    </div>
+                    {l.bloc.quoi?.[lang] && (
+                      <div style={{ fontSize: 11, color: C.inkQuiet, whiteSpace: 'normal' }}>{l.bloc.quoi[lang]}</div>
+                    )}
+                  </td>
+                  <td style={cellule}>
+                    <Mono size={12} color={C.inkBody}>{`${l.bloc.de} → ${l.bloc.a}`}</Mono>
+                    <span style={{ fontSize: 11, color: C.inkQuiet }}>{` (${l.n})`}</span>
+                  </td>
+                  <td style={cellule}><Mono size={12} color={C.ink}>{`${Math.round(l.bloc.part * 100)} %`}</Mono></td>
+                  <td style={cellule}><Mono size={12} color={C.ink}>{db.format10k(db.reference(l.bloc.code))}</Mono></td>
+                  <td style={cellule}><Mono size={12} color={C.inkBody}>{`${l.heures.toFixed(0)} h`}</Mono></td>
+                  <td style={cellule}>
+                    <Mono size={12} color={l.rampe == null ? C.inkQuiet : l.rampe >= 0 ? C.accentDeep : C.warning}>
+                      {l.rampe == null ? '—' : `${l.rampe >= 0 ? '+' : '−'}${Math.abs(l.rampe).toFixed(1)} %`}
+                    </Mono>
+                    <span style={{ fontSize: 10, color: C.inkQuiet }}>{fr ? '/sem' : '/tydz'}</span>
+                  </td>
+                  <td style={cellule}><Mono size={12} color={C.inkBody}>{String(l.seances)}</Mono></td>
+                  <td style={cellule}><Mono size={12} color={C.inkBody}>{`${l.qualite} %`}</Mono></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>
+        {fr
+          ? `De ${db.format10k(db.athlete.ref_actuelle_s)} à ${db.format10k(db.athlete.ref_cible_s)} sur 10 km : la part de chaque période dit où elle te place sur ce chemin.`
+          : `Od ${db.format10k(db.athlete.ref_actuelle_s)} do ${db.format10k(db.athlete.ref_cible_s)} na 10 km: udział okresu mówi, gdzie cię stawia na tej drodze.`}
+      </div>
+    </Card>
+  );
+}
+
 function Generateur({ app, large = false }: { app: App; large?: boolean }) {
   const fr = app.lang === 'fr';
   const seed = db.athlete;
@@ -570,6 +693,11 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
     setObjectifs((prev) => prev.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    {/* Le plan qu'il suit aujourd'hui, période par période — avant celui qu'on
+        lui construirait. On lit d'abord où il en est. */}
+    <Periodisation app={app} />
+
     <Colonnes large={large} ratio="minmax(0, 5fr) minmax(0, 6fr)" gauche={<>
       {/* d'où l'on part : ce que Strava sait de l'athlète */}
       <Historique
@@ -902,6 +1030,7 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
         </Card>
       )}
     </>} />
+    </div>
   );
 }
 

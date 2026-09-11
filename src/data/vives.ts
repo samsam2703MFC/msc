@@ -15,7 +15,7 @@ import type {
   Lang, MscActivity, MscAdaptation, MscAjustement, MscAnalyse, MscAthlete, MscBloc,
   MscCompetition, MscCourbes, MscDaily, MscEcart, MscExcuse, MscJournal, MscMetric, MscObjectif,
   MesureAttente, MscMesure, MscParamPublic, MscPlanSession, MscPlanWeek, MscRegle, MscRpe,
-  MscSource, MscStatut, MscStructure, MscType, MscUiStrings, MscZoneDef,
+  MscObjectifSport, MscSource, MscStatut, MscStructure, MscType, MscUiStrings, MscZoneDef,
 } from './types';
 
 /* L'ordre est celui dans lequel la feuille de réglages liste les tables. */
@@ -29,6 +29,9 @@ export const tables = {
   msc_session: [] as MscPlanSession[],
   /* La semaine type de l'athlète : le squelette que le plan et le coach suivent. */
   msc_structure: [] as MscStructure[],
+  /* Ce qu'il vise, discipline par discipline — sauf la course à pied, dont
+     l'objectif EST la paire de références portée par l'athlète. */
+  msc_objectif_sport: [] as MscObjectifSport[],
   msc_week: [] as MscPlanWeek[],
   msc_regle: [] as MscRegle[],
   msc_rpe: [] as MscRpe[],

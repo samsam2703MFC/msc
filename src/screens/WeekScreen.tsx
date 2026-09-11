@@ -8,6 +8,8 @@
 
 import * as db from '../data/db';
 import { motDuStatut, visuelDuStatut } from '../data/statut';
+import { JOURS, SPORTS } from '../data/structure';
+import type { Lang, MscPlanSession } from '../data/types';
 import { C } from '../design/theme';
 import { Annee } from '../components/Annee';
 import { raisonEnClair } from '../components/Bilan';
@@ -68,6 +70,9 @@ export function WeekScreen({ app }: { app: App }) {
           </Mono>
         </div>
       </Card>
+
+      {/* Ma semaine type, et ce qui s'en écarte cette semaine. */}
+      <SemaineType jours={jours} lang={lang} />
 
       <Grid cols={3} gap={10}>
         {totaux.map((t) => (
@@ -161,5 +166,84 @@ export function WeekScreen({ app }: { app: App }) {
         </div>
       </Card>
     </div>
+  );
+}
+
+/* La semaine type, en tête de la semaine réelle.
+
+   La matrice dit la forme qui ne bouge pas : le mardi c'est la nage, le
+   mercredi la qualité, le samedi la longue. Le plan, lui, bouge — le coach
+   recalcule, l'athlète déplace. Cette bande met les deux l'une sur l'autre :
+   sept jours, le sport prévu par la matrice, et un point quand le jour, cette
+   semaine, ne porte pas ce sport-là.
+
+   Rien n'est calculé en base pour ça : la matrice est déjà dans l'instantané,
+   et les séances aussi. Sans matrice, la carte ne s'affiche pas — il n'y a
+   rien à comparer. */
+function SemaineType({ jours, lang }: { jours: MscPlanSession[]; lang: Lang }) {
+  const fr = lang === 'fr';
+  const creneaux = db.select('msc_structure');
+  if (creneaux.length === 0) return null;
+
+  /* Le sport que chaque jour porte vraiment, cette semaine — rangé par la
+     date, pas par le nom du jour : la matrice compte de lundi (0) à dimanche
+     (6), et `getDay()` compte de dimanche. Une date ne se traduit pas. */
+  const reels = new Map<number, string[]>();
+  for (const s of jours) {
+    if (s.discipline === 'Repos') continue;
+    const i = (new Date(`${s.date}T00:00:00`).getDay() + 6) % 7;
+    reels.set(i, [...(reels.get(i) ?? []), s.discipline]);
+  }
+
+  const colonnes = JOURS.map((j, i) => {
+    const prevus = creneaux.filter((c) => c.jour === i).map((c) => c.discipline);
+    const reel = reels.get(i) ?? [];
+    /* « Écart » : la matrice attend un sport que la semaine ne porte pas, ou
+       l'inverse. On compare des ensembles, pas des listes — deux créneaux du
+       même sport le même jour ne comptent pas pour deux. */
+    const attendu = new Set(prevus);
+    const fait = new Set(reel);
+    const ecart = [...attendu].some((sp) => !fait.has(sp)) || [...fait].some((sp) => !attendu.has(sp));
+    return { jour: j, prevus, ecart };
+  });
+  const ecarts = colonnes.filter((c) => c.ecart).length;
+
+  return (
+    <Card padding="14px 16px" gap={10}>
+      <SectionLabel icon="repeat">{fr ? 'Ma semaine type' : 'Mój tydzień wzorcowy'}</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+        {colonnes.map((c) => (
+          <div
+            key={c.jour.index}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              padding: '6px 2px', borderRadius: 10,
+              background: c.ecart ? C.warningBg : C.surfaceAlt,
+            }}
+          >
+            <Mono size={9} color={C.inkQuiet}>{c.jour.court[lang]}</Mono>
+            {c.prevus.length === 0
+              ? <Icon name="moon" size={13} color={C.inkQuiet} />
+              : c.prevus.map((sp, k) => (
+                <Icon
+                  key={`${sp}-${k}`}
+                  name={SPORTS.find((x) => x.code === sp)?.icon ?? 'circle'}
+                  size={13}
+                  color={c.ecart ? C.warning : C.inkSecondary}
+                />
+              ))}
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>
+        {ecarts === 0
+          ? (fr
+            ? 'Cette semaine suit ta semaine type : même sport, aux mêmes jours.'
+            : 'Ten tydzień trzyma się wzorca: te same sporty, w te same dni.')
+          : (fr
+            ? `${ecarts} jour${ecarts > 1 ? 's' : ''} s’écarte${ecarts > 1 ? 'nt' : ''} de ta semaine type — le coach a changé le sport, ou le jour est vide.`
+            : `${ecarts} dzień/dni odbiega od wzorca — trener zmienił sport albo dzień jest pusty.`)}
+      </div>
+    </Card>
   );
 }

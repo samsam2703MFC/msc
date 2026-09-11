@@ -605,6 +605,26 @@ CREATE TABLE IF NOT EXISTS msc_structure (
   CONSTRAINT ck_structure_creneau CHECK (creneau BETWEEN 1 AND 2)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Où l'athlète en est, et où il veut aller, discipline par discipline. Une
+-- épreuve étalon par sport (10 km, 1500 m, 40 km, la course Hyrox) : elle est
+-- dans le code, pas ici, parce qu'elle ne change pas d'un athlète à l'autre —
+-- ce qui change, ce sont les deux temps.
+--
+-- La course à pied n'a PAS de ligne ici, et la contrainte le dit : ses deux
+-- temps sont msc_athlete.ref_actuelle_s et ref_cible_s, d'où le moteur tire
+-- chaque allure. Les ranger une seconde fois, ce serait deux vérités dont une
+-- se tromperait le jour d'un test de 30 minutes.
+CREATE TABLE IF NOT EXISTS msc_objectif_sport (
+  athlete_id INT UNSIGNED NOT NULL,
+  discipline VARCHAR(32) NOT NULL COMMENT 'Natation, Vélo, Hyrox — jamais Course à pied',
+  actuel_s   MEDIUMINT UNSIGNED NULL COMMENT 'le temps d''aujourd''hui sur l''épreuve étalon, en secondes',
+  cible_s    MEDIUMINT UNSIGNED NULL COMMENT 'le temps visé sur la même épreuve',
+  maj_le     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (athlete_id, discipline),
+  CONSTRAINT fk_objectif_sport_athlete FOREIGN KEY (athlete_id) REFERENCES msc_athlete (id) ON DELETE CASCADE,
+  CONSTRAINT ck_objectif_sport_cap CHECK (discipline <> 'Course à pied')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Une semaine type enregistrée sous un nom, pour la reposer sur un autre
 -- athlète. Même forme que msc_structure, sans athlète : c'est un modèle, il
 -- n'appartient à personne. Le nom EST la clé — un modèle, ce sont ses

@@ -48,7 +48,7 @@ the installed PWA looks like an app rather than a picture of one.
 ## How it is put together
 
 ```
-db/           the MySQL schema — 43 tables, and its own README
+db/           the MySQL schema — 44 tables, and its own README
 server/       the plan server: the secrets, Strava, the coach, the database
 src/
   data/       the seam — the live tables, the accessors, the engine, the API client
@@ -609,7 +609,7 @@ They are not the same job, and the split falls where the model belongs.
 
 ## The database
 
-`db/schema.sql` — 43 tables, MySQL 8, validated on MariaDB 10.11 too. `db/README.md`
+`db/schema.sql` — 44 tables, MySQL 8, validated on MariaDB 10.11 too. `db/README.md`
 is its own documentation; what follows is why it looks the way it does.
 
 Until now the MSC database was eighteen TypeScript arrays behind an accessor
@@ -1154,6 +1154,57 @@ The tab names left `msc_ui` at the same time. Five words in a table meant a
 migration to rename a tab; they live in `src/data/ecrans.ts` now, read by the
 phone and the desk, and `db-migrate` drops `screens` and `tabs` from the JSON.
 
+### Les périodes du plan, en un tableau
+
+A plan is not a run of weeks: it is four periods that ask for different
+things, and each sits at a known point on the way from today's reference to
+the target. `msc_bloc.part` says exactly that — A 0 %, B 28 %, C 65 %,
+D 100 % — and the block's reference pace is derived from it, never stored.
+
+The Plan tab opens on that table (`Periodisation` in `AdminScreen.tsx`): one
+row per period, and in the columns everything one compares across periods —
+weeks (from → to, and how many), **part** as a percentage of the way to the
+objective, the block's 10 km reference, planned hours, the **ramp** (what the
+last week of the block weighs over the first, per week, compounded), the
+number of sessions and the share of them that are hard. The row the athlete is
+living in is highlighted, and the footer restates the road: *from 52:00 to
+38:00 over 10 km*.
+
+A table rather than six cards, because periods are read by comparison, and
+comparison happens in rows. Everything in it is computed from the plan already
+in the snapshot — nothing new is stored to display it.
+
+### Les objectifs, discipline par discipline
+
+An athlete has more than one number to chase. `msc_objectif_sport` holds two
+times per sport — where I am, where I am going — on a **benchmark event the
+code knows**, not the database: 10 km running, 1500 m swimming, 40 km cycling,
+the Hyrox race itself (`EPREUVES` in `src/data/structure.ts`). The yardstick
+does not change from one athlete to the next; the two times do.
+
+Running is the exception, and the schema says so with a CHECK constraint: it
+has **no row**. Its two times *are* `msc_athlete.ref_actuelle_s` and
+`ref_cible_s`, the pair every pace in the plan is derived from. Storing them a
+second time would be two truths, and the copy would be wrong the day a 30
+minute test moves the first one. So `POST /api/athlete/objectifs` writes the
+references when the discipline is running, and `msc_objectif_sport` otherwise
+— one truth per number, while the screen shows them in the same list.
+
+That screen is `ProfilScreen`, which is rendered **twice**: the athlete opens
+it on their phone (Moi → Mon profil) and the coach opens it in the back
+office (an athlete's page → Profil). Same card, same route — an objective is
+decided by two people, and filing it in two places would make it two.
+
+The coach is told: every prompt (session, weekly, rolling seven days) now
+carries the athlete's objectives, running first, then the sports where a time
+has actually been set — a sport without an objective does not appear at all,
+because "no objective" reads better as absence than as an empty line. That is
+what makes the plan and the daily adaptation take the swim or the Hyrox race
+into account instead of treating them as volume to fill.
+
+The paces themselves keep coming from the 10 km reference: that *is* the
+running objective, and the engine is unchanged.
+
 ### Le matin, en quatre temps
 
 The athlete's day starts with a guided run, once per day, over whatever screen
@@ -1217,6 +1268,14 @@ Two things follow it:
   sport of a slot; a day absent from the list is a rest day, put nothing
   there.* That is the difference between a coach that replans and one that
   improvises.
+
+**And the athlete sees it.** The Semaine screen opens on a *Ma semaine type*
+strip: seven days, the sport each slot carries, and a day highlighted when this
+week does not carry that sport — the coach moved something, or the day is
+empty. The athlete reads the shape that does not move, and what moved. Nothing
+new is stored for it: the matrix already travels in the snapshot, and the days
+are matched by date rather than by the name of the day, which does not survive
+translation.
 
 An empty slot is rest — it is not stored, it is read from the absence. Writing
 the matrix replaces it whole (`POST /api/structure`): it is one decision, not a

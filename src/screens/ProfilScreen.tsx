@@ -6,6 +6,8 @@
 import { useEffect, useState } from 'react';
 import * as api from '../data/api';
 import * as db from '../data/db';
+import { chrono, versChrono } from '../data/engine';
+import { EPREUVES, SPORTS, SPORT_REFERENCE } from '../data/structure';
 import * as strava from '../data/strava';
 import type { Lang } from '../data/types';
 import { C, F, R } from '../design/theme';
@@ -17,16 +19,20 @@ import type { App } from '../state/useApp';
 
 const T = {
   fr: {
-    profil: 'Profil', references: 'Références 10 km', actuelle: 'actuelle', cible: 'cible',
-    aide: 'Toutes les allures du plan sont calculées depuis ces deux nombres. L’onboarding les pose ; le test de 30 minutes recale la première ; un nouveau plan (section Plan) les réécrit.',
+    profil: 'Profil', objectifs: 'Objectifs par discipline', actuelle: 'aujourd’hui', cible: 'visé',
+    aide: 'Où tu en es, où tu veux aller, sport par sport. Le 10 km n’est pas un objectif comme les autres : c’est lui qui donne toutes les allures du plan — le test de 30 minutes le recale, un nouveau plan le réécrit.',
+    aideCoach: 'Le coach lit ces objectifs pour construire le plan et pour adapter la semaine.',
+    enregistrer: 'Enregistrer', enregistre: 'Enregistré', vide: '—',
     strava: 'Connexion Strava', verifier: 'Vérifier la connexion', verification: 'Vérification…',
     connecte: 'connecté', nonConnecte: 'non connecté', nonConfigure: 'Strava non configuré pour cet athlète',
     synchro: 'dernière synchro', jamais: 'jamais', pasVerifie: 'pas encore vérifiée', versStrava: '→ Strava',
     aideStrava: 'Le compte Strava relié, et quand il a synchronisé pour la dernière fois. Pour relier, importer l’historique ou poser son application : sa section Strava.',
   },
   pl: {
-    profil: 'Profil', references: 'Odniesienia 10 km', actuelle: 'obecne', cible: 'docelowe',
-    aide: 'Wszystkie tempa planu liczone są z tych dwóch liczb. Onboarding je ustawia; test 30 minut koryguje pierwszą; nowy plan (sekcja Plan) je nadpisuje.',
+    profil: 'Profil', objectifs: 'Cele w każdej dyscyplinie', actuelle: 'dziś', cible: 'cel',
+    aide: 'Gdzie jesteś i dokąd zmierzasz, sport po sporcie. 10 km to nie cel jak inne: to z niego liczą się wszystkie tempa planu — test 30 minut go koryguje, nowy plan go nadpisuje.',
+    aideCoach: 'Trener czyta te cele, gdy układa plan i gdy dostosowuje tydzień.',
+    enregistrer: 'Zapisz', enregistre: 'Zapisano', vide: '—',
     strava: 'Połączenie Strava', verifier: 'Sprawdź połączenie', verification: 'Sprawdzanie…',
     connecte: 'połączona', nonConnecte: 'niepołączona', nonConfigure: 'Strava nieskonfigurowana dla tego zawodnika',
     synchro: 'ostatnia synchronizacja', jamais: 'nigdy', pasVerifie: 'jeszcze niesprawdzone', versStrava: '→ Strava',
@@ -67,21 +73,7 @@ export function ProfilScreen({
         <ProfilForm app={app} onDone={() => undefined} />
       </Card>
     } droite={<>
-      <Card padding="16px 18px" gap={8}>
-        <SectionLabel icon="gauge" color={C.teal}>{t.references}</SectionLabel>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontFamily: F.mono, fontSize: 19, color: C.ink }}>{db.format10k(db.athlete.ref_actuelle_s)}</span>
-            <span style={{ fontSize: 10.5, color: C.inkSecondary }}>{t.actuelle}</span>
-          </div>
-          <span style={{ color: C.inkQuiet }}>→</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontFamily: F.mono, fontSize: 19, color: C.ink }}>{db.format10k(db.athlete.ref_cible_s)}</span>
-            <span style={{ fontSize: 10.5, color: C.inkSecondary }}>{t.cible}</span>
-          </div>
-        </div>
-        <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.aide}</div>
-      </Card>
+      <Objectifs app={app} t={t} />
 
       <Card padding="16px 18px" gap={8}>
         <SectionLabel icon="link" color={C.teal}>{t.strava}</SectionLabel>
@@ -294,6 +286,123 @@ function Supprimer({ app, onSupprime }: { app: App; onSupprime: () => void }) {
           </div>
         </>
       )}
+    </Card>
+  );
+}
+
+/* Les objectifs, discipline par discipline.
+
+   Le même écran sert deux mains : l'athlète, dans son téléphone (Moi → Mon
+   profil), et le coach, dans la fiche du back office. C'est voulu — un
+   objectif se décide à deux, et le ranger à deux endroits en ferait deux.
+
+   Une ligne par sport, l'épreuve étalon à gauche (10 km, 1500 m, 40 km, la
+   course Hyrox), deux temps à droite : où j'en suis, où je vais. Le 10 km n'a
+   pas de ligne en base : ses deux temps sont les références de l'athlète,
+   celles d'où le moteur tire chaque allure — les écrire ailleurs en ferait une
+   seconde version, fausse au premier test de 30 minutes. */
+function Objectifs({ app, t }: { app: App; t: Record<string, string> }) {
+  const lecture = db.droit !== 'ecriture';
+  const [job, setJob] = useState<string | null>(null);
+  const [fait, setFait] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  /* Ce que la base dit aujourd'hui — relu à chaque version, comme partout. */
+  const range = (sport: string): { actuel: number | null; cible: number | null } => {
+    if (sport === SPORT_REFERENCE) {
+      return { actuel: db.athlete.ref_actuelle_s * 10, cible: db.athlete.ref_cible_s * 10 };
+    }
+    const o = db.one('msc_objectif_sport', (x) => x.discipline === sport);
+    return { actuel: o?.actuel_s ?? null, cible: o?.cible_s ?? null };
+  };
+
+  const [saisie, setSaisie] = useState<Record<string, { actuel: string; cible: string }>>({});
+  useEffect(() => {
+    setSaisie(Object.fromEntries(SPORTS.map((sp) => {
+      const v = range(sp.code);
+      return [sp.code, {
+        actuel: v.actuel == null ? '' : chrono(v.actuel),
+        cible: v.cible == null ? '' : chrono(v.cible),
+      }];
+    })));
+    setFait(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.version, db.athleteId]);
+
+  const enregistrer = async (sport: string) => {
+    const v = saisie[sport] ?? { actuel: '', cible: '' };
+    setJob(sport); setErreur(null); setFait(null);
+    try {
+      await api.ecrireObjectifSport({
+        discipline: sport,
+        actuel_s: v.actuel.trim() ? versChrono(v.actuel) : null,
+        cible_s: v.cible.trim() ? versChrono(v.cible) : null,
+      });
+      await app.recharger(db.athleteId);
+      setFait(sport);
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : String(e));
+    } finally {
+      setJob(null);
+    }
+  };
+
+  const champ = (sport: string, quoi: 'actuel' | 'cible') => (
+    <input
+      value={saisie[sport]?.[quoi] ?? ''}
+      onChange={(e) => setSaisie((x) => ({ ...x, [sport]: { ...x[sport], [quoi]: e.target.value } }))}
+      disabled={lecture}
+      inputMode="numeric"
+      placeholder={t.vide}
+      aria-label={`${sport} ${quoi === 'actuel' ? t.actuelle : t.cible}`}
+      style={{
+        width: 78, padding: '6px 8px', borderRadius: R.sm, border: `1px solid ${C.border}`,
+        background: C.surface, color: C.ink, fontFamily: F.mono, fontSize: 13, textAlign: 'right',
+      }}
+    />
+  );
+
+  return (
+    <Card padding="16px 18px" gap={10}>
+      <SectionLabel icon="target" color={C.teal}>{t.objectifs}</SectionLabel>
+      {SPORTS.map((sp) => {
+        const epreuve = EPREUVES[sp.code];
+        return (
+          <div key={sp.code} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Icon name={sp.icon} size={15} color={C.inkSecondary} />
+            <div style={{ flex: 1, minWidth: 92 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{sp.nom[app.lang]}</div>
+              <div style={{ fontSize: 10.5, color: C.inkQuiet }}>{epreuve?.libelle ?? ''}</div>
+            </div>
+            {champ(sp.code, 'actuel')}
+            <span style={{ color: C.inkQuiet }}>→</span>
+            {champ(sp.code, 'cible')}
+            {!lecture && (
+              <button
+                type="button"
+                disabled={job === sp.code}
+                onClick={() => void enregistrer(sp.code)}
+                aria-label={`${t.enregistrer} ${sp.code}`}
+                className="msc-hover-accent"
+                style={{
+                  padding: '6px 10px', borderRadius: R.md, fontSize: 11, fontWeight: 600,
+                  border: `1px solid ${fait === sp.code ? C.accent : C.border}`,
+                  background: fait === sp.code ? C.accentSoft : C.surface,
+                  color: fait === sp.code ? C.accentDeep : C.inkMuted,
+                }}
+              >
+                {fait === sp.code ? t.enregistre : t.enregistrer}
+              </button>
+            )}
+          </div>
+        );
+      })}
+      <div style={{ display: 'flex', gap: 10, fontSize: 10.5, color: C.inkQuiet }}>
+        <span>{`← ${t.actuelle}`}</span><span>{`${t.cible} →`}</span>
+      </div>
+      {erreur && <div style={{ fontSize: 12, color: C.negative }}>{erreur}</div>}
+      <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.aide}</div>
+      <div style={{ fontSize: 11.5, color: C.inkSecondary, lineHeight: 1.45 }}>{t.aideCoach}</div>
     </Card>
   );
 }

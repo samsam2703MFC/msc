@@ -351,6 +351,45 @@ try {
   check('l’envoyer vide l’efface : la matrice est remplacée, pas fusionnée',
     videe.statut === 200 && apresVidage.length === 0, JSON.stringify(apresVidage));
 
+  const moiAvant = (await c.appel('/api/db/instantane')).corps.msc_athlete?.[0];
+  /* Les objectifs par discipline : deux temps sur l'épreuve étalon du sport.
+     Celui de la course à pied n'est pas rangé à part — il atterrit dans les
+     deux références de l'athlète, d'où le moteur tire chaque allure. */
+  const objNage = await c.appel('/api/athlete/objectifs', {
+    method: 'POST', body: JSON.stringify({ discipline: 'Natation', actuel_s: 1620, cible_s: 1500 }),
+  });
+  const avecObjectif = await c.appel('/api/db/instantane');
+  const nage = (avecObjectif.corps.msc_objectif_sport ?? []).find((o: any) => o.discipline === 'Natation');
+  check('un objectif de discipline s’écrit et revient dans l’instantané',
+    objNage.statut === 200 && nage?.actuel_s === 1620 && nage?.cible_s === 1500,
+    JSON.stringify(nage));
+  /* Les références de l'athlète 1 sont celles que le classeur vérifie : on les
+     reprend telles quelles après l'avoir prouvé, sinon check:db et check:app
+     liraient les allures d'un autre athlète. */
+  const refsAvant = { actuelle: moiAvant?.ref_actuelle_s, cible: moiAvant?.ref_cible_s };
+  const objCap = await c.appel('/api/athlete/objectifs', {
+    method: 'POST', body: JSON.stringify({ discipline: 'Course à pied', actuel_s: 2700, cible_s: 2400 }),
+  });
+  const apresCap = await c.appel('/api/db/instantane');
+  const moiApres = apresCap.corps.msc_athlete?.[0];
+  check('le 10 km, lui, écrit les références de l’athlète — pas une seconde ligne',
+    objCap.statut === 200 && moiApres?.ref_actuelle_s === 270 && moiApres?.ref_cible_s === 240
+      && !(apresCap.corps.msc_objectif_sport ?? []).some((o: any) => o.discipline === 'Course à pied'),
+    `${moiApres?.ref_actuelle_s} → ${moiApres?.ref_cible_s}`);
+  await bd().execute('UPDATE msc_athlete SET ref_actuelle_s = ?, ref_cible_s = ? WHERE id = 1',
+    [refsAvant.actuelle, refsAvant.cible]);
+  const objVide = await c.appel('/api/athlete/objectifs', {
+    method: 'POST', body: JSON.stringify({ discipline: 'Natation', actuel_s: null, cible_s: null }),
+  });
+  const apresVide = await c.appel('/api/db/instantane');
+  check('deux temps vides retirent l’objectif : une ligne vide n’en est pas un',
+    objVide.statut === 200 && !(apresVide.corps.msc_objectif_sport ?? []).some((o: any) => o.discipline === 'Natation'),
+    JSON.stringify(apresVide.corps.msc_objectif_sport));
+  const objFou = await c.appel('/api/athlete/objectifs', {
+    method: 'POST', body: JSON.stringify({ discipline: 'Vélo', actuel_s: 3, cible_s: 2 }),
+  });
+  check('un temps invraisemblable est refusé', objFou.statut >= 400, String(objFou.statut));
+
   /* Les modèles de semaine type sont l'outil du coach : un athlète ne les
      voit pas, et n'en pose pas. */
   const modeleRefuse = await c.appel('/api/modeles', {

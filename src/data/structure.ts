@@ -41,6 +41,24 @@ export const SPORTS: Array<{ code: string; nom: Record<Lang, string>; icon: stri
   { code: 'Hyrox', nom: { fr: 'Hyrox / salle', pl: 'Hyrox / siłownia' }, icon: 'dumbbell' },
 ];
 
+/* L'épreuve étalon de chaque sport : celle sur laquelle on se mesure, et sur
+   laquelle on se donne un objectif de temps. Elle est ici et pas en base
+   parce qu'elle ne change pas d'un athlète à l'autre — ce qui change, ce sont
+   les deux temps.
+
+   La course à pied a la sienne depuis toujours : les deux références 10 km de
+   l'athlète, d'où le moteur tire chaque allure. Son objectif n'est donc pas
+   rangé ailleurs, il EST ces deux nombres-là. */
+export const EPREUVES: Record<string, { libelle: string; metres: number | null }> = {
+  'Course à pied': { libelle: '10 km', metres: 10_000 },
+  Natation: { libelle: '1500 m', metres: 1500 },
+  'Vélo': { libelle: '40 km', metres: 40_000 },
+  Hyrox: { libelle: 'Hyrox', metres: null },
+};
+
+/** Le sport dont l'objectif est la référence de l'athlète, pas une ligne à part. */
+export const SPORT_REFERENCE = 'Course à pied';
+
 /* Quels types d'entraînement ont un sens dans quel sport. Une liste déroulante
    qui propose « VMA » à une séance de natation fait perdre du temps à chaque
    ouverture ; celle-ci ne propose que ce qui se fait. */

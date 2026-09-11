@@ -11,6 +11,7 @@
      /api/modeles                 les semaines types enregistrées, réutilisables
      /api/fraicheur               l'empreinte des données, pour savoir quand relire
      /api/journal, /api/mesure    ce que l'application écrit
+     /api/athlete/objectifs       ce que l'athlète vise, discipline par discipline
      /api/activites               les activités appariées par le navigateur
      /api/photo, /api/mesure      la photo de la balance, et ce qu'on en tire
      /api/competitions            le back office
@@ -545,6 +546,16 @@ async function router(req, res, url) {
     const corps = await lireCorps(req, 16_000);
     return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'profil', (cnx) =>
       depots.ecrireProfil(athlete_id, corps, cnx)));
+  }
+
+  /* Un objectif de discipline : où j'en suis, où je veux aller, sur l'épreuve
+     étalon de ce sport. L'athlète le remplit depuis son téléphone, le coach
+     depuis la fiche — c'est le même écran, donc la même route. */
+  if (chemin === '/api/athlete/objectifs' && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    const corps = await lireCorps(req, 8_000);
+    return json(res, 200, await depots.mutation(athlete_id, corps.mutation_id, 'objectif_sport', (cnx) =>
+      depots.ecrireObjectifSport(athlete_id, corps, cnx)));
   }
 
   if (chemin.startsWith('/api/strava')) {

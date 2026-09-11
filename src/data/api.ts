@@ -247,6 +247,15 @@ export function ecrireStructure(creneaux: Array<{
   return ecrire<{ creneaux: number }>('/structure', { creneaux }, 'structure');
 }
 
+/** Un objectif de discipline : deux temps sur l'épreuve étalon du sport.
+    Le 10 km passe par la même route et atterrit dans les références de
+    l'athlète — c'est de là que le moteur tire ses allures. */
+export function ecrireObjectifSport(corps: {
+  discipline: string; actuel_s: number | null; cible_s: number | null;
+}) {
+  return ecrire<{ discipline: string }>('/athlete/objectifs', corps, 'objectif_sport');
+}
+
 /** Un modèle de semaine type : un nom et ses créneaux, sans athlète. */
 export interface Modele {
   nom: string;

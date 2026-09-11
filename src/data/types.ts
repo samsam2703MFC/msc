@@ -97,6 +97,17 @@ export interface MscActivity {
 /** Un créneau de la semaine type : un jour, un rang dans la journée, un sport
     fixe et un type d'entraînement. Les allures ne sont pas là : elles se
     calculent du type et des références de l'athlète. */
+/* L'objectif d'une discipline : deux temps sur l'épreuve étalon de ce sport
+   (10 km, 1500 m, 40 km, la course Hyrox). Celui de la course à pied n'est pas
+   ici : ce sont les deux références de l'athlète, d'où sortent les allures. */
+export interface MscObjectifSport {
+  discipline: string;
+  /** Le temps d'aujourd'hui, en secondes — nul tant qu'il n'est pas connu. */
+  actuel_s: number | null;
+  /** Le temps visé, sur la même épreuve. */
+  cible_s: number | null;
+}
+
 export interface MscStructure {
   /** 0 = lundi … 6 = dimanche. */
   jour: number;

@@ -125,6 +125,24 @@ await bd().execute(
   [c.insertId],
 );
 
+/* La semaine type de l'athlète 1 : l'écran Semaine la met en tête, et elle
+   n'existe que si quelqu'un l'a posée. Le contrôle la pose donc lui-même —
+   sinon il n'exercerait la carte qu'un jour sur deux, selon ce que le contrôle
+   d'avant a laissé. */
+await bd().execute('DELETE FROM msc_structure WHERE athlete_id = 1');
+for (const [jour, creneau, discipline, type, duree] of [
+  [1, 1, 'Natation', 'nage', 55],
+  [2, 1, 'Course à pied', 'seuil', 60],
+  [4, 2, 'Course à pied', 'recup', 45],
+  [5, 1, 'Course à pied', 'longue', 75],
+]) {
+  await bd().execute(
+    `INSERT INTO msc_structure (athlete_id, jour, creneau, discipline, type_code, duree_min)
+     VALUES (1, ?, ?, ?, ?, ?)`,
+    [jour, creneau, discipline, type, duree],
+  );
+}
+
 /* Ce contrôle encode des courses ; il doit partir d'une table propre, sinon
    « un seul résultat » n'est vrai qu'à la première exécution. */
 await bd().execute("DELETE FROM msc_competition WHERE nom LIKE '%de contrôle'");
@@ -302,6 +320,12 @@ try {
     /Natation|Course|Hyrox|Vélo|Repos/.test(semaine));
   check('et le plan sur l’année, en tête', /le plan sur l’année · \d+ semaines/i.test(semaine));
   check('et dit ce que veulent dire ses trois couleurs', /faite/.test(semaine) && /autrement/.test(semaine) && /manquée/.test(semaine));
+  /* La semaine réelle porte la semaine type : sept jours, le sport de chaque
+     créneau, et une phrase qui dit si la semaine s'y tient. */
+  check('la semaine porte la semaine type de l’athlète, et dit ce qui s’en écarte',
+    /Ma semaine type/i.test(semaine)
+      && /(suit ta semaine type|s’écarte|s’écartent)/.test(semaine),
+    semaine.split('\n').find((l) => /semaine type|écarte/.test(l))?.slice(0, 90) ?? '');
 
   /* Les allures ne sont pas en base : si la fiche d'une séance de course en
      affiche, c'est que le moteur les a calculées depuis la référence du bloc.
@@ -444,6 +468,12 @@ try {
      sont deux choses. */
   await ouvrirMoi(page, 'Mon plan');
   const createur = await page.locator('body').innerText();
+  /* La périodisation : les quatre périodes du plan actif, ce qu'elles pèsent,
+     et où elles placent l'athlète entre sa référence et son objectif. */
+  check('le plan montre ses périodes, leur part de l’objectif et leur rampe',
+    /Les périodes du plan/i.test(createur) && /Réamorçage/i.test(createur)
+      && /%\s*\n?\s*/.test(createur) && /\/sem/.test(createur),
+    createur.split('\n').find((l) => /Réamorçage/i.test(l))?.slice(0, 70) ?? '');
   check('l’écran Créer montre le plan généré',
     /Plan généré/i.test(createur) && /semaines/i.test(createur));
   check('et, en tête, l’historique Strava d’où l’on part',
@@ -467,6 +497,26 @@ try {
   /* Le back office : encoder une course, la voir apparaître, et voir la courbe
      se tracer une fois qu'il y a deux résultats à comparer. */
   console.log('\n=== le back office ===');
+  /* Les objectifs par discipline : l'athlète les remplit depuis son téléphone,
+     dans son profil — le même écran que le coach ouvre dans la fiche. */
+  await ouvrirMoi(page, 'Mon profil');
+  const profil = await page.locator('body').innerText();
+  check('le profil porte les objectifs par discipline, avec leur épreuve étalon',
+    /Objectifs par discipline/i.test(profil) && /10 km/.test(profil) && /1500 m/.test(profil)
+      && /40 km/.test(profil),
+    profil.split('\n').find((l) => /Objectifs par/.test(l)) ?? profil.split('\n').slice(0, 4).join(' · '));
+  await bd().execute('DELETE FROM msc_objectif_sport WHERE athlete_id = 1');
+  await page.getByLabel(/^Natation aujourd/).fill('27:00');
+  await page.getByLabel(/^Natation visé$/).fill('25:00');
+  await page.getByRole('button', { name: 'Enregistrer Natation' }).click();
+  await page.waitForTimeout(1500);
+  const [[objectif]] = await bd().execute(
+    "SELECT actuel_s, cible_s FROM msc_objectif_sport WHERE athlete_id = 1 AND discipline = 'Natation'",
+  );
+  check('l’athlète pose son objectif de natation depuis le PWA, et il part en base',
+    Number(objectif?.actuel_s) === 1620 && Number(objectif?.cible_s) === 1500,
+    JSON.stringify(objectif ?? null));
+
   await ouvrirMoi(page, 'Mes starts');
   /* Les intitulés de section sont mis en majuscules par le CSS, et innerText
      rend le texte affiché. */

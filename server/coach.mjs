@@ -221,11 +221,28 @@ async function avecRepli(client, requete, jeton) {
   return { reponse: await client.messages.parse(requete), strava: false };
 }
 
+/* Ce que l'athlète vise, sport par sport, en une ligne de prompt.
+
+   Le 10 km y est déjà nommé juste avant (c'est la référence des allures) :
+   ici, ce sont les autres disciplines, celles sur lesquelles il s'est donné
+   un temps. Sans objectif ailleurs qu'à pied, la ligne n'apparaît pas — un
+   prompt ne gagne rien à dire « rien ». */
+function ligneObjectifs(athlete) {
+  const autres = (athlete?.objectifs ?? []).filter((o) => o.discipline !== 'Course à pied');
+  if (autres.length === 0) return null;
+  const dits = autres.map((o) => {
+    const ou = [o.actuel, o.cible].filter(Boolean).join(' → ');
+    return `${o.discipline} (${o.epreuve}) ${ou}`;
+  });
+  return `Objectifs des autres disciplines : ${dits.join(' ; ')}.`;
+}
+
 /* ------------------------------------------------------- l'analyse d'une séance */
 
 function contexteSeance({ athlete, session, allures, activite, journal, stats }) {
   const lignes = [
     `Athlète : ${athlete.nom}. Référence 10 km actuelle ${athlete.ref_actuelle} → cible ${athlete.ref_cible}.`,
+    ...(ligneObjectifs(athlete) ? [ligneObjectifs(athlete)] : []),
     '',
     `Séance prévue : ${session.titre}`,
     `  ${session.date} · semaine ${session.semaine} · bloc ${session.bloc} · ${session.discipline} · type ${session.type}`,
@@ -447,6 +464,7 @@ const DOCTRINE = `Deux règles du plan que tu ne discutes pas :
 function contexteSemaine({ athlete, semaine, bloc, ecart, seances, suite, regles }) {
   const lignes = [
     `Athlète : ${athlete.nom}. Référence 10 km actuelle ${athlete.ref_actuelle} → cible ${athlete.ref_cible}.`,
+    ...(ligneObjectifs(athlete) ? [ligneObjectifs(athlete)] : []),
     `Semaine ${semaine}, bloc ${bloc}.`,
     '',
     'L’écart, déjà calculé — cite-le tel quel :',
@@ -601,6 +619,7 @@ const ETAT_EN_CLAIR = {
 function contexteGlissant({ athlete, aujourdhui, jour, semaine, bloc, matin, passees, prochains, structure, regles }) {
   const lignes = [
     `Athlète : ${athlete.nom}. Référence 10 km actuelle ${athlete.ref_actuelle} → cible ${athlete.ref_cible}.`,
+    ...(ligneObjectifs(athlete) ? [ligneObjectifs(athlete)] : []),
     `Aujourd'hui : ${jour} ${aujourdhui} · semaine ${semaine} · bloc ${bloc}.`,
     '',
     'Le signal du matin, déjà calculé — cite-le tel quel :',

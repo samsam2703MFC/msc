@@ -50,6 +50,27 @@ export function format10k(secondesParKm: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+/** Un temps d'épreuve : « 1:24:30 » au-delà de l'heure, « 42:10 » en deçà. */
+export function chrono(secondes: number): string {
+  const t = Math.round(secondes);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const sec = t % 60;
+  return h
+    ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    : `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+/** Le chemin inverse : « 1:24:30 », « 42:10 » ou « 2530 » → secondes. */
+export function versChrono(v: string): number | null {
+  const parts = v.trim().split(':').map((x) => Number(x));
+  if (parts.length === 0 || parts.some((n) => !Number.isFinite(n))) return null;
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return null;
+}
+
 export function bloc(code: string): MscBloc {
   const found = tables.msc_bloc.find((b) => b.code === code);
   if (!found) throw new Error(`msc_bloc: unknown block "${code}"`);

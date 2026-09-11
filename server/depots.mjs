@@ -181,7 +181,7 @@ async function lePlan(planId) {
 }
 
 async function leVecu(athleteId) {
-  const [activites, blocs, journal, douleurs, limites, raisons, structure, mesures, attente] = await Promise.all([
+  const [activites, blocs, journal, douleurs, limites, raisons, structure, objectifsSport, mesures, attente] = await Promise.all([
     lignes('SELECT * FROM msc_activity WHERE athlete_id = :a ORDER BY date, id', { a: athleteId }),
     lignes(
       `SELECT b.* FROM msc_activity_bloc b JOIN msc_activity a ON a.id = b.activity_id
@@ -198,6 +198,9 @@ async function leVecu(athleteId) {
        WHERE j.athlete_id = :a ORDER BY r.raison`, { a: athleteId }),
     lignes(
       'SELECT jour, creneau, discipline, type_code, duree_min FROM msc_structure WHERE athlete_id = :a ORDER BY jour, creneau',
+      { a: athleteId }),
+    lignes(
+      'SELECT discipline, actuel_s, cible_s FROM msc_objectif_sport WHERE athlete_id = :a ORDER BY discipline',
       { a: athleteId }),
     lignes(
       "SELECT * FROM msc_mesure WHERE athlete_id = :a AND etat = 'confirme' ORDER BY date",
@@ -236,6 +239,13 @@ async function leVecu(athleteId) {
     msc_structure: structure.map((c) => ({
       jour: c.jour, creneau: c.creneau, discipline: c.discipline,
       type_code: c.type_code, duree_min: c.duree_min ?? undefined,
+    })),
+    /* Les objectifs des autres disciplines. Celui de la course à pied n'est
+       pas ici : c'est la paire de références de l'athlète, juste au-dessus. */
+    msc_objectif_sport: objectifsSport.map((o) => ({
+      discipline: o.discipline,
+      actuel_s: o.actuel_s == null ? null : Number(o.actuel_s),
+      cible_s: o.cible_s == null ? null : Number(o.cible_s),
     })),
     msc_activity: activites.map((a) => ({
       id_strava: Number(a.id_strava ?? a.id),
@@ -509,6 +519,7 @@ export async function fraicheur(athleteId) {
        UNION ALL SELECT MAX(maj_le) FROM msc_mesure WHERE athlete_id = :a
        UNION ALL SELECT MAX(maj_le) FROM msc_activity WHERE athlete_id = :a
        UNION ALL SELECT MAX(maj_le) FROM msc_structure WHERE athlete_id = :a
+       UNION ALL SELECT MAX(maj_le) FROM msc_objectif_sport WHERE athlete_id = :a
        UNION ALL SELECT MAX(maj_le) FROM msc_competition WHERE athlete_id = :a
        UNION ALL SELECT MAX(cree_le) FROM msc_analyse WHERE athlete_id = :a
        UNION ALL SELECT MAX(cree_le) FROM msc_chat WHERE athlete_id = :a
@@ -1039,6 +1050,59 @@ export async function ecrireProfil(athleteId, { prenom, nom, surnom, annee_naiss
     [prenomNet, nomNet, surnomNet, annee, coach ?? null, athleteId],
   );
   return { id: athleteId, prenom: prenomNet, nom: nomNet, surnom: surnomNet, annee_naissance: annee, coach: coach ?? undefined };
+}
+
+/* --------------------------------------------- les objectifs par discipline
+
+   Où l'athlète en est, et où il veut aller, sport par sport, sur une épreuve
+   étalon que le code connaît (10 km, 1500 m, 40 km, la course Hyrox).
+
+   La course à pied est à part, et c'est voulu : ses deux temps SONT les
+   références de l'athlète, celles d'où le moteur tire chaque allure. Les
+   écrire ici les écrirait deux fois, et la seconde copie se tromperait au
+   premier test de 30 minutes. Alors le sport de référence écrit dans
+   msc_athlete, les autres dans msc_objectif_sport — une seule vérité par
+   nombre, et l'écran, lui, les montre dans la même liste. */
+const SPORT_REFERENCE = 'Course à pied';
+
+export async function ecrireObjectifSport(athleteId, { discipline, actuel_s, cible_s }, cnx) {
+  const q = cnx ?? bd();
+  const sport = texte(discipline, 32).trim();
+  if (!sport) throw new DepotError('Discipline manquante.');
+  /* Un temps d'épreuve : entre une minute et douze heures, ou rien du tout. */
+  const temps = (v) => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 60 || n > 43_200) throw new DepotError('Temps invraisemblable.');
+    return Math.round(n);
+  };
+  const actuel = temps(actuel_s);
+  const cible = temps(cible_s);
+
+  if (sport === SPORT_REFERENCE) {
+    /* Le 10 km : la référence est une allure au kilomètre, l'objectif un temps
+       sur dix kilomètres. Le même nombre, divisé par dix. */
+    if (actuel == null || cible == null) throw new DepotError('Le 10 km demande les deux temps.');
+    await q.execute(
+      'UPDATE msc_athlete SET ref_actuelle_s = ?, ref_cible_s = ? WHERE id = ?',
+      [Math.round(actuel / 10), Math.round(cible / 10), athleteId],
+    );
+    return { discipline: sport, actuel_s: actuel, cible_s: cible };
+  }
+
+  /* Les deux temps vides : l'athlète n'a pas d'objectif sur ce sport, et une
+     ligne vide n'en est pas un. */
+  if (actuel == null && cible == null) {
+    await q.execute('DELETE FROM msc_objectif_sport WHERE athlete_id = ? AND discipline = ?', [athleteId, sport]);
+    return { discipline: sport, actuel_s: null, cible_s: null };
+  }
+  await q.execute(
+    `INSERT INTO msc_objectif_sport (athlete_id, discipline, actuel_s, cible_s)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE actuel_s = VALUES(actuel_s), cible_s = VALUES(cible_s)`,
+    [athleteId, sport, actuel, cible],
+  );
+  return { discipline: sport, actuel_s: actuel, cible_s: cible };
 }
 
 /**

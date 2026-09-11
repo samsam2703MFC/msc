@@ -16,6 +16,7 @@
    number on the screen. */
 
 import * as db from './db';
+import { EPREUVES, SPORT_REFERENCE } from './structure';
 import type {
   GlissantContenu,
   MscActivity,
@@ -322,6 +323,31 @@ function briefDeSeance(session: MscPlanSession, lang: Lang = 'fr') {
   };
 }
 
+/* Ce que l'athlète vise, discipline par discipline, tel qu'on le dit au coach.
+
+   Le 10 km d'abord, parce que c'est de lui que sortent toutes les allures ;
+   les autres sports ensuite, ceux sur lesquels un objectif a été posé. Un
+   sport sans objectif n'entre pas dans le prompt : « pas d'objectif » se lit
+   à son absence, et une ligne vide occuperait la place d'une vraie. */
+function objectifsDuCoach(): Array<{ discipline: string; epreuve: string; actuel: string; cible: string }> {
+  const out = [{
+    discipline: SPORT_REFERENCE,
+    epreuve: EPREUVES[SPORT_REFERENCE].libelle,
+    actuel: db.format10k(db.athlete.ref_actuelle_s),
+    cible: db.format10k(db.athlete.ref_cible_s),
+  }];
+  for (const o of db.select('msc_objectif_sport')) {
+    if (o.actuel_s == null && o.cible_s == null) continue;
+    out.push({
+      discipline: o.discipline,
+      epreuve: EPREUVES[o.discipline]?.libelle ?? '',
+      actuel: o.actuel_s == null ? '' : db.chrono(o.actuel_s),
+      cible: o.cible_s == null ? '' : db.chrono(o.cible_s),
+    });
+  }
+  return out;
+}
+
 export function demanderAnalyse(
   session: MscPlanSession,
   options: {
@@ -342,6 +368,9 @@ export function demanderAnalyse(
       nom: db.athlete.nom,
       ref_actuelle: db.format10k(db.athlete.ref_actuelle_s),
       ref_cible: db.format10k(db.athlete.ref_cible_s),
+      /* Ce qu'il vise, sport par sport : le coach construit et adapte en le
+         sachant, au lieu de traiter les autres disciplines comme du volume. */
+      objectifs: objectifsDuCoach(),
     },
     session: {
       ...briefDeSeance(session, lang),
@@ -585,6 +614,9 @@ export function demanderRecalcul(
       nom: db.athlete.nom,
       ref_actuelle: db.format10k(db.athlete.ref_actuelle_s),
       ref_cible: db.format10k(db.athlete.ref_cible_s),
+      /* Ce qu'il vise, sport par sport : le coach construit et adapte en le
+         sachant, au lieu de traiter les autres disciplines comme du volume. */
+      objectifs: objectifsDuCoach(),
     },
     bloc: db.blocDeSemaine(semaine).code,
     ecart: {
@@ -686,6 +718,9 @@ export function demanderGlissant(aujourdhui: string, lang: Lang = 'fr'): Promise
       nom: db.athlete.nom,
       ref_actuelle: db.format10k(db.athlete.ref_actuelle_s),
       ref_cible: db.format10k(db.athlete.ref_cible_s),
+      /* Ce qu'il vise, sport par sport : le coach construit et adapte en le
+         sachant, au lieu de traiter les autres disciplines comme du volume. */
+      objectifs: objectifsDuCoach(),
     },
     passees,
     prochains,

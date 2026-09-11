@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
 import * as db from '../data/db';
+import { chrono, versChrono } from '../data/engine';
 import { equivalent10k } from '../data/generateur';
 import { TYPES_COURSE, disciplineEnClair, nomDuType, typeCourse, typesGroupes } from '../data/courses';
 import type { Lang, MscCompetition } from '../data/types';
@@ -55,26 +56,6 @@ const T: Record<Lang, Record<string, string>> = {
 function allure(s: number): string {
   const t = Math.round(s);
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
-}
-
-function chrono(s: number): string {
-  const t = Math.round(s);
-  const h = Math.floor(t / 3600);
-  const m = Math.floor((t % 3600) / 60);
-  const sec = t % 60;
-  return h
-    ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-    : `${m}:${String(sec).padStart(2, '0')}`;
-}
-
-/** « 1:24:30 », « 42:10 » ou « 2530 » → secondes. */
-function versSecondes(v: string): number | null {
-  const parts = v.trim().split(':').map((x) => Number(x));
-  if (parts.some((n) => !Number.isFinite(n))) return null;
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  return null;
 }
 
 export function BackOffice({ app }: { app: App }) {
@@ -245,7 +226,7 @@ function Rangee({
 
   const modifie = JSON.stringify(v) !== reference;
   const valide = v.date !== '' && v.nom.trim() !== '';
-  const secondes = v.temps.trim() ? versSecondes(v.temps) : null;
+  const secondes = v.temps.trim() ? versChrono(v.temps) : null;
   const km = nombre(v.distance);
   const allureS = secondes && km ? secondes / km : null;
 
