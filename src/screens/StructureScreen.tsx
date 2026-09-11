@@ -38,8 +38,14 @@ const T = {
     allures: 'Allures cibles',
     sansAllure: 'pas d’allure au km — séries, sensations, watts',
     enregistrer: 'Enregistrer la semaine type', enregistre: 'Enregistrée', enCours: 'Enregistrement…',
-    modele: 'Partir du modèle',
-    modeleAide: 'Une semaine de départ, à corriger ensuite : nage et vélo le mardi, seuil le mercredi, longue le samedi.',
+    modeles: 'Modèles de semaine',
+    depart: 'Semaine de départ',
+    modelesAide: 'Un modèle remplit la grille ; rien n’est écrit chez l’athlète tant que la semaine type n’est pas enregistrée.',
+    nomModele: 'Nom du modèle',
+    enregistrerModele: 'Enregistrer comme modèle',
+    supprimer: 'Supprimer',
+    confirmer: 'Supprimer ?',
+    creneauxMot: 'créneaux',
     vidone: 'Aucun créneau : le coach n’a pas de structure à suivre, il posera la semaine lui-même.',
     bloc: 'bloc',
     lecture: 'Compte en lecture seule.',
@@ -54,8 +60,14 @@ const T = {
     allures: 'Tempa docelowe',
     sansAllure: 'bez tempa na km — serie, odczucia, waty',
     enregistrer: 'Zapisz tydzień wzorcowy', enregistre: 'Zapisano', enCours: 'Zapisywanie…',
-    modele: 'Zacznij od wzoru',
-    modeleAide: 'Tydzień na start, do poprawienia: pływanie i rower we wtorek, próg w środę, długi w sobotę.',
+    modeles: 'Wzorce tygodnia',
+    depart: 'Tydzień startowy',
+    modelesAide: 'Wzorzec wypełnia siatkę; u zawodnika nic się nie zapisuje, dopóki nie zapiszesz tygodnia wzorcowego.',
+    nomModele: 'Nazwa wzorca',
+    enregistrerModele: 'Zapisz jako wzorzec',
+    supprimer: 'Usuń',
+    confirmer: 'Usunąć?',
+    creneauxMot: 'okien',
     vidone: 'Brak okien: trener nie ma struktury do naśladowania, ułoży tydzień sam.',
     bloc: 'blok',
     lecture: 'Konto tylko do odczytu.',
@@ -144,6 +156,14 @@ export function StructureScreen({ app, large = false }: { app: App; large?: bool
         )}
       </Card>
 
+      {!lecture && (
+        <Modeles
+          t={t}
+          creneaux={creneaux}
+          onPoser={(c) => { setJob('idle'); setCreneaux(c); }}
+        />
+      )}
+
       <div
         style={{
           display: 'grid',
@@ -186,32 +206,162 @@ export function StructureScreen({ app, large = false }: { app: App; large?: bool
           <div style={{ fontSize: 11.5, color: C.inkQuiet }}>{t.lecture}</div>
         ) : (
           <>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                disabled={job === 'envoi'}
-                onClick={() => void enregistrer()}
-                style={{
-                  padding: '10px 16px', borderRadius: R.md, border: 'none', fontSize: 13, fontWeight: 700,
-                  background: job === 'fait' ? C.accentSoft : C.accent,
-                  color: job === 'fait' ? C.accentDeep : C.accentInk,
-                }}
-              >
-                {job === 'envoi' ? t.enCours : job === 'fait' ? t.enregistre : t.enregistrer}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setJob('idle'); setCreneaux(modele({ natation: true, velo: true, salle: true })); }}
-                style={{ padding: '10px 14px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.inkMuted, fontSize: 12, fontWeight: 600 }}
-              >
-                {t.modele}
-              </button>
-            </div>
-            <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>{t.modeleAide}</div>
+            <button
+              type="button"
+              disabled={job === 'envoi'}
+              onClick={() => void enregistrer()}
+              style={{
+                alignSelf: 'flex-start',
+                padding: '10px 16px', borderRadius: R.md, border: 'none', fontSize: 13, fontWeight: 700,
+                background: job === 'fait' ? C.accentSoft : C.accent,
+                color: job === 'fait' ? C.accentDeep : C.accentInk,
+              }}
+            >
+              {job === 'envoi' ? t.enCours : job === 'fait' ? t.enregistre : t.enregistrer}
+            </button>
           </>
         )}
       </Card>
     </div>
+  );
+}
+
+/* Les modèles : une semaine type qui marche pour un athlète marche souvent
+   pour le suivant. On l'enregistre sous un nom, et on la repose ailleurs.
+
+   Poser un modèle ne fait que remplir la grille — c'est « Enregistrer la
+   semaine type » qui écrit chez l'athlète. Deux gestes, parce que ce sont deux
+   décisions : choisir une forme, et la donner à quelqu'un. */
+function Modeles({
+  t, creneaux, onPoser,
+}: {
+  t: Record<string, string>;
+  creneaux: MscStructure[];
+  onPoser: (creneaux: MscStructure[]) => void;
+}) {
+  const [liste, setListe] = useState<api.Modele[]>([]);
+  const [nom, setNom] = useState('');
+  const [job, setJob] = useState<'idle' | 'envoi'>('idle');
+  const [aSupprimer, setASupprimer] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const relire = () => {
+    api.modeles().then((r) => setListe(r.modeles)).catch(() => setListe([]));
+  };
+  useEffect(relire, []);
+
+  /* Un modèle rangé revient avec `duree_min: null` quand il n'en portait pas ;
+     la grille, elle, ne connaît que « une durée ou rien ». */
+  const poser = (m: api.Modele) => onPoser(m.creneaux.map((c) => ({
+    jour: c.jour, creneau: c.creneau === 2 ? 2 : 1, discipline: c.discipline,
+    type_code: c.type_code as TypeCode,
+    ...(c.duree_min === null ? {} : { duree_min: c.duree_min }),
+  })));
+
+  const enregistrer = async () => {
+    setJob('envoi'); setErreur(null);
+    try {
+      await api.ecrireModele(nom, creneaux.map((c) => ({
+        jour: c.jour, creneau: c.creneau, discipline: c.discipline,
+        type_code: c.type_code, duree_min: c.duree_min ?? null,
+      })));
+      setNom('');
+      relire();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : String(e));
+    } finally {
+      setJob('idle');
+    }
+  };
+
+  const supprimer = async (cible: string) => {
+    setASupprimer(null);
+    try { await api.supprimerModele(cible); } catch { /* la relecture dira */ }
+    relire();
+  };
+
+  const chip: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: R.full,
+    border: `1px solid ${C.border}`, background: C.surface, color: C.inkMuted,
+    fontSize: 12, fontWeight: 600,
+  };
+
+  return (
+    <Card padding="12px 16px" gap={8}>
+      <SectionLabel icon="repeat" color={C.teal}>{t.modeles}</SectionLabel>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {/* Celui d'origine, qui n'est rangé nulle part : il est dans le code,
+            et c'est de lui qu'on part quand il n'y a encore rien. */}
+        <button
+          type="button"
+          className="msc-hover-accent"
+          style={chip}
+          onClick={() => onPoser(modele({ natation: true, velo: true, salle: true }))}
+        >
+          <Icon name="sparkles" size={13} />
+          {t.depart}
+        </button>
+        {liste.map((m) => (
+          <span key={m.nom} style={{ ...chip, paddingRight: 4 }}>
+            <button
+              type="button"
+              className="msc-hover-accent"
+              onClick={() => poser(m)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.inkMuted, fontSize: 12, fontWeight: 600 }}
+            >
+              <Icon name="calendar-days" size={13} />
+              {m.nom}
+              <Mono size={10} color={C.inkQuiet}>{`${m.creneaux.length}`}</Mono>
+            </button>
+            {aSupprimer === m.nom ? (
+              <button
+                type="button"
+                onClick={() => void supprimer(m.nom)}
+                style={{ padding: '2px 8px', borderRadius: R.full, background: C.negative, color: C.surface, fontSize: 10, fontWeight: 700 }}
+              >
+                {t.confirmer}
+              </button>
+            ) : (
+              <button
+                type="button"
+                aria-label={`${t.supprimer} ${m.nom}`}
+                onClick={() => setASupprimer(m.nom)}
+                style={{ width: 20, height: 20, borderRadius: R.full, color: C.inkQuiet, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Icon name="trash-2" size={12} />
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          value={nom}
+          onChange={(e) => setNom(e.target.value)}
+          placeholder={t.nomModele}
+          aria-label={t.nomModele}
+          maxLength={48}
+          style={{ ...CHAMP, width: 190 }}
+        />
+        <button
+          type="button"
+          disabled={job === 'envoi' || nom.trim() === '' || creneaux.length === 0}
+          onClick={() => void enregistrer()}
+          style={{
+            padding: '7px 12px', borderRadius: R.md, fontSize: 12, fontWeight: 600,
+            border: `1px solid ${nom.trim() && creneaux.length ? C.accent : C.border}`,
+            background: nom.trim() && creneaux.length ? C.accentSoft : C.surface,
+            color: nom.trim() && creneaux.length ? C.accentDeep : C.inkQuiet,
+          }}
+        >
+          {t.enregistrerModele}
+        </button>
+        <Mono size={10} color={C.inkQuiet}>{`${creneaux.length} ${t.creneauxMot}`}</Mono>
+      </div>
+      {erreur && <div style={{ fontSize: 12, color: C.negative }}>{erreur}</div>}
+      <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>{t.modelesAide}</div>
+    </Card>
   );
 }
 

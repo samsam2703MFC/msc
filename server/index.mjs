@@ -8,6 +8,7 @@
 
      /api/connexion, /api/moi     qui parle, et de quel athlète
      /api/db/instantane           toute la base d'un athlète, en une fois
+     /api/modeles                 les semaines types enregistrées, réutilisables
      /api/fraicheur               l'empreinte des données, pour savoir quand relire
      /api/journal, /api/mesure    ce que l'application écrit
      /api/activites               les activités appariées par le navigateur
@@ -439,6 +440,32 @@ async function router(req, res, url) {
     const corps = await lireCorps(req, 8_000);
     if (!corps.cle) return json(res, 400, { erreur: 'champ manquant : cle' });
     return json(res, 200, { param: await params.ecrire(String(corps.cle), corps.valeur ?? null) });
+  }
+
+  /* Les modèles de semaine type : du vocabulaire de club, pas la donnée d'un
+     athlète — d'où une route à part, et pas l'instantané. Les lire, les
+     écrire et les supprimer est réservé au coach et à l'admin : c'est lui qui
+     décide de la structure d'une semaine. */
+  if (chemin === '/api/modeles') {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    if (!identite.bypass && !['coach', 'admin'].includes(identite.compte.role)) {
+      return json(res, 403, { erreur: 'Réservé à un compte coach ou admin.' });
+    }
+    if (req.method === 'GET') return json(res, 200, await depots.modeles());
+    if (req.method === 'POST') {
+      const corps = await lireCorps(req, 16_000);
+      /* Un nom vide ou une matrice dont aucun créneau ne tient debout : c'est
+         la demande qui est mauvaise, pas le serveur — 400, et on le dit. */
+      const nom = String(corps.nom ?? '').trim();
+      if (!nom || depots.creneauxValides(corps.creneaux).length === 0) {
+        return json(res, 400, { erreur: 'Un modèle a besoin d’un nom et d’au moins un créneau.' });
+      }
+      return json(res, 200, await depots.ecrireModele(nom, corps.creneaux));
+    }
+    if (req.method === 'DELETE') {
+      return json(res, 200, await depots.supprimerModele(url.searchParams.get('nom')));
+    }
   }
 
   /* Strava, athlète par athlète : pour un coach ses athlètes, pour un admin

@@ -351,6 +351,14 @@ try {
   check('l’envoyer vide l’efface : la matrice est remplacée, pas fusionnée',
     videe.statut === 200 && apresVidage.length === 0, JSON.stringify(apresVidage));
 
+  /* Les modèles de semaine type sont l'outil du coach : un athlète ne les
+     voit pas, et n'en pose pas. */
+  const modeleRefuse = await c.appel('/api/modeles', {
+    method: 'POST', body: JSON.stringify({ nom: 'Interdit', creneaux: [] }),
+  });
+  check('les modèles de semaine sont refusés à un athlète',
+    modeleRefuse.statut === 403, String(modeleRefuse.statut));
+
   /* Les sept prochains jours : la route vérifie sa forme, puis demande au
      coach — sans clé Anthropic ici, c'est le 401 qui dit lequel des trois cas
      on est ; avec une clé, une replanification rangée. */
@@ -865,6 +873,46 @@ try {
   const avecCode = await client().appel('/api/inscription', { method: 'POST', body: JSON.stringify({ ...corpsLibre, email: `libre2-${EMAIL}`, code: 'CLUB-2026' }) });
   check('un code d’invitation posé est exigé, et suffit',
     codePose.statut === 200 && sansCode.statut === 403 && avecCode.statut === 200, `${sansCode.statut} / ${avecCode.statut} ${sansCode.corps.erreur ?? ''}`);
+
+  /* Les modèles : la même matrice, rangée sous un nom et sans athlète, pour la
+     reposer sur le suivant. Les poser ne touche à personne — c'est la semaine
+     type qui écrit chez l'athlète. */
+  const modeleEcrit = await c.appel('/api/modeles', {
+    method: 'POST',
+    body: JSON.stringify({ nom: '  Contrôle  ', creneaux: [
+      { jour: 0, creneau: 1, discipline: 'Hyrox', type_code: 'force', duree_min: 70 },
+      { jour: 3, creneau: 1, discipline: 'Course à pied', type_code: 'vma', duree_min: 55 },
+      { jour: 5, creneau: 1, discipline: 'Repos', type_code: 'repos', duree_min: 0 },
+    ] }),
+  });
+  check('un modèle s’enregistre sous son nom, sans le repos',
+    modeleEcrit.statut === 200 && modeleEcrit.corps.nom === 'Contrôle' && modeleEcrit.corps.creneaux === 2,
+    JSON.stringify(modeleEcrit.corps));
+  const catalogue = await c.appel('/api/modeles');
+  const leModele = (catalogue.corps.modeles ?? []).find((m: any) => m.nom === 'Contrôle');
+  check('et il se relit avec ses créneaux, prêt à être reposé ailleurs',
+    catalogue.statut === 200 && leModele?.creneaux?.length === 2
+      && leModele.creneaux[0].jour === 0 && leModele.creneaux[1].type_code === 'vma',
+    JSON.stringify(leModele));
+  const structureIntacte = (await c.appel('/api/db/instantane')).corps.msc_structure ?? [];
+  check('enregistrer un modèle n’écrit rien chez l’athlète',
+    structureIntacte.length === 0, JSON.stringify(structureIntacte));
+  const modeleVide = await c.appel('/api/modeles', {
+    method: 'POST', body: JSON.stringify({ nom: 'Vide', creneaux: [] }),
+  });
+  check('un modèle sans créneau est refusé', modeleVide.statut === 400, String(modeleVide.statut));
+  const modeleSansNom = await c.appel('/api/modeles', {
+    method: 'POST', body: JSON.stringify({ nom: '   ', creneaux: [
+      { jour: 0, creneau: 1, discipline: 'Hyrox', type_code: 'force', duree_min: 70 },
+    ] }),
+  });
+  check('et un modèle sans nom aussi', modeleSansNom.statut === 400, String(modeleSansNom.statut));
+  await c.appel('/api/modeles?nom=Contr%C3%B4le', { method: 'DELETE' });
+  const catalogueApres = await c.appel('/api/modeles');
+  check('supprimer un modèle le retire du catalogue',
+    !(catalogueApres.corps.modeles ?? []).some((m: any) => m.nom === 'Contrôle'),
+    JSON.stringify(catalogueApres.corps.modeles));
+
   await c.appel('/api/param', { method: 'PUT', body: JSON.stringify({ cle: 'securite.code_invitation', valeur: null }) });
   await bd().execute("UPDATE compte SET role = 'athlete' WHERE email = ?", [EMAIL]);
   const redevenu = await c.appel('/api/admin/systeme');

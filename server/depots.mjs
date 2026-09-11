@@ -21,7 +21,7 @@
    d'attente hors-ligne qui rejoue après une coupure enregistre deux fois le
    même RPE. */
 
-import { lignes, ligne, transaction } from './bd.mjs';
+import { bd, lignes, ligne, transaction } from './bd.mjs';
 import { chargeParJour, courbesDeForme } from './forme.mjs';
 import { palierDeAthlete } from './niveau.mjs';
 import { param, publics as paramsPublics } from './params.mjs';
@@ -909,8 +909,12 @@ export async function ecrireJournal(athleteId, { date, session_id, rpe, sommeil,
     c'est la poser telle qu'elle est à l'écran, pas fusionner deux états. Un
     créneau au type « repos » n'est pas rangé — un jour sans rien EST le
     repos, et une ligne « repos » se compterait dans le volume. */
-export async function ecrireStructure(athleteId, creneaux, cnx) {
-  const q = cnx ?? (await import('./bd.mjs')).bd();
+/* Ce qu'une matrice a le droit de contenir — pour la semaine type d'un athlète
+   comme pour un modèle enregistré, puisque c'est la même chose rangée deux
+   fois. Un jour hors des sept, un créneau qui n'est ni le premier ni le
+   second, un « repos » : rien de tout ça n'entre. Le repos n'est pas une
+   ligne — c'est l'absence de ligne, sinon il compterait dans le volume. */
+export function creneauxValides(creneaux) {
   const gardes = [];
   for (const c of creneaux ?? []) {
     const jour = Number(c?.jour);
@@ -925,6 +929,12 @@ export async function ecrireStructure(athleteId, creneaux, cnx) {
     gardes.push([jour, creneau, discipline, type,
       Number.isFinite(duree) && duree > 0 ? Math.min(Math.round(duree), 600) : null]);
   }
+  return gardes;
+}
+
+export async function ecrireStructure(athleteId, creneaux, cnx) {
+  const q = cnx ?? bd();
+  const gardes = creneauxValides(creneaux);
   await q.execute('DELETE FROM msc_structure WHERE athlete_id = ?', [athleteId]);
   for (const [jour, creneau, discipline, type, duree] of gardes) {
     await q.execute(
@@ -934,6 +944,53 @@ export async function ecrireStructure(athleteId, creneaux, cnx) {
     );
   }
   return { creneaux: gardes.length };
+}
+
+/* ------------------------------------------- les modèles de semaine type
+
+   Une semaine type qui marche pour un athlète marche souvent pour le
+   suivant. On l'enregistre sous un nom, et on la repose ailleurs. Le modèle
+   n'appartient à personne : c'est du vocabulaire de club, comme les types
+   d'entraînement — d'où pas d'athlete_id, et une lecture ouverte au coach.
+
+   Reposer un modèle ne l'attache à rien : il remplit la grille à l'écran, et
+   c'est « Enregistrer la semaine type » qui écrit chez l'athlète. Un modèle
+   modifié plus tard ne rejoue donc pas dans le dos de personne. */
+export async function modeles() {
+  const rangs = await lignes(
+    'SELECT nom, jour, creneau, discipline, type_code, duree_min FROM msc_modele ORDER BY nom, jour, creneau',
+  );
+  const parNom = new Map();
+  for (const r of rangs) {
+    if (!parNom.has(r.nom)) parNom.set(r.nom, []);
+    parNom.get(r.nom).push({
+      jour: Number(r.jour), creneau: Number(r.creneau), discipline: r.discipline,
+      type_code: r.type_code, duree_min: r.duree_min === null ? null : Number(r.duree_min),
+    });
+  }
+  return { modeles: [...parNom].map(([nom, creneaux]) => ({ nom, creneaux })) };
+}
+
+export async function ecrireModele(nom, creneaux) {
+  const titre = String(nom ?? '').trim().slice(0, 48);
+  if (!titre) throw new Error('un modèle a besoin d’un nom');
+  const gardes = creneauxValides(creneaux);
+  if (gardes.length === 0) throw new Error('un modèle vide ne sert à rien');
+  const q = bd();
+  await q.execute('DELETE FROM msc_modele WHERE nom = ?', [titre]);
+  for (const [jour, creneau, discipline, type, duree] of gardes) {
+    await q.execute(
+      `INSERT INTO msc_modele (nom, jour, creneau, discipline, type_code, duree_min)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [titre, jour, creneau, discipline, type, duree],
+    );
+  }
+  return { nom: titre, creneaux: gardes.length };
+}
+
+export async function supprimerModele(nom) {
+  const [r] = await bd().execute('DELETE FROM msc_modele WHERE nom = ?', [String(nom ?? '')]);
+  return { supprime: r.affectedRows > 0 };
 }
 
 /** Le poids et la FC de repos du jour. */

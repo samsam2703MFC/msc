@@ -247,6 +247,32 @@ export function ecrireStructure(creneaux: Array<{
   return ecrire<{ creneaux: number }>('/structure', { creneaux }, 'structure');
 }
 
+/** Un modèle de semaine type : un nom et ses créneaux, sans athlète. */
+export interface Modele {
+  nom: string;
+  creneaux: Array<{
+    jour: number; creneau: number; discipline: string; type_code: string; duree_min: number | null;
+  }>;
+}
+
+/* Les modèles ne sont à personne : ils ne voyagent pas dans l'instantané d'un
+   athlète, ils se demandent quand on ouvre la semaine type. Et ils ne passent
+   pas par la file d'attente hors ligne : poser un modèle est un geste de
+   bureau, devant sa base. */
+export function modeles(): Promise<{ modeles: Modele[] }> {
+  return appeler<{ modeles: Modele[] }>('/modeles');
+}
+
+export function ecrireModele(nom: string, creneaux: Modele['creneaux']) {
+  return appeler<{ nom: string; creneaux: number }>('/modeles', {
+    method: 'POST', body: JSON.stringify({ nom, creneaux }),
+  });
+}
+
+export function supprimerModele(nom: string) {
+  return appeler<{ supprime: boolean }>(`/modeles?nom=${encodeURIComponent(nom)}`, { method: 'DELETE' });
+}
+
 export interface EcritureMesure {
   date: string;
   poids_kg?: number;

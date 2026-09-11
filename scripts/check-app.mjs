@@ -664,7 +664,7 @@ try {
       && /1er créneau/.test(matrice) && /2e créneau/.test(matrice)
       && (await page.getByRole('combobox').count()) >= 28,
     `${await page.getByRole('combobox').count()} listes déroulantes`);
-  await page.getByRole('button', { name: /Partir du modèle/ }).click();
+  await page.getByRole('button', { name: /Semaine de départ/ }).click();
   await page.waitForTimeout(600);
   const remplie = await page.locator('main').innerText();
   check('le modèle remplit la grille, avec les allures cibles des créneaux à pied',
@@ -675,6 +675,41 @@ try {
   await page.waitForTimeout(1500);
   const [[rangee]] = await bd().execute('SELECT COUNT(*) AS n FROM msc_structure WHERE athlete_id = 1');
   check('et elle s’enregistre, créneau par créneau', Number(rangee.n) >= 5, `${rangee.n} créneaux`);
+
+  /* Le modèle : la même semaine, rangée sous un nom, pour la reposer sur le
+     suivant. On l'enregistre, on vide la grille, on la repose. */
+  await bd().execute('DELETE FROM msc_modele WHERE nom = ?', ['Contrôle navigateur']);
+  await page.getByLabel('Nom du modèle').fill('Contrôle navigateur');
+  await page.waitForTimeout(200);
+  await page.getByRole('button', { name: /Enregistrer comme modèle/ }).click();
+  await page.waitForTimeout(1200);
+  const [[modeleRange]] = await bd().execute(
+    'SELECT COUNT(*) AS n FROM msc_modele WHERE nom = ?', ['Contrôle navigateur'],
+  );
+  check('la semaine type s’enregistre comme modèle, sous son nom',
+    Number(modeleRange.n) >= 5, `${modeleRange.n} créneaux`);
+  check('… et le modèle apparaît, prêt à être reposé',
+    (await page.getByRole('button', { name: /^Contrôle navigateur/ }).count()) >= 1);
+  /* Le reposer remplit la grille à l'écran, et rien d'autre : ce qui est rangé
+     chez l'athlète ne bouge qu'en enregistrant la semaine type. Deux gestes,
+     parce que ce sont deux décisions. */
+  await page.getByRole('button', { name: /^Contrôle navigateur/ }).first().click();
+  await page.waitForTimeout(600);
+  const reposee = await page.locator('main').innerText();
+  const [[inchangee]] = await bd().execute('SELECT COUNT(*) AS n FROM msc_structure WHERE athlete_id = 1');
+  check('le reposer remplit la grille, sans rien écrire chez l’athlète',
+    /[1-9]\d*h\d\d\s*\n?\s*Volume de la semaine type/.test(reposee)
+      && Number(inchangee.n) === Number(rangee.n),
+    `${inchangee.n} créneaux en base`);
+  await page.getByRole('button', { name: /Supprimer Contrôle navigateur/ }).click();
+  await page.waitForTimeout(300);
+  await page.getByRole('button', { name: /^Supprimer \?$/ }).click();
+  await page.waitForTimeout(900);
+  const [[modeleParti]] = await bd().execute(
+    'SELECT COUNT(*) AS n FROM msc_modele WHERE nom = ?', ['Contrôle navigateur'],
+  );
+  check('et le supprimer demande confirmation, puis le retire',
+    Number(modeleParti.n) === 0, `${modeleParti.n} créneaux restants`);
 
   /* Et la sortie définitive : dans SA fiche, sous son profil, jamais d'un
      seul bouton — on dit ce qui sera détruit, et le nom se tape. */

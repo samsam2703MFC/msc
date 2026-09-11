@@ -48,7 +48,7 @@ the installed PWA looks like an app rather than a picture of one.
 ## How it is put together
 
 ```
-db/           the MySQL schema — 37 tables, and its own README
+db/           the MySQL schema — 43 tables, and its own README
 server/       the plan server: the secrets, Strava, the coach, the database
 src/
   data/       the seam — the live tables, the accessors, the engine, the API client
@@ -609,7 +609,7 @@ They are not the same job, and the split falls where the model belongs.
 
 ## The database
 
-`db/schema.sql` — 37 tables, MySQL 8, validated on MariaDB 10.11 too. `db/README.md`
+`db/schema.sql` — 43 tables, MySQL 8, validated on MariaDB 10.11 too. `db/README.md`
 is its own documentation; what follows is why it looks the way it does.
 
 Until now the MSC database was eighteen TypeScript arrays behind an accessor
@@ -1221,6 +1221,23 @@ Two things follow it:
 An empty slot is rest — it is not stored, it is read from the absence. Writing
 the matrix replaces it whole (`POST /api/structure`): it is one decision, not a
 stream of keystrokes, so the screen edits locally and saves on a button.
+
+**Modèles — the same week, reusable.** A shape that works for one athlete
+usually works for the next, so a matrix can be saved under a name and put back
+on someone else: `msc_modele`, the same six columns as `msc_structure` minus
+the athlete, with **the name as the key** — a model *is* its slots, so there is
+no id to carry and no second table for the title. `GET/POST/DELETE
+/api/modeles`, coach and admin only: it is the coach's tool, not the athlete's.
+
+Putting a model on the grid attaches nothing. It fills the screen, and it is
+still **Enregistrer la semaine type** that writes to the athlete — two gestures,
+because they are two decisions: choosing a shape, and giving it to someone. A
+model edited later therefore never replays behind anyone's back. Next to the
+saved ones sits **Semaine de départ**, the built-in skeleton `modele()` that the
+generator also falls back on: one default in code, N saved in the database.
+
+Models are not in the snapshot: the snapshot is one athlete's, and a model is
+nobody's. The screen fetches them when it opens, like the standings.
 
 ### Race types, objectives and starts
 

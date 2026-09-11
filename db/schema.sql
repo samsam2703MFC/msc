@@ -605,6 +605,25 @@ CREATE TABLE IF NOT EXISTS msc_structure (
   CONSTRAINT ck_structure_creneau CHECK (creneau BETWEEN 1 AND 2)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Une semaine type enregistrée sous un nom, pour la reposer sur un autre
+-- athlète. Même forme que msc_structure, sans athlète : c'est un modèle, il
+-- n'appartient à personne. Le nom EST la clé — un modèle, ce sont ses
+-- créneaux ; pas d'identifiant à porter, pas de table de plus pour le titre.
+CREATE TABLE IF NOT EXISTS msc_modele (
+  nom        VARCHAR(48) NOT NULL COMMENT 'le nom que le coach lui donne : « Triathlon 3 séances », « Reprise »',
+  jour       TINYINT UNSIGNED NOT NULL COMMENT '0 = lundi … 6 = dimanche',
+  creneau    TINYINT UNSIGNED NOT NULL COMMENT '1 = le premier de la journée, 2 = le second',
+  discipline VARCHAR(32) NOT NULL,
+  type_code  VARCHAR(16) NOT NULL,
+  duree_min  SMALLINT UNSIGNED NULL,
+  maj_le     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (nom, jour, creneau),
+  KEY ix_modele_type (type_code),
+  CONSTRAINT fk_modele_type FOREIGN KEY (type_code) REFERENCES msc_type (code),
+  CONSTRAINT ck_modele_jour CHECK (jour BETWEEN 0 AND 6),
+  CONSTRAINT ck_modele_creneau CHECK (creneau BETWEEN 1 AND 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Le journal : le RPE ressenti et la note, saisis à la main chaque jour. C'est
 -- la moitié de la charge de Foster, et la seule que Strava ne donnera jamais.
 CREATE TABLE IF NOT EXISTS msc_journal (
