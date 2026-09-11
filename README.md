@@ -1191,8 +1191,10 @@ is a period of its own rather than a rule hidden in the volume curve, because a
 period you can see is a period you can argue with. It keeps the peak's
 reference (you do not taper towards a slower pace), each of its weeks weighs
 three quarters of the one before, and the weekly floor does not apply to it:
-coming down is the whole point. A final block too short to give up three weeks
-and still be a block keeps its weeks, and says so in the warnings.
+coming down is the whole point. A final block too short for three weeks does
+not lose its taper — it gets what fits, down to one week, keeping two weeks of
+peak, and the warning says it was shortened. An athlete whose target race falls
+three weeks after the previous one deserves one taper week, not none.
 
 `check:plan` holds all of it: the four natures in order, the taper at the
 peak's pace, each taper week lighter than the last, and the floor still held

@@ -269,9 +269,19 @@ export function periodiser(
      discuter. Il faut qu'il reste de quoi faire un pic devant, sinon la
      préparation n'aurait qu'un affûtage. */
   const dernier = fusionnes[fusionnes.length - 1];
-  const combien = Math.max(0, Math.round(contraintes.affutage_semaines));
-  if (dernier && dernier.nature === 'pic' && combien >= 1
-      && dernier.a - dernier.de + 1 >= combien + 2) {
+  const voulu = Math.max(0, Math.round(contraintes.affutage_semaines));
+  /* Ce qui rentre : le pic doit garder deux semaines, sinon la préparation
+     n'aurait qu'un affûtage. Un bloc final court n'annule donc pas l'affûtage,
+     il le raccourcit — et le dit. Un athlète dont l'objectif tombe trois
+     semaines après sa dernière course mérite une semaine d'affûtage, pas
+     zéro. */
+  const combien = dernier ? Math.min(voulu, dernier.a - dernier.de + 1 - 2) : 0;
+  if (dernier && dernier.nature === 'pic' && combien >= 1) {
+    if (combien < voulu) {
+      avertissements.push(
+        `Le bloc final ne dure que ${dernier.a - dernier.de + 1} semaines : affûtage ramené à ${combien}.`,
+      );
+    }
     const coupe = dernier.a - combien + 1;
     fusionnes.push({
       code: codes[fusionnes.length] ?? `T${fusionnes.length}`,
@@ -285,9 +295,9 @@ export function periodiser(
       quoi: l(`Les ${combien} dernières semaines, course comprise : le volume tombe d'un quart par semaine, l'allure ne bouge pas.`),
     });
     dernier.a = coupe - 1;
-  } else if (dernier && dernier.nature === 'pic' && combien >= 1) {
+  } else if (dernier && dernier.nature === 'pic' && voulu >= 1) {
     avertissements.push(
-      `Le bloc final ne dure que ${dernier.a - dernier.de + 1} semaines : pas d'affûtage détaché.`,
+      `Le bloc final ne dure que ${dernier.a - dernier.de + 1} semaines : trop court pour détacher un affûtage.`,
     );
   }
 

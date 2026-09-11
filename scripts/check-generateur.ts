@@ -135,6 +135,23 @@ check('aucune qualité avant la fin du réamorçage',
   qualite.every((s) => s.semaine > 6),
   `première: S${qualite[0]?.semaine}`);
 
+/* Un objectif qui tombe trois semaines après la course d'avant : le bloc final
+   ne peut pas céder trois semaines d'affûtage. Il en cède une — un affûtage
+   court vaut mieux que pas d'affûtage, et le plan le dit. */
+const serre = genererPlan(
+  athlete,
+  [
+    { date: '2027-02-28', nom: 'Course d’avant', cible_s: 2400, distance_km: 10, principal: false },
+    { date: '2027-03-21', nom: 'Objectif', cible_s: 2160, distance_km: 10, principal: true },
+  ],
+  contraintes,
+);
+const court = serre.blocs.find((b) => b.nature === 'affutage');
+check('un bloc final court raccourcit l’affûtage au lieu de l’annuler',
+  !!court && court.a - court.de + 1 === 1
+  && serre.avertissements.some((a) => /affûtage ramené à 1/.test(a)),
+  serre.blocs.map((b) => `${b.nature} S${b.de}–S${b.a}`).join(' · '));
+
 /* --------------------------------------------- le plan suit la semaine type */
 const surMesure = genererPlan(
   athlete,
