@@ -9,6 +9,7 @@ import { Bilan } from './Bilan';
 import { Icon } from './Icon';
 import { GainPill, SheetHeading } from './SheetHeading';
 import { Card, Grid, IconLine, Mono } from './primitives';
+import { Deroule } from './Deroule';
 import { Sheet, SheetCloseButton } from './Sheet';
 import type { App } from '../state/useApp';
 
@@ -77,6 +78,11 @@ export function SessionSheet({ app, sessionId }: { app: App; sessionId: number }
           {db.consigne(session, lang)}
         </IconLine>
       )}
+
+      {/* Le déroulé : ce qu'on fait, dans l'ordre, à quelle allure et à quelle
+          FC. « 60 min · seuil » suffit à qui sait déjà quoi faire ; devant son
+          téléphone à six heures du matin, on veut la suite des étapes. */}
+      <Deroule session={session} lang={lang} />
 
       {paces.length > 0 && (
         <Grid cols={3} gap={10}>

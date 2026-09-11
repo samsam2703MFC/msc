@@ -1225,6 +1225,28 @@ since is never overwritten. `check:db` compares the natures in the database
 against `src/data/reference.ts`, which is what would catch a plan that lost
 them.
 
+### Le déroulé d'une séance
+
+A session used to say « 60 min · RPE 6 · seuil » and one sentence of prose.
+That is enough for someone who already knows what to do. In front of a phone at
+six in the morning it says neither how long to warm up, nor how many times, nor
+what the recovery between blocks looks like.
+
+`src/data/deroule.ts` builds the steps: warm-up, the body of the session, the
+cool-down — each with its minutes, its pace, its heart-rate range, and a `×6` on
+a repeated block rather than the same line six times. Nothing new is stored: the
+breakdown is computed from the session's type, its duration and its block's
+reference, exactly as paces are. Storing it would mean two versions, one of them
+wrong the day the athlete gets faster or the day the coach shortens the session.
+
+Heart rates come from the heart-rate reserve (Karvonen): `repos + part × (max −
+repos)`, with the max estimated by Tanaka — 208 − 0.7 × age, closer than 220 −
+age past forty — from the birth year already on the profile, and the resting
+rate taken as the median of the last thirty mornings rather than the last one, so
+a bad night does not redefine a baseline. Without a birth year or without
+morning measurements it shows the paces and says why it is silent on the rest,
+instead of inventing a range.
+
 ### Où en est son niveau, et où le plan le mène
 
 A level, here, is a 10 km reference pace — the same unit as everything else,

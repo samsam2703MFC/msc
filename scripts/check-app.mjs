@@ -348,6 +348,13 @@ try {
   await page.locator('button.msc-hover-surface').filter({ hasText: course.titre }).first().click();
   await page.waitForTimeout(900);
   const ficheCourse = await page.locator('body').innerText();
+  /* Le déroulé : la suite des étapes, avec leurs durées, leurs allures et
+     leurs plages de FC. « 60 min · seuil » ne dit pas quoi faire. */
+  check('et son déroulé, étape par étape, avec les plages de FC',
+    /Le déroulé/i.test(ficheCourse) && /\d+′/.test(ficheCourse)
+      && /\d+–\d+ bpm/.test(ficheCourse),
+    ficheCourse.split('\n').filter((x) => /bpm|Échauffement|Retour au calme/.test(x)).slice(0, 2).join(' · '));
+
   check('et la fiche d’une séance de course porte les allures que le moteur calcule',
     /\d+:\d\d\/km/.test(ficheCourse),
     ficheCourse.match(/\d+:\d\d\/km/g)?.slice(0, 3).join(' ') ?? '');
