@@ -20,7 +20,8 @@ import type { Deficits, TypeCourse } from '../data/courses';
 import type { Lang } from '../data/types';
 import type { App } from '../state/useApp';
 import { BackOffice } from './BackOffice';
-import { AthletesHub, Classement, SuiviAthlete } from './AthletesScreen';
+import { AthletesHub, SuiviAthlete } from './AthletesScreen';
+import { Dupki } from './DupkiScreen';
 import { ProfilScreen } from './ProfilScreen';
 import { CalendrierScreen } from './CalendrierScreen';
 import { ParamScreen } from './ParamScreen';
@@ -264,7 +265,7 @@ export function SectionAdmin({
   switch (vue.section) {
     case 'athletes': return <Athletes app={app} vue={vue} onVue={onVue} large={large} />;
     case 'calendrier': return <CalendrierScreen app={app} />;
-    case 'classement': return <Classement app={app} />;
+    case 'classement': return <Dupki app={app} />;
     case 'param': return <ParamScreen app={app} large={large} />;
     /* « Relier Strava » / « Écrire son plan » à la fin de l'assistant : ce
        sont des onglets de la fiche du nouvel athlète, pas des sections. */
@@ -410,7 +411,9 @@ export function FicheAthlete({
    de liste, pas de comptes, pas de réglages de serveur. Le back office est
    ailleurs, derrière un bouton, et seulement pour qui en a un. */
 
-const MOI_ORDRE = ['plan', 'courses', 'profil', 'strava', 'calendrier', 'classement'] as const;
+/* Le classement n'est plus ici : c'est « Dupki », un onglet de la barre du
+   bas. Deux chemins vers le même écran, c'était un de trop. */
+const MOI_ORDRE = ['plan', 'courses', 'profil', 'strava', 'calendrier'] as const;
 type OngletMoi = (typeof MOI_ORDRE)[number];
 
 const MOI_LIBELLE: Record<OngletMoi, Record<Lang, string>> = {
@@ -419,12 +422,11 @@ const MOI_LIBELLE: Record<OngletMoi, Record<Lang, string>> = {
   profil: { fr: 'Mon profil', pl: 'Mój profil' },
   strava: { fr: 'Strava', pl: 'Strava' },
   calendrier: { fr: 'Calendrier', pl: 'Kalendarz' },
-  classement: { fr: 'Classement', pl: 'Ranking' },
 };
 
 const MOI_ICONE: Record<OngletMoi, string> = {
   plan: 'wand-sparkles', courses: 'flag', profil: 'pencil', strava: 'link',
-  calendrier: 'calendar-days', classement: 'zap',
+  calendrier: 'calendar-days',
 };
 
 const MOI_AIDE: Record<OngletMoi, Record<Lang, string>> = {
@@ -433,14 +435,13 @@ const MOI_AIDE: Record<OngletMoi, Record<Lang, string>> = {
   profil: { fr: 'Mon nom, mes références 10 km, mon coach, ma langue.', pl: 'Moje nazwisko, odniesienia 10 km, trener, język.' },
   strava: { fr: 'Ma liaison Strava : relier, importer mon historique.', pl: 'Moje połączenie ze Stravą: łączenie, import historii.' },
   calendrier: { fr: 'Les compétitions du club : qui court quoi, et quand.', pl: 'Zawody klubu: kto biegnie co i kiedy.' },
-  classement: { fr: 'Où j’en suis par rapport aux autres, discipline par discipline.', pl: 'Gdzie jestem względem innych, dyscyplina po dyscyplinie.' },
 };
 
 export function MoiScreen({ app, large = false }: { app: App; large?: boolean }) {
   const lang = app.lang;
   const fr = lang === 'fr';
   const [onglet, setOnglet] = useState<OngletMoi>('plan');
-  const club = onglet === 'calendrier' || onglet === 'classement';
+  const club = onglet === 'calendrier';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -480,79 +481,6 @@ export function MoiScreen({ app, large = false }: { app: App; large?: boolean })
       {onglet === 'profil' && <ProfilScreen app={app} onSection={() => setOnglet('strava')} large={large} />}
       {onglet === 'strava' && <StravaScreen app={app} />}
       {onglet === 'calendrier' && <CalendrierScreen app={app} />}
-      {onglet === 'classement' && <Classement app={app} />}
-    </div>
-  );
-}
-
-/* --------------------------------------------------------- le back office
-
-   Sur un téléphone : le même plan que le bureau, dans une barre, et une
-   sortie explicite vers son propre entraînement. Ce n'est pas un onglet :
-   on y entre, on en sort, et pendant qu'on y est on ne joue pas à être
-   l'athlète — on regarde ses données. */
-export function BackOfficeScreen({ app, onQuitter }: { app: App; onQuitter?: () => void }) {
-  const role = app.identite?.compte.role ?? 'athlete';
-  const sections = sectionsDe(role);
-  const [vue, setVue] = useState<Vue>({ section: 'athletes' });
-  const serre = sections.length > 3;
-  const defile = sections.length > 4;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div
-        role="tablist"
-        style={{
-          display: 'flex',
-          gap: 3,
-          padding: 3,
-          borderRadius: R.full,
-          background: C.surfaceAlt,
-          border: `1px solid ${C.border}`,
-          ...(defile ? { overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } : {}),
-        }}
-      >
-        {sections.map((cle) => (
-          <button
-            key={cle}
-            type="button"
-            role="tab"
-            onClick={() => setVue({ section: cle })}
-            aria-selected={vue.section === cle}
-            aria-pressed={vue.section === cle}
-            style={{
-              flex: defile ? '0 0 auto' : 1,
-              minWidth: 0,
-              padding: defile ? '7px 12px' : serre ? '7px 6px' : '7px 12px',
-              borderRadius: R.full,
-              fontSize: serre && !defile ? 11 : 12,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              fontWeight: 600,
-              background: vue.section === cle ? C.surface : 'transparent',
-              color: vue.section === cle ? C.ink : C.inkSecondary,
-              boxShadow: vue.section === cle ? C.shadowCard : 'none',
-            }}
-          >
-            {titreSection(cle, app.lang)}
-          </button>
-        ))}
-      </div>
-
-      <SectionAdmin app={app} vue={vue} onVue={setVue} />
-
-      {onQuitter && (
-        <button
-          type="button"
-          className="msc-hover-surface"
-          onClick={onQuitter}
-          style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surface, color: C.inkMuted, fontSize: 12, fontWeight: 600 }}
-        >
-          <Icon name="chevron-right" size={13} style={{ transform: 'rotate(180deg)' }} />
-          {app.lang === 'fr' ? 'Revenir à mon entraînement' : 'Wróć do mojego treningu'}
-        </button>
-      )}
     </div>
   );
 }

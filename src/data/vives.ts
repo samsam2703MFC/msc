@@ -80,6 +80,9 @@ export type Instantane = Partial<typeof tables> & {
   athlete_id?: number;
   droit?: 'lecture' | 'ecriture';
   courbes?: MscCourbes;
+  /** L'empreinte des données au moment du téléchargement : elle sert à savoir,
+      plus tard, si la base a bougé sous l'application. */
+  empreinte?: string;
 };
 
 /** Remplit les tables. Chaque table est remplacée en place, jamais réaffectée :

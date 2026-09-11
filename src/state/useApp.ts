@@ -26,6 +26,11 @@ const LIAISON_MAX_MS = 3 * 60 * 1000;
    anything. This is a local request, not a Strava one: it costs no quota. */
 const VEILLE_MS = 60_000;
 
+/* À quelle fréquence l'application demande si la base a bougé sous elle. Elle
+   ne le demande que pendant qu'elle est à l'écran — dans une poche, elle ne
+   demande rien, et le retour à l'écran relit tout de suite. */
+const FRAICHEUR_MS = 30_000;
+
 /* Laps cost one Strava request each, so they are fetched for the week on
    screen, not for the whole plan. */
 const DETAILS_MAX = 4;
@@ -241,8 +246,13 @@ export function useApp() {
   );
   const [enAttente, setEnAttente] = useState(0);
 
+  /* L'empreinte de l'instantané qu'on affiche. Tant que celle du serveur est
+     la même, il n'y a rien à retélécharger. */
+  const empreinte = useRef<string | null>(null);
+
   const appliquerInstantane = useCallback((instantane: db.Instantane) => {
     db.charger(instantane);
+    empreinte.current = instantane.empreinte ?? null;
     setDate((actuelle) => db.positionDuPlan(actuelle || db.aujourdhuiISO()).date);
     setVersion((v) => v + 1);
   }, []);
@@ -561,6 +571,47 @@ export function useApp() {
     }, VEILLE_MS);
     return () => window.clearInterval(t);
   }, [stravaEtat?.lie, rafraichirEtat, synchroniser]);
+
+  /* Le coach modifie un entraînement au back office ; l'athlète a son
+     téléphone ouvert. Sans ça, il verrait l'ancienne version jusqu'à ce qu'il
+     pense à recharger — et il ne le pense jamais.
+
+     L'application redemande donc l'empreinte des données pendant qu'elle est à
+     l'écran, et au moment où elle y revient. Si elle a bougé, elle retélécharge
+     l'instantané : le serveur reste la seule vérité, et l'écran la suit. Une
+     empreinte coûte quelques octets ; l'instantané n'est repris que lorsqu'il
+     a vraiment changé. */
+  useEffect(() => {
+    if (amorce !== 'pret') return undefined;
+    let occupe = false;
+    const verifier = async () => {
+      if (occupe || document.visibilityState !== 'visible') return;
+      occupe = true;
+      try {
+        const { empreinte: serveur } = await api.fraicheur(db.athleteId);
+        if (!monte.current || !serveur) return;
+        if (empreinte.current !== null && serveur !== empreinte.current) {
+          /* Le rechargement pose lui-même l'empreinte du nouvel instantané —
+             plus récente que celle qu'on vient de lire. */
+          await recharger(db.athleteId);
+        } else {
+          empreinte.current = serveur;
+        }
+      } catch {
+        /* Hors ligne, ou la session a expiré : rien à faire ici. La copie
+           locale reste affichée, et le bandeau du titre le dit. */
+      } finally {
+        occupe = false;
+      }
+    };
+    const auRetour = () => { if (document.visibilityState === 'visible') void verifier(); };
+    document.addEventListener('visibilitychange', auRetour);
+    const t = window.setInterval(() => void verifier(), FRAICHEUR_MS);
+    return () => {
+      document.removeEventListener('visibilitychange', auRetour);
+      window.clearInterval(t);
+    };
+  }, [amorce, recharger]);
 
   const lierStrava = useCallback(async () => {
     setStravaErreur(null);

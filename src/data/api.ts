@@ -199,6 +199,14 @@ export function instantane(athleteId?: number | null): Promise<Instantane> {
   return appeler<Instantane>(`/db/instantane${q}`);
 }
 
+/** L'empreinte des données d'un athlète : elle change quand la base change.
+    Deux cents octets au lieu de tout l'instantané — assez peu pour la
+    redemander pendant que l'application est à l'écran. */
+export function fraicheur(athleteId?: number | null): Promise<{ empreinte: string }> {
+  const q = athleteId ? `?athlete=${athleteId}` : '';
+  return appeler<{ empreinte: string }>(`/fraicheur${q}`);
+}
+
 export interface Sante {
   ok: boolean;
   cle: boolean;

@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import * as db from './data/db';
-import type { ScreenKey } from './data/types';
+import { ICONES, ONGLET, ORDRE, TITRE } from './data/ecrans';
 import { C, F, R } from './design/theme';
 import { Icon } from './components/Icon';
 import { Avatar } from './components/Avatar';
@@ -15,30 +15,22 @@ import { MiseAJour } from './components/MiseAJour';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TypeSheet } from './components/TypeSheet';
-import { BackOfficeScreen, MoiScreen } from './screens/AdminScreen';
+import { MoiScreen } from './screens/AdminScreen';
 import { ChargementScreen, ConnexionScreen, PanneScreen } from './screens/ConnexionScreen';
 import { CoachScreen } from './screens/CoachScreen';
+import { Dupki } from './screens/DupkiScreen';
 import { FormScreen } from './screens/FormScreen';
 import { TodayScreen } from './screens/TodayScreen';
 import { WeekScreen } from './screens/WeekScreen';
 import { useApp } from './state/useApp';
 import { Bureau } from './Bureau';
 
-const ORDER: ScreenKey[] = ['today', 'week', 'form', 'coach', 'admin'];
-const TAB_ICONS: Record<ScreenKey, string> = {
-  today: 'sun',
-  week: 'calendar-days',
-  form: 'heart-pulse',
-  coach: 'bot',
-  admin: 'user',
-};
-
 const MOIS_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const MOIS_PL = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
 
-/* Le back office n'est pas un onglet : c'est un autre mode, pour les comptes
-   qui en ont un. La barre du bas, elle, est toujours la même — c'est moi. */
-function aUnBackOffice(app: ReturnType<typeof useApp>): boolean {
+/* Le back office n'est pas dans le téléphone du tout : c'est le bureau, sur
+   un écran large. Le téléphone est mon entraînement, et rien d'autre. */
+function aUnBureau(app: ReturnType<typeof useApp>): boolean {
   const role = app.identite?.compte.role;
   return role === 'coach' || role === 'admin';
 }
@@ -58,11 +50,11 @@ function eyebrow(app: ReturnType<typeof useApp>): string {
       return app.semaine > 0
         ? `${s}${app.semaine} / ${db.derniereSemaine} · ${fr ? 'bloc' : 'blok'} ${db.blocDeSemaine(app.semaine).code}`
         : fr ? 'Sans plan' : 'Bez planu';
-    case 'form':
-      return fr ? '28 jours' : '28 dni';
     case 'coach':
-      return `${fr ? 'Hebdo' : 'Tygodniowa'}${sem}`;
-    case 'admin':
+      return `${fr ? '28 jours' : '28 dni'}${sem}`;
+    case 'dupki':
+      return fr ? 'Le club' : 'Klub';
+    case 'moi':
       return fr ? 'Ce qui est à moi' : 'To, co moje';
   }
 }
@@ -89,29 +81,28 @@ function useMedia(requete: string) {
 
 function Screen({ app }: { app: ReturnType<typeof useApp> }) {
   /* Sans plan, les écrans qui le lisent n'ont rien à montrer — et l'écran
-     Semaine tomberait sur un bloc qui n'existe pas. Seul « Créer » reste. */
-  if (db.derniereSemaine === 0 && app.screen !== 'admin') return <SansPlan app={app} />;
+     Semaine tomberait sur un bloc qui n'existe pas. Restent « Moi », où l'on
+     s'en fait un, et « Dupki » : le club ne dépend pas de mon plan. */
+  if (db.derniereSemaine === 0 && app.screen !== 'moi' && app.screen !== 'dupki') {
+    return <SansPlan app={app} />;
+  }
   switch (app.screen) {
     case 'today':
       return <TodayScreen app={app} />;
     case 'week':
       return <WeekScreen app={app} />;
-    case 'form':
-      return <FormScreen app={app} />;
+    /* La forme et le coach répondent à une seule question — « où j'en suis,
+       et qu'est-ce que j'en fais » — alors ils tiennent dans un écran. */
     case 'coach':
-      return <CoachScreen app={app} />;
-    case 'admin':
+      return <><FormScreen app={app} /><CoachScreen app={app} /></>;
+    case 'dupki':
+      return <Dupki app={app} />;
+    case 'moi':
       return <MoiScreen app={app} />;
   }
 }
 
 function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolean }) {
-  const ui = db.ui(app.lang);
-  /* Le back office est un mode, pas un onglet : on y entre par le bouton du
-     bandeau, on en sort par la barre du bas — qui, elle, est toujours mon
-     application. Un athlète n'a pas ce bouton du tout. */
-  const [backOffice, setBackOffice] = useState(false);
-  const fr = app.lang === 'fr';
 
   return (
     <div
@@ -182,7 +173,7 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
               textOverflow: 'ellipsis',
             }}
           >
-            {backOffice ? (fr ? 'Coach · le club' : 'Trener · klub') : eyebrow(app)}
+            {eyebrow(app)}
           </div>
           <h1
             style={{
@@ -195,28 +186,11 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
               lineHeight: 1.15,
             }}
           >
-            {backOffice ? (fr ? 'Back office' : 'Zaplecze') : ui.screens[app.screen]}
+            {TITRE[app.screen][app.lang]}
           </h1>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        {/* Entrer dans le back office, pour qui en a un. Ce n'est pas « mon »
-            application : c'est celle du club, et le bouton le dit. */}
-        {aUnBackOffice(app) && !backOffice && (
-          <button
-            type="button"
-            className="msc-hover-accent"
-            onClick={() => setBackOffice(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '7px 10px', borderRadius: R.md,
-              border: `1px solid ${C.border}`, color: C.inkSecondary, fontSize: 11, fontWeight: 600,
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}
-          >
-            <Icon name="footprints" size={15} />
-            {fr ? 'Back office' : 'Zaplecze'}
-          </button>
-        )}
         {/* Prénom + nom pour les initiales ; sous la pastille, le surnom seul. */}
         <Avatar
           nom={[db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ')}
@@ -261,16 +235,14 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
       </header>
 
       <main className="msc-scroll" style={{ flex: 1, padding: '16px 20px 24px' }}>
-        {backOffice
-          ? <BackOfficeScreen app={app} onQuitter={() => setBackOffice(false)} />
-          : <Screen app={app} />}
+        <Screen app={app} />
       </main>
 
       <nav
         style={{
           flexShrink: 0,
           display: 'grid',
-          gridTemplateColumns: `repeat(${ORDER.length}, 1fr)`,
+          gridTemplateColumns: `repeat(${ORDRE.length}, 1fr)`,
           gap: 4,
           padding: framed
             ? '10px 12px 34px'
@@ -279,13 +251,13 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
           borderTop: `1px solid ${C.border}`,
         }}
       >
-        {ORDER.map((key) => {
-          const active = key === app.screen && !backOffice;
+        {ORDRE.map((key) => {
+          const active = key === app.screen;
           return (
             <button
               key={key}
               type="button"
-              onClick={() => { setBackOffice(false); app.setScreen(key); }}
+              onClick={() => app.setScreen(key)}
               aria-current={active ? 'page' : undefined}
               style={{
                 display: 'flex',
@@ -298,9 +270,9 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
                 color: active ? C.accentDeep : C.inkQuiet,
               }}
             >
-              <Icon name={TAB_ICONS[key]} size={21} />
+              <Icon name={ICONES[key]} size={21} />
               <div style={{ fontSize: 10, fontWeight: 600, textAlign: 'center' }}>
-                {ui.tabs[key]}
+                {ONGLET[key][app.lang]}
               </div>
             </button>
           );
@@ -354,8 +326,7 @@ export function App() {
 
   /* Le bureau du coach : une fois connecté, sur un écran large. Les écrans de
      l'athlète y restent accessibles, rendus par le même `Screen`. */
-  if (app.amorce === 'pret' && large && aUnBackOffice(app)) {
-    const ui = db.ui(app.lang);
+  if (app.amorce === 'pret' && large && aUnBureau(app)) {
     return (
       <IOSDevice standalone>
         <Bureau
@@ -364,7 +335,7 @@ export function App() {
           eyebrow={eyebrow(app)}
           /* Les cinq mêmes que sur le téléphone, « Moi » compris : mon
              entraînement est mon application, pas un sous-ensemble. */
-          onglets={ORDER.map((k) => ({ key: k, icon: TAB_ICONS[k], label: ui.tabs[k] }))}
+          onglets={ORDRE.map((k) => ({ key: k, icon: ICONES[k], label: ONGLET[k][app.lang] }))}
         />
       </IOSDevice>
     );

@@ -532,11 +532,12 @@ export interface MscCompetition {
   resultat?: MscResultat;
 }
 
-export type ScreenKey = 'today' | 'week' | 'form' | 'coach' | 'admin';
+/* Les cinq onglets de l'application de l'athlète. « coach » réunit la forme et
+   le coach — deux écrans pour une seule question ; « dupki », c'est le club :
+   les autres et leur niveau. */
+export type ScreenKey = 'today' | 'week' | 'coach' | 'dupki' | 'moi';
 
 export interface MscUiStrings {
-  screens: Record<ScreenKey, string>;
-  tabs: Record<ScreenKey, string>;
   doneOn: string;
   doneOff: string;
   rpeLabel: string;

@@ -32,7 +32,6 @@ export function WeekScreen({ app }: { app: App }) {
   const bilan = db.bilanSemaine(app.semaine);
   const jours = db.sessionsDeSemaine(app.semaine);
   const bloc = db.blocDeSemaine(app.semaine);
-  const grille = db.grilleAllures(bloc.code);
   const semaine = db.semaine(app.semaine);
 
   const realise = {
@@ -160,33 +159,6 @@ export function WeekScreen({ app }: { app: App }) {
             );
           })}
         </div>
-      </Card>
-
-      {/* the pace grid for this block — computed from the two references */}
-      <Card padding="16px 18px" gap={10}>
-        <SectionLabel icon="gauge">
-          {`${fr ? 'Allures · bloc' : 'Tempa · blok'} ${bloc.code} · ${db.format10k(db.reference(bloc.code))}`}
-        </SectionLabel>
-        <div style={{ fontSize: 12, color: C.inkQuiet, lineHeight: 1.4 }}>{bloc.quoi[lang]}</div>
-        {grille.map((g) => (
-          <div
-            key={g.zone.code}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 2 }}
-          >
-            <Icon name={g.zone.icon} size={14} color={C.inkSecondary} />
-            <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.inkBody }}>
-              {g.zone.label[lang]}
-            </div>
-            <Mono size={10} color={C.inkQuiet}>
-              {g.zone.ecart_s === 0
-                ? 'réf.'
-                : `${g.zone.ecart_s > 0 ? '+' : '−'}${Math.abs(g.zone.ecart_s)} s`}
-            </Mono>
-            <Mono size={13} color={C.ink} style={{ minWidth: 66, textAlign: 'right' }}>
-              {g.allure}
-            </Mono>
-          </div>
-        ))}
       </Card>
     </div>
   );

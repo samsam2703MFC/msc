@@ -51,6 +51,28 @@ async function traverserLeMatin(page, fc = '44', hrv = '68') {
   await page.waitForTimeout(400);
 }
 
+/* Deux tailles, deux applications. Le téléphone est celle de l'athlète —
+   cinq onglets, une main, et aucun accès au back office. Le back office est
+   le bureau : à partir de 1024 px, un menu à gauche. Le contrôle passe de
+   l'une à l'autre comme l'utilisateur change d'appareil. */
+const BUREAU = { width: 1280, height: 900 };
+const TELEPHONE = { width: 420, height: 900 };
+
+async function redimensionner(page, taille) {
+  const actuelle = page.viewportSize();
+  if (actuelle && actuelle.width === taille.width) return;
+  await page.setViewportSize(taille);
+  await page.waitForTimeout(700);
+}
+
+/* Les onglets de l'athlète se prennent dans la barre du bas : « Coach »
+   apparaît aussi au milieu des cartes, et `text=Coach` tomberait dessus. */
+async function ouvrirOnglet(page, nom) {
+  await redimensionner(page, TELEPHONE);
+  await page.locator('nav button').filter({ hasText: nom }).first().click();
+  await page.waitForTimeout(700);
+}
+
 /* Le back office a deux niveaux, et ces deux fonctions sont le chemin : une
    section du menu (ce qui vaut pour le club ou pour l'application), ou la
    fiche d'un athlète (tout ce qui lui appartient, sous son nom).
@@ -59,14 +81,12 @@ async function traverserLeMatin(page, fc = '44', hrv = '68') {
    qui n'existe qu'ici : si le plan du back office change encore, c'est ici
    que ça se voit, en deux fonctions et pas en douze clics. */
 async function ouvrirSection(page, nom) {
-  /* Le back office n'est plus un onglet : on y entre par le bouton du
-     bandeau, et la barre du bas en ressort. */
-  const porte = page.getByRole('button', { name: /^Back office$/ });
-  if (await porte.count()) {
-    await porte.click();
-    await page.waitForTimeout(800);
-  }
-  await page.getByRole('tab', { name: nom, ...(typeof nom === 'string' ? { exact: true } : {}) }).first().click();
+  await redimensionner(page, BUREAU);
+  const menu = page.getByRole('navigation', { name: 'Back office' });
+  /* La bascule : on parle du club, pas de moi. */
+  const club = menu.getByRole('button', { name: /^Le club$/ });
+  if (await club.count()) { await club.click(); await page.waitForTimeout(300); }
+  await menu.getByRole('button', { name: nom, ...(typeof nom === 'string' ? { exact: true } : {}) }).first().click();
   await page.waitForTimeout(900);
 }
 
@@ -74,6 +94,7 @@ async function ouvrirSection(page, nom) {
    est à lui — son plan, ses starts, son profil, sa Strava. Rien à voir avec le
    back office : c'est son application, pas celle du club. */
 async function ouvrirMoi(page, chip) {
+  await redimensionner(page, TELEPHONE);
   await page.locator('nav button').last().click();
   await page.waitForTimeout(700);
   await page.getByRole('tab', { name: chip, exact: true }).first().click();
@@ -278,17 +299,33 @@ try {
     aujourdhui.split('\n').find((l) => /hier/i.test(l)) ?? 'S1');
 
   console.log('\n=== les écrans ===');
-  await page.click('text=Semaine');
-  await page.waitForTimeout(600);
+  await ouvrirOnglet(page, 'Semaine');
   const semaine = await page.locator('body').innerText();
   check('la semaine montre des séances',
     /Natation|Course|Hyrox|Vélo|Repos/.test(semaine));
   check('et le plan sur l’année, en tête', /le plan sur l’année · \d+ semaines/i.test(semaine));
-  /* Les allures ne sont pas en base : si elles s'affichent, c'est que le moteur
-     tourne sur des données venues du serveur. */
-  check('et des allures que le moteur a calculées', /\d+:\d\d\/km/.test(semaine),
-    semaine.match(/\d+:\d\d\/km/g)?.slice(0, 3).join(' ') ?? '');
   check('et dit ce que veulent dire ses trois couleurs', /faite/.test(semaine) && /autrement/.test(semaine) && /manquée/.test(semaine));
+
+  /* Les allures ne sont pas en base : si la fiche d'une séance de course en
+     affiche, c'est que le moteur les a calculées depuis la référence du bloc.
+     Elles sont dans la fiche, et plus en grille sur la semaine : une liste
+     d'allures qu'aucune séance ne demande n'aide personne à courir. */
+  const [[course]] = await bd().execute(
+    `SELECT s.titre_court_fr AS titre FROM msc_session s JOIN msc_plan p ON p.id = s.plan_id
+     WHERE p.athlete_id = 1 AND p.actif = 1 AND s.discipline = 'Course à pied'
+       AND s.semaine = (SELECT s2.semaine FROM msc_session s2 JOIN msc_plan p2 ON p2.id = s2.plan_id
+                        WHERE p2.athlete_id = 1 AND p2.actif = 1
+                        ORDER BY ABS(DATEDIFF(s2.date, CURDATE())), s2.ordre LIMIT 1)
+     ORDER BY s.date LIMIT 1`,
+  );
+  await page.locator('button.msc-hover-surface').filter({ hasText: course.titre }).first().click();
+  await page.waitForTimeout(900);
+  const ficheCourse = await page.locator('body').innerText();
+  check('et la fiche d’une séance de course porte les allures que le moteur calcule',
+    /\d+:\d\d\/km/.test(ficheCourse),
+    ficheCourse.match(/\d+:\d\d\/km/g)?.slice(0, 3).join(' ') ?? '');
+  await page.getByRole('button', { name: /^Fermer$/ }).last().click();
+  await page.waitForTimeout(500);
 
   /* Le bilan d'une séance passée : les deux voies, et la bonne question sous
      chacune. « Pas faite » demande pourquoi ; « faite » ouvre Strava et le
@@ -316,8 +353,9 @@ try {
   await page.getByRole('button', { name: /^Fermer$/ }).last().click();
   await page.waitForTimeout(500);
 
-  await page.click('text=Forme');
-  await page.waitForTimeout(500);
+  /* La forme et le coach ne font qu'un écran : une seule question — où j'en
+     suis, et qu'est-ce que j'en fais. */
+  await ouvrirOnglet(page, 'Coach');
   const ecranForme = await page.locator('body').innerText();
   check('une métrique sans données le dit au lieu d’inventer un chiffre',
     /Pas encore assez de données|—/.test(ecranForme));
@@ -352,13 +390,50 @@ try {
     forme.split('\n').find((l) => /kg/.test(l)) ?? '');
   check('et la carte de proposition a disparu', !forme.includes('Lu sur la photo'));
 
-  await page.click('text=Coach');
-  await page.waitForTimeout(600);
   check('les sept prochains jours attendent le signal du matin',
     /7 prochains jours/i.test(await page.locator('body').innerText())
       && (await page.getByRole('button', { name: /Replanifier/ }).count()) === 1);
   check("l'écart de la semaine est calculé",
     /réalisation|Semaine tenue|Écart détecté/i.test(await page.locator('body').innerText()));
+
+  /* Dupki : le club et le niveau de chacun. C'est le seul écran du téléphone
+     qui parle des autres, et il ne dit d'eux qu'un nom et des scores. */
+  await ouvrirOnglet(page, 'Dupki');
+  const dupki = await page.locator('body').innerText();
+  check('Dupki montre le club et le niveau de chacun',
+    /Niveaux de combat/i.test(dupki) && /Endurance/.test(dupki) && /puissance/i.test(dupki),
+    dupki.split('\n').find((l) => /Niveaux de combat/i.test(l)) ?? '');
+  check('et la barre du bas porte les cinq onglets de l’athlète, sans back office',
+    (await page.locator('nav button').count()) === 5
+      && /Dupki/.test(await page.locator('nav').innerText())
+      && (await page.getByRole('button', { name: /^Back office$/ }).count()) === 0,
+    (await page.locator('nav').innerText()).replace(/\n/g, ' · '));
+
+  /* Le coach modifie un entraînement ; l'athlète a son téléphone ouvert. Il
+     doit le voir sans rien recharger. On change la séance en base, on simule
+     le retour à l'écran — ce que fait le navigateur quand on revient sur
+     l'application — et on la regarde changer. */
+  console.log('\n=== la base bouge sous l’application ===');
+  await ouvrirOnglet(page, 'Semaine');
+  const [[seance]] = await bd().execute(
+    `SELECT s.id, s.titre_fr, s.titre_court_fr FROM msc_session s
+     JOIN msc_plan p ON p.id = s.plan_id
+     WHERE p.athlete_id = 1 AND p.actif = 1
+     ORDER BY ABS(DATEDIFF(s.date, CURDATE())), s.ordre LIMIT 1`,
+  );
+  const marque = `Modifié par le coach ${Date.now()}`;
+  await bd().execute(
+    'UPDATE msc_session SET titre_fr = ?, titre_court_fr = ? WHERE id = ?',
+    [marque, marque, seance.id],
+  );
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForTimeout(2500);
+  check('un entraînement modifié en base apparaît sans rechargement',
+    (await page.locator('body').innerText()).includes(marque), marque);
+  await bd().execute(
+    'UPDATE msc_session SET titre_fr = ?, titre_court_fr = ? WHERE id = ?',
+    [seance.titre_fr, seance.titre_court_fr, seance.id],
+  );
 
   /* Le générateur : le plan se fabrique dans le navigateur, et le bouton qui
      l'enregistre dit ce qu'il remplace AVANT qu'on appuie.
@@ -469,8 +544,8 @@ try {
   check('la barre du bas ne change pas de rôle : c’est toujours mon application',
     /Moi/.test(await page.locator('nav').innerText()) && !/Admin/.test(await page.locator('nav').innerText()),
     (await page.locator('nav').innerText()).replace(/\n/g, ' · '));
-  check('et le back office s’ouvre par son bouton, dans le bandeau',
-    (await page.getByRole('button', { name: /^Back office$/ }).count()) === 1);
+  check('et le téléphone n’a pas de back office du tout : c’est mon application',
+    (await page.getByRole('button', { name: /^Back office$/ }).count()) === 0);
   await ouvrirSection(page, 'Comptes');
   const comptesTexte = await page.locator('body').innerText();
   check('Comptes liste le compte connecté, avec son athlète et son droit',

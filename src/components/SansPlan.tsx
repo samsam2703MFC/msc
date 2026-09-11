@@ -23,7 +23,7 @@ export function SansPlan({ app }: { app: App }) {
       <AccentButton
         label={fr ? 'Créer un plan' : 'Utwórz plan'}
         icon="plus"
-        onClick={() => app.setScreen('admin')}
+        onClick={() => app.setScreen('moi')}
       />
     </Card>
   );

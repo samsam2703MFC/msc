@@ -475,6 +475,51 @@ async function reglagesDesCourbes() {
   };
 }
 
+/**
+ * La fraîcheur des données d'un athlète : la plus récente des dates de mise à
+ * jour de tout ce que l'instantané porte, en une chaîne. Le téléphone la
+ * redemande pendant qu'il est à l'écran ; si elle a bougé, il retélécharge
+ * l'instantané — et l'entraînement que le coach vient de modifier apparaît
+ * sans que personne ne recharge la page.
+ *
+ * La liste suit celle de `instantane` exprès : une table qui voyage sans être
+ * ici arriverait en retard, et sans prévenir. Une chaîne, pas un compte de
+ * lignes — ce qui compte est « quelque chose a changé », pas quoi. Douze MAX
+ * sur des colonnes indexées, c'est une requête de quelques millisecondes :
+ * assez peu cher pour être posée toutes les trente secondes.
+ *
+ * Une analyse et un tour de chat ne se modifient pas — ils s'ajoutent : c'est
+ * `cree_le` qui les date. msc_param et msc_ui sont au club et non à
+ * l'athlète, mais un réglage changé par l'admin change ce que tous les écrans
+ * affichent, alors ils comptent aussi. (Pas de commentaire SQL dans la
+ * requête : le tokeniseur des `:paramètres` de mysql2 s'y perd.)
+ *
+ * DATE_FORMAT et pas la date brute : le pilote rendrait un objet Date, dont
+ * la mise en chaîne perd les millisecondes — deux écritures dans la même
+ * seconde donneraient alors la même empreinte.
+ */
+export async function fraicheur(athleteId) {
+  const r = await ligne(
+    `SELECT DATE_FORMAT(MAX(t), '%Y-%m-%d %H:%i:%s.%f') AS empreinte FROM (
+       SELECT MAX(maj_le) AS t FROM msc_athlete WHERE id = :a
+       UNION ALL SELECT MAX(maj_le) FROM msc_plan WHERE athlete_id = :a
+       UNION ALL SELECT MAX(s.maj_le) FROM msc_session s
+                 JOIN msc_plan p ON p.id = s.plan_id WHERE p.athlete_id = :a
+       UNION ALL SELECT MAX(maj_le) FROM msc_journal WHERE athlete_id = :a
+       UNION ALL SELECT MAX(maj_le) FROM msc_mesure WHERE athlete_id = :a
+       UNION ALL SELECT MAX(maj_le) FROM msc_activity WHERE athlete_id = :a
+       UNION ALL SELECT MAX(maj_le) FROM msc_structure WHERE athlete_id = :a
+       UNION ALL SELECT MAX(maj_le) FROM msc_competition WHERE athlete_id = :a
+       UNION ALL SELECT MAX(cree_le) FROM msc_analyse WHERE athlete_id = :a
+       UNION ALL SELECT MAX(cree_le) FROM msc_chat WHERE athlete_id = :a
+       UNION ALL SELECT MAX(maj_le) FROM msc_param
+       UNION ALL SELECT MAX(maj_le) FROM msc_ui
+     ) x`,
+    { a: athleteId },
+  );
+  return { empreinte: r?.empreinte ? String(r.empreinte) : '' };
+}
+
 /* ============================================================ la vue coach */
 
 /**

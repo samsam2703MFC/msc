@@ -13,6 +13,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import * as db from './data/db';
+import { TITRE } from './data/ecrans';
 import type { ScreenKey } from './data/types';
 import { C, F, R } from './design/theme';
 import { Icon } from './components/Icon';
@@ -81,7 +82,6 @@ export function Bureau({
 }) {
   const lang = app.lang;
   const t = T[lang];
-  const ui = db.ui(lang);
   const role = app.identite?.compte.role;
   const sections = sectionsDe(role);
   /* Deux mondes, et une bascule entre les deux — jamais les deux dans le même
@@ -95,7 +95,7 @@ export function Bureau({
      et le menu, lui, ne parle que du club et de l'application. */
   const fiche = vue.section === 'athletes' && vue.onglet;
   const titre = mode === 'moi'
-    ? ui.screens[app.screen]
+    ? TITRE[app.screen][lang]
     : fiche
       ? [db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ') || db.athlete.nom
       : titreSection(vue.section, lang);

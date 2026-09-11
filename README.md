@@ -848,6 +848,37 @@ journal, the accepted proposals, the coach's output — which the server now
 persists — and the Strava sync: matching still happens in the browser because
 that is where the plan is, and what comes out is posted and read back.
 
+### And when the base moves under the app
+
+The same rule, seen from the other side: the coach changes a session in the
+back office while the athlete has their phone open. Nothing the phone did
+caused that write, so nothing would reload it — the athlete would keep reading
+yesterday's session until they thought to refresh, and they never do.
+
+So the snapshot now carries an **empreinte**: the latest `maj_le` across
+everything the snapshot itself carries — profile, plan, sessions, journal,
+measures, activities, semaine type, races, plus the analyses and chat turns
+(insert-only, so `cree_le`) and the club's `msc_param` / `msc_ui`
+(`depots.fraicheur`). The list follows `instantane`'s on purpose: a table that
+travels in the snapshot but not in the fingerprint would arrive late and
+silently. `GET /api/fraicheur` returns that string and nothing else, a couple
+of hundred bytes; `/api/db/instantane` ships it alongside the tables, so the
+app always knows which version it is holding.
+
+`useApp` asks for it every 30 s **while the page is visible**, and again on
+`visibilitychange` — the moment the app comes back to the foreground. Different
+from what it holds → `recharger()`, the same full snapshot path every write
+already takes. In a pocket it asks nothing. Offline, the fetch fails and the
+local copy stays on screen, which the header already says.
+
+Why a fingerprint and not a push: a poll that costs a dozen indexed `MAX` is
+cheaper to run and to reason about than a socket that has to be reconnected,
+re-authenticated and thought about again offline. The snapshot is only
+re-downloaded when it actually changed. `check:api` asserts the empreinte
+matches the snapshot's and moves when a session is touched; `check:app` changes
+a session's title in the database under an open browser, dispatches
+`visibilitychange`, and watches the screen follow.
+
 ### The login screen, and signing up
 
 MySmartCoach is a service an athlete joins: the coach is the AI, and the one
@@ -885,6 +916,12 @@ It also asserts the negative space: that the plan is not visible before login,
 and that logging out empties the tables rather than just the screen — one
 athlete's data must not stay readable by the next person to log in on the same
 device.
+
+It drives **both shells**, because there are two: 420 px for the athlete's
+phone, 1280 px for the desk where the back office lives — `redimensionner`
+switches between them the way a coach switches by sitting down. And it watches
+the base move under an open page: a session's title changed in SQL, a
+`visibilitychange` dispatched, and the screen has to follow without a reload.
 
 ### What is not built yet
 
@@ -1026,19 +1063,20 @@ plan, types a note, restores the network and asserts the note reached MySQL.
 
 ## The back office
 
-The **Créer** tab carries two things now, behind a segmented control: building a
-plan, and keeping the register of races. A switch rather than a sixth tab — the
-bar already has five, and a back office is not a screen you open every day.
-
 **Two applications, not one with two hats.** The athlete's app is the five
-tabs at the bottom — *Aujourd'hui · Semaine · Forme · Coach · **Moi*** — and it
+tabs at the bottom — *Aujourd'hui · Semaine · Coach · Dupki · **Moi*** — and it
 is the same bar for everyone, athlete or admin: **it is always me**. « Moi »
 carries what belongs to me and that the four others don't hold — my plan, my
-starts, my profile, my Strava — plus the club's two screens (calendar,
-standings). The back office is **not a tab**: it is another mode, behind a
-*Back office* button in the header (a switch at the top of the desk's menu),
-and only for a `coach` or `admin`. An athlete never sees it at all —
-`sectionsDe` returns nothing for them.
+starts, my profile, my Strava, and the club's calendar. Not the standings: they
+are **Dupki**, one tab away, and two paths to the same screen was one too
+many.
+
+**The phone has no back office at all.** Not a tab, not a button in the header:
+the back office *is* the desk, from 1024 px up, and only for a `coach` or an
+`admin` (`src/Bureau.tsx`). A phone is the athlete's application and nothing
+else — that is what the header button kept muddling, since an admin is also an
+athlete and saw *Zaplecze* over their own training. An athlete never sees the
+back office at any width: `sectionsDe` returns nothing for them.
 
 That rule is what the previous layouts kept breaking: entries that were *mine*
 sat in the same menu as entries about *other people*, and a dropdown decided
@@ -1088,6 +1126,33 @@ what is the application's (settings, accounts, system), and the phone follows
 the same line: the avatar opens the athlete's profile — with the 10 km
 references and the Strava card — while the gear holds **Mon application**:
 language, plan day, the account, the version.
+
+### Cinq onglets, et ce qui en est sorti
+
+The phone was carrying screens that answered no question the athlete asks:
+
+- **Forme** and **Coach** became one tab. *Where am I, and what do I do about
+  it* is one question; the form gauge and the coach's reading of it were two
+  screens deep in the same answer. The tab is **Coach**, the page is titled
+  *Forme & coach*, and it renders `FormScreen` then `CoachScreen`.
+- The **pace grid** left the Semaine screen (`Tempa · blok A · 47:30`): eight
+  zones of a block, of which a given week uses two or three. The paces are
+  still computed, never stored — they are on the session that asks for them,
+  in its sheet and on Aujourd'hui.
+- The **adaptation rules** card (*Reguły dostosowania*) left the Coach screen.
+  It listed the engine's rules and which ones a signal fired — the mechanics of
+  the app, not the athlete's training. The rules still run; what they decide
+  shows up as the session that changed.
+- **Dupki** took the free slot (`DupkiScreen.tsx`): the club's standings,
+  everyone and their level, five axes plus the average, each one's palier and
+  its Dragon-Ball avatar. `/api/classement` already answered for any connected
+  account and returns names and scores only, so an athlete sees the club
+  without seeing anyone's data. The back office's **Classement** section is the
+  same component — one version of the thing.
+
+The tab names left `msc_ui` at the same time. Five words in a table meant a
+migration to rename a tab; they live in `src/data/ecrans.ts` now, read by the
+phone and the desk, and `db-migrate` drops `screens` and `tabs` from the JSON.
 
 ### Le matin, en quatre temps
 
@@ -1293,8 +1358,8 @@ The coach works sitting down, so a `coach` or `admin` account on a screen at
 least 1024 px wide gets **le bureau** instead of the phone shell
 (`src/Bureau.tsx`): a menu on the left carrying the same two families as the
 phone — *Entraînement* (Athlètes, Calendrier, Classement), *Application*
-(Paramètres, Comptes, Système) — then *Vue athlète*, the athlete's own screens
-(Aujourd'hui, Semaine, Forme, Coach) rendered in a 520 px column because they
+(Paramètres, Comptes, Système) — then, behind a *Le club / Moi* switch, the
+athlete's own five screens rendered in a 520 px column because they
 were drawn for a hand, and at the foot *Mon application* (the gear) and the
 sign-out. Nothing in that menu depends on a chosen athlete: their five tabs
 live on their page, reached from the list. The desk opens on Athlètes, and an

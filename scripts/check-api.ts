@@ -177,6 +177,27 @@ try {
   check('et les activités datées dans le futur n’y sont pas',
     courbes?.charge.every((d: any) => d.date <= aujourdhuiIso));
 
+  /* L'empreinte : elle voyage avec l'instantané, et /api/fraicheur rend la
+     même tant que rien n'a bougé. C'est ce qui permet au téléphone de savoir,
+     pour quelques octets, qu'un entraînement modifié au back office l'attend. */
+  const fraiche = await c.appel('/api/fraicheur');
+  check('la fraîcheur répond la même empreinte que l’instantané',
+    fraiche.statut === 200 && typeof base.empreinte === 'string' && base.empreinte.length > 0
+      && fraiche.corps.empreinte === base.empreinte,
+    `${fraiche.statut} · ${fraiche.corps?.empreinte}`);
+  const [[premiere]]: any = await bd().execute(
+    `SELECT s.id FROM msc_session s JOIN msc_plan p ON p.id = s.plan_id
+     WHERE p.athlete_id = 1 AND p.actif = 1 ORDER BY s.date, s.ordre LIMIT 1`,
+  );
+  await bd().execute(
+    'UPDATE msc_session SET maj_le = NOW(3) + INTERVAL 1 SECOND WHERE id = ?',
+    [premiere.id],
+  );
+  const empreinteApres = await c.appel('/api/fraicheur');
+  check('et elle change dès qu’un entraînement bouge en base',
+    empreinteApres.statut === 200 && empreinteApres.corps.empreinte !== base.empreinte,
+    `${base.empreinte} → ${empreinteApres.corps?.empreinte}`);
+
   const apercu = await c.appel('/api/apercu');
   check('la vue coach porte les mêmes courbes',
     apercu.statut === 200 && Array.isArray(apercu.corps.athletes?.[0]?.courbes?.charge)

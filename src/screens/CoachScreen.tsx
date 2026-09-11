@@ -40,16 +40,6 @@ export function CoachScreen({ app }: { app: App }) {
   const picked = app.excuse ? db.mustOne('msc_excuse', (r) => r.code === app.excuse) : null;
   const adjustments = weekly ? db.select('msc_ajustement', (r) => r.analyse_id === weekly.id) : [];
 
-  /* The rules are evaluated, not narrated: these are the signals the app has
-     for the current week, and `evaluer` decides which rules fire. */
-  const signaux = {
-    rpe_qualite: app.rpe,
-    derive_longue: db.athlete.derive_reference_pct,
-    fc_repos_delta: 0,
-  };
-  const declenchees = db.evaluer(signaux);
-  const codesDeclenches = new Set(declenchees.map((r) => r.code));
-
   const recRunning = app.recalc === 'running';
   const recDone = app.recalc === 'done';
 
@@ -137,8 +127,6 @@ export function CoachScreen({ app }: { app: App }) {
 
       {/* les sept prochains jours, replanifiés à partir du signal du matin */}
       <SeptJours app={app} />
-
-      <ReglesCard app={app} declenchees={codesDeclenches} />
 
       {/* the gap — recalculated, never made up for */}
       <div
@@ -343,64 +331,6 @@ export function CoachScreen({ app }: { app: App }) {
         </Grid>
       </Card>
     </div>
-  );
-}
-
-/** The adjustment rules, and which of them the week's signals currently fire.
-    This is the mechanic itself: each rule names a signal and a threshold, so
-    the app evaluates them rather than reciting them. */
-function ReglesCard({ app, declenchees }: { app: App; declenchees: ReadonlySet<string> }) {
-  const lang = app.lang;
-  const gravites: Record<string, string> = {
-    stop: C.negative,
-    allege: C.warning,
-    ajuste: C.accentDeep,
-  };
-  return (
-    <Card padding="16px 18px" gap={10}>
-      <SectionLabel icon="scale">
-        {lang === 'fr' ? "Règles d'ajustement" : 'Reguły dostosowania'}
-      </SectionLabel>
-      {db.select('msc_regle').map((r) => {
-        const on = declenchees.has(r.code);
-        return (
-          <div
-            key={r.code}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: `1px solid ${on ? C.accent : C.border}`,
-              background: on ? C.accentSoft : 'transparent',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 999,
-                  background: gravites[r.gravite],
-                  flexShrink: 0,
-                }}
-              />
-              <div style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: C.ink }}>
-                {r.si[lang]}
-              </div>
-              {on && <Icon name="circle-check" size={14} color={C.accentDeep} />}
-            </div>
-            <div style={{ fontSize: 12, lineHeight: 1.4, color: C.inkBody, paddingLeft: 14 }}>
-              {r.alors[lang]}
-            </div>
-            <div style={{ fontSize: 11, lineHeight: 1.4, color: C.inkQuiet, paddingLeft: 14 }}>
-              {r.pourquoi[lang]}
-            </div>
-          </div>
-        );
-      })}
-    </Card>
   );
 }
 

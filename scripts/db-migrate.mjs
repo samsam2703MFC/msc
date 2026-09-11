@@ -177,15 +177,12 @@ try {
      clé par clé ; les mêmes textes que tables.ts, à garder identiques. */
   const LIBELLES = [
     ['fr', { anaLabel: 'Le coach', anaIdle: 'Il en pense quoi le coach ?',
-             anaRunning: 'Le coach lit ta séance…', anaDoneBtn: 'Redemander au coach',
-             /* Le cinquième onglet n'est plus « Créer » ni « Admin » : c'est moi. */
-             'screens.admin': 'Mon entraînement', 'tabs.admin': 'Moi' }],
+             anaRunning: 'Le coach lit ta séance…', anaDoneBtn: 'Redemander au coach' }],
     ['pl', { anaLabel: 'Trener', anaIdle: 'Co na to trener?',
-             anaRunning: 'Trener czyta twój trening…', anaDoneBtn: 'Zapytaj trenera ponownie',
-             'screens.admin': 'Mój trening', 'tabs.admin': 'Ja' }],
+             anaRunning: 'Trener czyta twój trening…', anaDoneBtn: 'Zapytaj trenera ponownie' }],
   ];
   for (const [langue, cles] of LIBELLES) {
-    /* Une clé pointée (« screens.admin ») est un chemin dans le JSON. */
+    /* Une clé pointée (« a.b ») est un chemin dans le JSON. */
     const paires = Object.entries(cles).flatMap(([k, v]) => [`$.${k}`, v]);
     const [r] = await cnx.query(
       `UPDATE msc_ui SET chaines = JSON_SET(chaines, ${Object.keys(cles).map(() => '?, ?').join(', ')})
@@ -194,6 +191,15 @@ try {
     );
     if (r.changedRows) console.log(`~ msc_ui ${langue} : ${Object.keys(cles).join(', ')}`);
   }
+
+  /* Les noms des onglets ont quitté la base : ils sont en clair dans
+     src/data/ecrans.ts. Les laisser ici, c'était deux versions des mêmes cinq
+     mots, dont une jamais lue. JSON_REMOVE ne se plaint pas d'un chemin déjà
+     absent : la migration se rejoue sans rien dire. */
+  const [oublis] = await cnx.query(
+    "UPDATE msc_ui SET chaines = JSON_REMOVE(chaines, '$.screens', '$.tabs')",
+  );
+  if (oublis.changedRows) console.log(`~ msc_ui : screens, tabs retirés (${oublis.changedRows})`);
 
   /* Le catalogue des paramètres : chaque clé posée si elle manque, et ses
      libellés, son défaut, son unité remis à jour à chaque passage. La valeur

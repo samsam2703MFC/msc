@@ -8,6 +8,7 @@
 
      /api/connexion, /api/moi     qui parle, et de quel athlète
      /api/db/instantane           toute la base d'un athlète, en une fois
+     /api/fraicheur               l'empreinte des données, pour savoir quand relire
      /api/journal, /api/mesure    ce que l'application écrit
      /api/activites               les activités appariées par le navigateur
      /api/photo, /api/mesure      la photo de la balance, et ce qu'on en tire
@@ -524,10 +525,27 @@ async function router(req, res, url) {
   }
 
   /* Tout ce qui suit est au nom d'un athlète. */
+
+  /* La fraîcheur : une empreinte, et rien d'autre. Le téléphone la compare à
+     celle de son instantané ; si elle a bougé, il redemande l'instantané.
+     C'est la réponse la moins chère à « quelque chose a-t-il changé ? », et
+     c'est ce qui fait qu'un entraînement modifié au back office arrive dans la
+     main de l'athlète sans qu'il recharge quoi que ce soit. */
+  if (chemin === '/api/fraicheur' && req.method === 'GET') {
+    const { athlete_id } = await athleteDe(req, url);
+    return json(res, 200, await depots.fraicheur(athlete_id));
+  }
+
   if (chemin === '/api/db/instantane' && req.method === 'GET') {
     const { athlete_id, visibles, droit } = await athleteDe(req, url);
-    const base = await depots.instantane(athlete_id);
-    return json(res, 200, { ...base, athlete_id, droit, athletes: visibles ?? null });
+    /* L'empreinte part avec l'instantané : l'application sait ainsi de quelle
+       version elle tient ses tables, et /api/fraicheur lui dit ensuite quand
+       cette version est dépassée. */
+    const [base, { empreinte }] = await Promise.all([
+      depots.instantane(athlete_id),
+      depots.fraicheur(athlete_id),
+    ]);
+    return json(res, 200, { ...base, empreinte, athlete_id, droit, athletes: visibles ?? null });
   }
 
   if (chemin === '/api/journal' && req.method === 'POST') {
