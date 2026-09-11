@@ -747,6 +747,34 @@ try {
     method: 'PUT', body: JSON.stringify({ compte_id: creeId, athlete_id: athlete.corps.athlete?.id, droit: null }),
   });
   check('un accès se retire', retireAcces.statut === 200 && retireAcces.corps.acces?.droit === null);
+
+  /* Supprimer un athlète : on dit d'abord ce que ça détruit, le nom tapé doit
+     correspondre, et tout part ensemble — le schéma cascade. */
+  const aSupprimer = inscrit.corps.athlete?.id as number;
+  const resume = await c.appel(`/api/admin/athletes/${aSupprimer}`);
+  check('le résumé d’une suppression dit ce qu’elle emporterait, et qui le voit',
+    resume.statut === 200 && resume.corps.athlete?.id === aSupprimer
+      && typeof resume.corps.compte?.seances === 'number'
+      && resume.corps.comptes?.some((x: any) => x.email === `inscrit-${EMAIL}` && x.seulement_lui === true),
+    JSON.stringify({ compte: resume.corps.compte, comptes: resume.corps.comptes?.length }));
+  const mauvaisNom = await c.appel(`/api/admin/athletes/${aSupprimer}`, {
+    method: 'DELETE', body: JSON.stringify({ nom: 'pas le bon nom' }),
+  });
+  check('sans le nom exact, rien n’est supprimé', mauvaisNom.statut === 409, mauvaisNom.corps.erreur);
+  const [[avantSuppression]] = (await bd().execute('SELECT COUNT(*) AS n FROM msc_athlete WHERE id = ?', [aSupprimer])) as any;
+  const supprime = await c.appel(`/api/admin/athletes/${aSupprimer}`, {
+    /* Les accents et la casse ne comptent pas : c'est le nom qu'on vérifie,
+       pas la dactylographie. */
+    method: 'DELETE', body: JSON.stringify({ nom: 'inscrit du controle', compte: true }),
+  });
+  const [[apresSuppression]] = (await bd().execute('SELECT COUNT(*) AS n FROM msc_athlete WHERE id = ?', [aSupprimer])) as any;
+  const [[compteParti]] = (await bd().execute('SELECT COUNT(*) AS n FROM compte WHERE email = ?', [`inscrit-${EMAIL}`])) as any;
+  check('le nom écrit à la main supprime l’athlète, et le compte qui ne voyait que lui',
+    supprime.statut === 200 && Number(avantSuppression.n) === 1 && Number(apresSuppression.n) === 0
+      && Number(compteParti.n) === 0,
+    `${supprime.statut} · athlète ${avantSuppression.n}→${apresSuppression.n} · compte ${compteParti.n}`);
+  const disparu = await c.appel(`/api/admin/athletes/${aSupprimer}`);
+  check('et il n’existe plus', disparu.statut === 404, String(disparu.statut));
   const systeme = await c.appel('/api/admin/systeme');
   check('le système se décrit : version servie, clé, Strava, scellement, base, démo',
     systeme.statut === 200 && 'version' in systeme.corps && typeof systeme.corps.cle === 'boolean'

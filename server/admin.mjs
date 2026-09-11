@@ -240,6 +240,111 @@ export async function creerAthlete(corps) {
   return { ...a, compte_id: a.compte_id ?? null };
 }
 
+/* ------------------------------------------------- supprimer un athlète
+
+   Une suppression est définitive et emporte tout : le schéma cascade depuis
+   msc_athlete — plans, séances, journal, activités, courses, mesures, photos,
+   analyses, questions au coach. On ne peut donc pas la proposer d'un bouton
+   sec : on dit d'abord ce qu'elle détruit, chiffre par chiffre, et on demande
+   le nom de l'athlète écrit à la main. Le serveur le revérifie — une
+   confirmation qui ne vit que dans l'écran n'en est pas une. */
+
+/** Ce qu'une suppression emporterait. Lu avant, montré avant. */
+export async function resumeAthlete(id) {
+  const a = await unAthlete(id);
+  if (!a) throw new AdminError(`Aucun athlète ${id}.`, 404);
+  const n = await ligne(
+    `SELECT
+       (SELECT COUNT(*) FROM msc_plan WHERE athlete_id = :a) AS plans,
+       (SELECT COUNT(*) FROM msc_session s JOIN msc_plan p ON p.id = s.plan_id WHERE p.athlete_id = :a) AS seances,
+       (SELECT COUNT(*) FROM msc_activity WHERE athlete_id = :a) AS activites,
+       (SELECT COUNT(*) FROM msc_journal WHERE athlete_id = :a) AS journal,
+       (SELECT COUNT(*) FROM msc_competition WHERE athlete_id = :a) AS courses,
+       (SELECT COUNT(*) FROM msc_mesure WHERE athlete_id = :a) AS mesures,
+       (SELECT COUNT(*) FROM msc_photo WHERE athlete_id = :a) AS photos,
+       (SELECT COUNT(*) FROM msc_analyse WHERE athlete_id = :a) AS analyses,
+       (SELECT COUNT(*) FROM msc_chat WHERE athlete_id = :a) AS questions,
+       (SELECT COUNT(*) FROM msc_strava_compte WHERE athlete_id = :a) AS strava`,
+    { a: id },
+  );
+  /* Les comptes qui ne voient que lui : les supprimer avec est une option,
+     parce qu'un login sans athlète ne sert plus à rien — mais c'est un choix,
+     pas une conséquence qu'on subit. */
+  const comptes = await lignes(
+    `SELECT c.id, c.email, c.nom, c.role,
+            (SELECT COUNT(*) FROM msc_acces y WHERE y.compte_id = c.id) AS athletes
+     FROM msc_acces x JOIN compte c ON c.id = x.compte_id
+     WHERE x.athlete_id = :a ORDER BY c.email`,
+    { a: id },
+  );
+  return {
+    athlete: a,
+    compte: Object.fromEntries(Object.entries(n ?? {}).map(([k, v]) => [k, Number(v ?? 0)])),
+    comptes: comptes.map((c) => ({
+      id: c.id, email: c.email, nom: c.nom, role: c.role,
+      /* Vrai quand cet athlète est le seul qu'il voit. */
+      seulement_lui: Number(c.athletes) <= 1,
+    })),
+  };
+}
+
+/**
+ * Supprime un athlète, et ce qui ne vaut que par lui.
+ *
+ *   { nom }     le nom tapé à la main, qui doit correspondre
+ *   { compte }  supprimer aussi les comptes qui ne voyaient que lui
+ *
+ * Jamais le compte qui appelle, jamais le dernier admin actif : le back office
+ * ne doit pas pouvoir se fermer de l'intérieur, ici comme ailleurs.
+ */
+export async function supprimerAthlete(id, corps = {}, appelant) {
+  const resume = await resumeAthlete(id);
+  const nu = (x) => String(x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  const attendu = resume.athlete.nom;
+  if (nu(corps.nom) !== nu(attendu)) {
+    throw new AdminError(`Pour supprimer, écris son nom exactement : « ${attendu} ».`, 409);
+  }
+
+  /* Les fichiers d'abord : une photo orpheline sur le disque ne se retrouve
+     plus, la ligne qui la nommait ayant disparu avec la cascade. */
+  const photos = await lignes('SELECT chemin FROM msc_photo WHERE athlete_id = :a', { a: id });
+  let fichiers = 0;
+  if (photos.length) {
+    const { racinePhotos } = await import('./photo.mjs');
+    const { rm } = await import('node:fs/promises');
+    for (const p of photos) {
+      try {
+        await rm(join(racinePhotos(), p.chemin), { force: true });
+        fichiers += 1;
+      } catch {
+        /* Un fichier déjà parti n'empêche pas la suppression de la base. */
+      }
+    }
+  }
+
+  const comptesASupprimer = corps.compte
+    ? resume.comptes.filter((c) => c.seulement_lui && c.id !== appelant)
+    : [];
+  if (comptesASupprimer.some((c) => c.role === 'admin')) {
+    const [{ n: admins }] = await lignes("SELECT COUNT(*) AS n FROM compte WHERE role = 'admin' AND actif = 1");
+    const restants = Number(admins) - comptesASupprimer.filter((c) => c.role === 'admin').length;
+    if (restants < 1) throw new AdminError('C’est le dernier admin actif : il resterait personne pour ouvrir le back office.', 409);
+  }
+
+  await transaction(async (cnx) => {
+    await cnx.execute('DELETE FROM msc_athlete WHERE id = ?', [id]);
+    for (const c of comptesASupprimer) {
+      await cnx.execute('DELETE FROM compte WHERE id = ?', [c.id]);
+    }
+  });
+
+  return {
+    supprime: { id, nom: attendu },
+    fichiers,
+    comptes_supprimes: comptesASupprimer.map((c) => c.email),
+  };
+}
+
 /* --------------------------------------------- un athlète et son compte */
 
 async function unAthlete(id) {

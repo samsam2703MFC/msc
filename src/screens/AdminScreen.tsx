@@ -378,7 +378,19 @@ export function FicheAthlete({
       {onglet === 'suivi' && <SuiviAthlete app={app} large={large} />}
       {onglet === 'plan' && <Generateur app={app} large={large} />}
       {onglet === 'courses' && <BackOffice app={app} />}
-      {onglet === 'profil' && <ProfilScreen app={app} onSection={() => onOnglet('strava')} large={large} />}
+      {onglet === 'profil' && (
+        <ProfilScreen
+          app={app}
+          onSection={() => onOnglet('strava')}
+          /* Supprimer un athlète est un geste de back office, et d'admin
+             seul : dans SA fiche, sous son profil, et nulle part ailleurs.
+             Une fois fait, il n'y a plus de fiche — on revient à la liste. */
+          onSupprime={app.identite?.compte.role === 'admin'
+            ? () => { void app.recharger(); onListe?.(); }
+            : undefined}
+          large={large}
+        />
+      )}
       {onglet === 'strava' && <StravaScreen app={app} />}
     </div>
   );

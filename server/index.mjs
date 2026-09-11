@@ -485,6 +485,18 @@ async function router(req, res, url) {
     if (chemin === '/api/admin/athletes' && req.method === 'POST') {
       return json(res, 200, { athlete: await admin.creerAthlete(await lireCorps(req, 8_000)) });
     }
+    /* Ce qu'une suppression détruirait, puis la suppression elle-même. Deux
+       routes et pas une : on montre avant de détruire, et le nom tapé se
+       revérifie ici — une confirmation qui ne vit que dans l'écran n'en est
+       pas une. */
+    const unAthlete = chemin.match(/^\/api\/admin\/athletes\/(\d+)$/);
+    if (unAthlete && req.method === 'GET') {
+      return json(res, 200, await admin.resumeAthlete(Number(unAthlete[1])));
+    }
+    if (unAthlete && req.method === 'DELETE') {
+      const corps = await lireCorps(req, 4_000);
+      return json(res, 200, await admin.supprimerAthlete(Number(unAthlete[1]), corps, appelant));
+    }
     if (chemin === '/api/admin/acces' && req.method === 'PUT') {
       return json(res, 200, { acces: await admin.ecrireAcces(await lireCorps(req, 4_000)) });
     }

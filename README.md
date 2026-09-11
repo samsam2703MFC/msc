@@ -1064,6 +1064,18 @@ plan), **Starts** (their races and the progression they draw), **Profil**
 says in one line what it answers, a back button returns to the list, and a
 select changes athlete without leaving the tab.
 
+**Deleting an athlete** lives at the bottom of their **Profil** tab, for an
+`admin` only, and never behind a single button. `GET /api/admin/athletes/:id`
+says first what a deletion would destroy — sessions, plans, Strava activities,
+journal days, races, measures, photos, analyses, questions — and which accounts
+see them (marking those that see *only* them). Then `DELETE` on the same route
+takes the athlete's name **typed by hand**; the server re-checks it, accent- and
+case-insensitively, because a confirmation that only lives in the screen is not
+one. The schema cascades from `msc_athlete`, so one `DELETE` takes the whole
+trail with it; the photo files are unlinked from disk first, since the rows
+naming them are about to disappear. An option deletes the logins that saw only
+that athlete — never the caller's own, never the last active admin.
+
 The rule that holds it together: **a menu entry never depends on a choice made
 somewhere else.** The menu carries what belongs to the club and to the
 application; a person's own things live on their page, and the page says whose

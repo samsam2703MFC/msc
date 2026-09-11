@@ -465,6 +465,29 @@ export function creerAthlete(corps: {
   return appeler<{ athlete: AthleteAdmin }>('/admin/athletes', { method: 'POST', body: JSON.stringify(corps) });
 }
 
+/** Ce qu'une suppression d'athlète emporterait : les comptes qui le voient,
+    et le décompte de ce qui disparaîtrait avec lui. */
+export interface ResumeAthlete {
+  athlete: AthleteAdmin;
+  compte: {
+    plans: number; seances: number; activites: number; journal: number; courses: number;
+    mesures: number; photos: number; analyses: number; questions: number; strava: number;
+  };
+  comptes: Array<{ id: number; email: string; nom: string; role: CompteAdmin['role']; seulement_lui: boolean }>;
+}
+
+export function resumeAthlete(id: number): Promise<ResumeAthlete> {
+  return appeler<ResumeAthlete>(`/admin/athletes/${id}`);
+}
+
+/** Supprimer un athlète. `nom` doit être son nom, écrit à la main : le serveur
+    le revérifie. `compte` emporte les logins qui ne voyaient que lui. */
+export function supprimerAthlete(id: number, corps: { nom: string; compte?: boolean }): Promise<{
+  supprime: { id: number; nom: string }; fichiers: number; comptes_supprimes: string[];
+}> {
+  return appeler(`/admin/athletes/${id}`, { method: 'DELETE', body: JSON.stringify(corps) });
+}
+
 /** Un athlète et son compte d'un seul geste — ou l'un des deux, relié à
     l'autre s'il existe déjà. Tout ou rien : le serveur écrit en transaction. */
 export function inscrire(corps: {

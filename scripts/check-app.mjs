@@ -579,6 +579,20 @@ try {
       && /Profil/.test(ficheTexte) && /Strava/.test(ficheTexte)
       && /Tous les athlètes/.test(ficheTexte),
     ficheTexte.split('\n').slice(0, 3).join(' · '));
+  /* Et la sortie définitive : dans SA fiche, sous son profil, jamais d'un
+     seul bouton — on dit ce qui sera détruit, et le nom se tape. */
+  await page.getByRole('tab', { name: 'Profil', exact: true }).click();
+  await page.waitForTimeout(900);
+  await page.getByRole('button', { name: /Supprimer cet athlète…/ }).click();
+  await page.waitForTimeout(1200);
+  const zone = await page.locator('main').innerText();
+  check('supprimer un athlète dit d’abord ce que ça détruit, et demande son nom',
+    /Ce qui sera détruit/i.test(zone) && /Écris son nom pour confirmer/i.test(zone)
+      && (await page.getByRole('button', { name: /Supprimer définitivement/ }).isDisabled()),
+    zone.split('\n').find((l) => /Écris son nom/.test(l)) ?? '');
+  await page.getByRole('button', { name: /^Annuler$/ }).click();
+  await page.waitForTimeout(500);
+
   await menu.getByRole('button', { name: 'Système' }).click();
   await page.waitForTimeout(900);
   check('une section s’ouvre depuis le menu', /cette page/i.test(await page.locator('body').innerText()));
