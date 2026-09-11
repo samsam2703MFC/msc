@@ -8,9 +8,10 @@
 
 import { useEffect, useState } from 'react';
 import * as api from '../data/api';
-import type { Lang, MscParam } from '../data/types';
+import type { Classement, Lang, MscParam } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
+import { AvatarNiveau } from '../components/AvatarNiveau';
 import type { App } from '../state/useApp';
 
 const GROUPES: Array<{ code: string; icon: string; nom: Record<Lang, string> }> = [
@@ -30,6 +31,9 @@ const T: Record<Lang, Record<string, string>> = {
     illisible: 'renseignée mais illisible : scellée avec une autre clé de serveur (MSC_SECRET_KEY). Ressaisis-la.',
     base: 'réglé ici', env: 'variable d’environnement', defaut: 'défaut du code',
     intro: 'Ce qui s’applique, et d’où ça vient. Un réglage vide retombe sur la variable d’environnement, puis sur le défaut.',
+    paliers: 'Les six paliers',
+    paliersAide: 'La tête qu’un athlète porte à chaque palier, et le niveau de combat qu’il lui faut pour y arriver. Les seuils sont les réglages ci-dessous : change-en un, la liste suit.',
+    aPartirDe: 'à partir de', depart: 'au départ',
   },
   pl: {
     chargement: 'Wczytywanie ustawień…', enregistrer: 'Zapisz', effacer: 'Wyczyść',
@@ -37,6 +41,9 @@ const T: Record<Lang, Record<string, string>> = {
     illisible: 'ustawiony, ale nieczytelny: zapieczętowany innym kluczem serwera (MSC_SECRET_KEY). Wpisz ponownie.',
     base: 'ustawione tutaj', env: 'zmienna środowiskowa', defaut: 'domyślne z kodu',
     intro: 'Co obowiązuje i skąd pochodzi. Puste ustawienie wraca do zmiennej środowiskowej, potem do domyślnej.',
+    paliers: 'Sześć poziomów',
+    paliersAide: 'Twarz zawodnika na każdym poziomie i moc, której wymaga. Progi to ustawienia poniżej: zmień jeden, lista pójdzie za nim.',
+    aPartirDe: 'od', depart: 'na start',
   },
 };
 
@@ -154,9 +161,45 @@ export function Reglage({
   );
 }
 
+/* Les six paliers, en entier : la tête qu'on porte à chacun, son nom, et le
+   niveau de combat qu'il demande. Les seuils viennent du serveur, qui les lit
+   dans ces mêmes réglages — la liste dit donc toujours ce qui s'applique, et
+   pas ce que le code croyait à l'écriture de cet écran. */
+function Paliers({ paliers, lang, t }: {
+  paliers: Classement['paliers']; lang: Lang; t: Record<string, string>;
+}) {
+  if (paliers.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 600, color: C.ink }}>{t.paliers}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {paliers.map((p) => (
+          <div
+            key={p.n}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, minWidth: 148, flex: '1 1 148px',
+              padding: '7px 9px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surfaceAlt,
+            }}
+          >
+            <AvatarNiveau nom={p.nom[lang]} palier={p.n} taille={34} badge={false} />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>{p.nom[lang]}</span>
+              <span style={{ fontSize: 10.5, color: C.inkQuiet, fontFamily: F.mono }}>
+                {p.seuil > 0 ? `${t.aPartirDe} ${p.seuil}/100` : t.depart}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>{t.paliersAide}</div>
+    </div>
+  );
+}
+
 export function ParamScreen({ app, large = false }: { app: App; large?: boolean }) {
   const t = T[app.lang];
   const [params, setParams] = useState<MscParam[] | null>(null);
+  const [paliers, setPaliers] = useState<Classement['paliers']>([]);
   const [erreur, setErreur] = useState<string | null>(null);
 
   useEffect(() => {
@@ -164,12 +207,22 @@ export function ParamScreen({ app, large = false }: { app: App; large?: boolean 
     api.params()
       .then((r) => { if (vivant) setParams(r.params); })
       .catch((e) => { if (vivant) setErreur(e instanceof Error ? e.message : String(e)); });
+    /* Les paliers viennent du classement : c'est lui qui les nomme et qui sait
+       à partir de quel niveau on y entre. Une liste écrite ici en dirait une
+       seconde version, fausse au premier seuil changé. */
+    api.classement()
+      .then((r) => { if (vivant) setPaliers(r.paliers); })
+      .catch(() => undefined);
     return () => { vivant = false; };
   }, []);
 
   const enregistrer = async (cle: string, valeur: string | number | boolean | null) => {
     const r = await api.majParam(cle, valeur);
     setParams((ps) => (ps ?? []).map((p) => (p.cle === cle ? r.param : p)));
+    /* Un seuil vient peut-être de changer : la liste des paliers le montre. */
+    if (cle.startsWith('niveau.palier_')) {
+      await api.classement().then((c) => setPaliers(c.paliers)).catch(() => undefined);
+    }
   };
 
   if (erreur) {
@@ -200,6 +253,7 @@ export function ParamScreen({ app, large = false }: { app: App; large?: boolean 
                 {g.nom[app.lang]}
               </div>
             </div>
+            {g.code === 'niveau' && <Paliers paliers={paliers} lang={app.lang} t={t} />}
             {lignes.map((p) => <Reglage key={p.cle} p={p} lang={app.lang} onSave={enregistrer} />)}
           </div>
         );

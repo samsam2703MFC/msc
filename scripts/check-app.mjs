@@ -768,6 +768,18 @@ try {
   const reglagesTexte = await page.locator('body').innerText();
   check('les paramètres de l’application sont réunis dans Paramètres : clé Anthropic, application Strava commune',
     /Clé API Anthropic/i.test(reglagesTexte) && /Strava · Client ID/i.test(reglagesTexte));
+  /* Les six paliers y sont en entier — la tête, le nom, le seuil — à côté des
+     réglages qui les déplacent : régler « palier 4 » sans voir ce qu'est le
+     palier 4, c'est régler à l'aveugle. */
+  check('et les six paliers y sont, avec leur tête et le niveau qu’ils demandent',
+    /Les six paliers/i.test(reglagesTexte) && /Terrien/.test(reglagesTexte)
+      && /Ultra/.test(reglagesTexte) && /à partir de \d+\/100/.test(reglagesTexte),
+    reglagesTexte.split('\n').filter((x) => /Terrien|à partir de/.test(x)).slice(0, 2).join(' · '));
+  if (process.env.MSC_CAPTURES) {
+    await page.getByText('Les six paliers').first().evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${process.env.MSC_CAPTURES}/paliers.png` });
+  }
   await ouvrirSection(page, 'Système');
   const systemeTexte = await page.locator('body').innerText();
   check('Système montre la version de la page et celle du serveur',
