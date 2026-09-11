@@ -1239,6 +1239,18 @@ generator also falls back on: one default in code, N saved in the database.
 Models are not in the snapshot: the snapshot is one athlete's, and a model is
 nobody's. The screen fetches them when it opens, like the standings.
 
+**L'amorce.** A club with no model has nothing to put back, and an athlete with
+no matrix gives the coach nothing to follow — so `db-migrate` seeds the
+starting week once, as a model named *Triathlon + Hyrox*, and applies it to the
+athlete named in the script. Both halves are guarded by *it is empty*: the
+model only if `msc_modele` has no row, the matrix only if that athlete has
+none. Nothing is ever written over a coach's decision, and re-running the
+migration does not re-run the bootstrap. Deleting that model when it is the
+only one does bring it back on the next deploy — a club with zero models gets
+the default one, which is the same rule read from the other side. It is a
+bootstrap, not a policy: once the club has its own models, those thirty lines
+can be deleted without breaking anything.
+
 ### Race types, objectives and starts
 
 One catalogue, `src/data/courses.ts`, names every race an athlete can aim at

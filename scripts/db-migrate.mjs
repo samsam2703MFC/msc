@@ -222,6 +222,65 @@ try {
   const [[{ apres }]] = await cnx.query('SELECT COUNT(*) AS apres FROM msc_param');
   if (apres > avant) console.log(`+ msc_param : ${apres - avant} paramètre(s) posé(s)`);
 
+  /* ------------------------------------------------------------- l'amorce
+
+     Une fois, et une seule : un club qui n'a encore aucun modèle de semaine
+     type n'a rien à reposer, et un athlète sans matrice ne donne rien à
+     suivre au coach. On pose donc la semaine de départ — celle sur laquelle
+     le générateur retombe déjà — comme modèle, et on l'applique à l'athlète
+     nommé ici.
+
+     Les deux moitiés sont gardées par « c'est vide » : le modèle n'est écrit
+     que si la table l'est, la matrice que si l'athlète n'en a aucune. Rien
+     n'est donc jamais posé par-dessus une décision du coach, et rejouer la
+     migration ne rejoue pas l'amorce.
+
+     C'est une amorce, pas une règle : le jour où le club a ses modèles, ces
+     trente lignes se suppriment sans rien casser. */
+  const AMORCE_ATHLETE = 'Verheyden';
+  const AMORCE_MODELE = 'Triathlon + Hyrox';
+  const AMORCE_CRENEAUX = [
+    [0, 1, 'Hyrox', 'force', 70],
+    [1, 1, 'Natation', 'nage', 55],
+    [1, 2, 'Vélo', 'velo', 50],
+    [2, 1, 'Course à pied', 'seuil', 60],
+    [3, 1, 'Hyrox', 'compromis', 55],
+    [4, 1, 'Natation', 'nage', 40],
+    [4, 2, 'Course à pied', 'recup', 45],
+    [5, 1, 'Course à pied', 'longue', 75],
+  ];
+  /* Sur une base vierge, msc_type est vide jusqu'au seed : la clé étrangère
+     refuserait, et c'est le seed qui pose déjà ce qu'il faut. */
+  const [vocabulaire] = await cnx.query("SELECT 1 FROM msc_type WHERE code = 'seuil'");
+  if (vocabulaire.length > 0) {
+    const [[{ n: combien }]] = await cnx.query('SELECT COUNT(*) AS n FROM msc_modele');
+    if (Number(combien) === 0) {
+      for (const [jour, creneau, discipline, type, duree] of AMORCE_CRENEAUX) {
+        await cnx.query(
+          `INSERT INTO msc_modele (nom, jour, creneau, discipline, type_code, duree_min)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [AMORCE_MODELE, jour, creneau, discipline, type, duree],
+        );
+      }
+      console.log(`+ msc_modele « ${AMORCE_MODELE} » : ${AMORCE_CRENEAUX.length} créneaux`);
+    }
+    const [sansMatrice] = await cnx.query(
+      `SELECT a.id, a.nom FROM msc_athlete a
+       WHERE a.nom = ? AND NOT EXISTS (SELECT 1 FROM msc_structure s WHERE s.athlete_id = a.id)`,
+      [AMORCE_ATHLETE],
+    );
+    for (const a of sansMatrice) {
+      for (const [jour, creneau, discipline, type, duree] of AMORCE_CRENEAUX) {
+        await cnx.query(
+          `INSERT INTO msc_structure (athlete_id, jour, creneau, discipline, type_code, duree_min)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [a.id, jour, creneau, discipline, type, duree],
+        );
+      }
+      console.log(`+ msc_structure ${a.nom} : ${AMORCE_CRENEAUX.length} créneaux (amorce)`);
+    }
+  }
+
   const [tables] = await cnx.query(
     'SELECT table_name AS t FROM information_schema.tables WHERE table_schema = ?',
     [nom],
