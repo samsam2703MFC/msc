@@ -25,6 +25,9 @@ export const msc_athlete: MscAthlete[] = [
   {
     id: 1,
     nom: 'Sam',
+    /* L'année de naissance sert la FC max estimée (Tanaka). Sans elle, le
+       déroulé d'une séance donne les allures et se tait sur les plages de FC. */
+    annee_naissance: 1986,
     /* 10 km in 52:00 — measured on a ~55 min reference run (Garmin). */
     ref_actuelle_s: 312,
     /* 10 km in 36:00 — the objective of 21/03/2027. */

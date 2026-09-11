@@ -353,7 +353,7 @@ try {
   check('et son déroulé, étape par étape, avec les plages de FC',
     /Le déroulé/i.test(ficheCourse) && /\d+′/.test(ficheCourse)
       && /\d+–\d+ bpm/.test(ficheCourse),
-    ficheCourse.split('\n').filter((x) => /bpm|Échauffement|Retour au calme/.test(x)).slice(0, 2).join(' · '));
+    ficheCourse.split('\n').filter((x) => /bpm|\d+′/.test(x)).slice(0, 2).join(' · '));
 
   check('et la fiche d’une séance de course porte les allures que le moteur calcule',
     /\d+:\d\d\/km/.test(ficheCourse),
