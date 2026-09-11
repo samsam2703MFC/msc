@@ -1292,6 +1292,15 @@ at equal level the half comes out faster per kilometre than the marathon).
 When one objective is easier than the one before it, the card says so, names
 both in 10 km terms, and points at the button.
 
+**And a reference never goes backwards.** You do not get slower by training, so
+a race targeted slower than the block before it is not a race that sets a
+level — it is a race run *inside* the block, and the block keeps its reference.
+Without that floor, a marathon entered as a comfortable run dragged the whole
+peak of the season down with it, and nothing on screen said why. The warning
+now says exactly that: the block keeps its reference, the race is run inside
+it. `check:plan` holds it with a ladder that dips — 10 km, half, then a
+marathon at 3:00:00 — and asserts the parts never decrease.
+
 ### Une seule couture pour dire de quel athlète on parle
 
 The server reads the athlete from `?athlete=` and, failing that, takes the

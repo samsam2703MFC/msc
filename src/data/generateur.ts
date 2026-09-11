@@ -250,13 +250,25 @@ export function periodiser(
           : `« ${o.nom} » : sans chrono visé sur la partie course, le bloc vise la date, pas une allure.`,
       );
     }
+    /* Une référence ne recule pas : on ne devient pas plus lent en s'entraînant.
+       Une course visée plus lente que le bloc d'avant n'est donc pas une course
+       qui pose un niveau — c'est une course qu'on court à l'intérieur du bloc,
+       et le bloc garde sa référence. Sans ce plancher, un marathon visé
+       tranquillement faisait ralentir tout le pic de la saison, et rien ne
+       disait pourquoi. */
+    const partVoulue = allureCible === null
+      ? Math.min(Math.max(partPrecedente, 0), 1)
+      : Math.min(Math.max(partDe(allureCible), 0), 1);
+    if (allureCible !== null && partVoulue < partPrecedente - 0.005) {
+      avertissements.push(
+        `« ${o.nom} » vise plus lent que le bloc précédent : le bloc garde sa référence, la course se court dedans.`,
+      );
+    }
     blocs.push({
       code: codes[blocs.length] ?? `B${i}`,
       de: curseur,
       a: fin,
-      part: allureCible === null
-        ? Math.min(Math.max(partPrecedente, 0), 1)
-        : Math.min(Math.max(partDe(allureCible), 0), 1),
+      part: Math.max(partVoulue, partPrecedente),
       /* Le bloc qui mène à l'objectif principal est le pic : c'est là que
          l'allure visée devient l'allure de travail. Les autres construisent. */
       nature: o.principal ? 'pic' : 'construction',

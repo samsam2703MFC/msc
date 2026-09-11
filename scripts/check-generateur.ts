@@ -160,6 +160,25 @@ check('un bloc final court raccourcit l’affûtage au lieu de l’annuler',
   && serre.avertissements.some((a) => /affûtage ramené à 1/.test(a)),
   serre.blocs.map((b) => `${b.nature} S${b.de}–S${b.a}`).join(' · '));
 
+/* Une course visée plus lente que le bloc d'avant ne fait pas reculer le plan :
+   on ne devient pas plus lent en s'entraînant. Le bloc garde sa référence, et
+   l'avertissement dit que la course se court dedans. */
+const tranquille = genererPlan(
+  athlete,
+  [
+    { date: '2026-11-29', nom: '10 km', cible_s: 2280, distance_km: 10, principal: false },
+    { date: '2027-02-21', nom: 'Semi', cible_s: 4986, distance_km: 21.0975, principal: false },
+    /* 3:00:00 sur marathon ≡ 39:08 au 10 km : plus lent que les deux d'avant. */
+    { date: '2027-03-14', nom: 'Marathon', cible_s: 10800, distance_km: 42.195, principal: true },
+  ],
+  contraintes,
+);
+const parts = tranquille.blocs.map((b) => b.part);
+check('une course visée plus lente ne fait pas reculer la référence',
+  parts.every((x, i) => i === 0 || x >= parts[i - 1] - 0.005)
+  && tranquille.avertissements.some((a) => /vise plus lent que le bloc précédent/.test(a)),
+  parts.map((x) => `${Math.round(x * 100)} %`).join(' → '));
+
 /* Les deux sens de la conversion se referment l'un sur l'autre : c'est ce qui
    permet de proposer un chrono au lieu de laisser chacun le calculer — et deux
    courses finir à la même allure au kilomètre, ce qui est impossible. */

@@ -855,8 +855,8 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
         const a = versTexte(Math.round(avant.e * 10));
         const b = versTexte(Math.round(ici.e * 10));
         return fr
-          ? `« ${ici.nom} » vaut ${b} au 10 km, « ${avant.nom} » qui le précède en vaut ${a} : l’objectif redescend, et le plan avec lui. Le bouton « Aligner sur sa cible » pose le chrono qui correspond à son objectif 10 km.`
-          : `„${ici.nom}” to ${b} na 10 km, a poprzedzające „${avant.nom}” — ${a}: cel się obniża, a plan razem z nim.`;
+          ? `« ${ici.nom} » vaut ${b} au 10 km, « ${avant.nom} » qui le précède en vaut ${a} : c’est une course plus facile que la précédente. Le plan ne recule pas pour autant — le bloc garde sa référence et la course se court dedans — mais si elle devait poser le niveau, « Aligner sur sa cible » donne le chrono qui correspond.`
+          : `„${ici.nom}” to ${b} na 10 km, a poprzedzające „${avant.nom}” — ${a}: to zawody łatwiejsze od poprzednich. Plan się nie cofa — blok zachowuje swoje odniesienie — ale „Wyrównaj do celu” poda pasujący czas.`;
       }
     }
     return null;
