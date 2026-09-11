@@ -13,6 +13,8 @@ import type { ApercuAthlete, Conversation as ConversationType, Lang } from '../d
 import { C, F, R } from '../design/theme';
 import { coachDe } from '../data/coachs';
 import { Avatar } from '../components/Avatar';
+import { Progression } from '../components/Progression';
+import { progression } from '../data/progression';
 import { CoachAvatar } from '../components/CoachAvatar';
 import { FormeJauge } from '../components/FormeJauge';
 import { Colonnes } from '../components/primitives';
@@ -213,7 +215,13 @@ export function SuiviAthlete({ app, large = false }: { app: App; large?: boolean
     .map((m) => ({ date: m.date, valeur: m.poids_kg as number, label: m.date }));
   if (app.apercu === null) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.chargement}</div>;
   if (!a) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.aucun}</div>;
+  /* Où en est son niveau, et où le plan le mène : c'est la question que « ce
+     qui a été fait » pose sans y répondre. Le modèle est dans
+     src/data/progression.ts ; ici on ne fait que le montrer. */
+  const suivi = progression(app.semaine, app.lang);
+
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
     <Colonnes large={large} ratio="minmax(0, 7fr) minmax(0, 5fr)" gauche={<Carte a={a} app={app} />} droite={
       <div style={{ borderRadius: R.card, background: C.surface, border: `1px solid ${C.border}`, boxShadow: C.shadowCard, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -228,6 +236,11 @@ export function SuiviAthlete({ app, large = false }: { app: App; large?: boolean
         />
       </div>
     } />
+
+    {/* Toute la largeur : une série sur huit mois dans une colonne étroite est
+        une série qu'on ne lit pas. */}
+    {suivi && <Progression donnees={suivi} lang={app.lang} />}
+    </div>
   );
 }
 

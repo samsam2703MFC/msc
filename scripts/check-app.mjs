@@ -693,6 +693,24 @@ try {
   /* Strava est à l'athlète : sa liaison, son historique, son application à
      lui. Les paramètres de l'application — la clé, l'application Strava
      commune — sont réunis dans Réglages. */
+  /* Le suivi : la courbe du niveau, sa projection, ses repères de course.
+     Un graphique se regarde autant qu'il se teste — MSC_CAPTURES=1 en pose une
+     image dans ce dossier, pour l'ouvrir au lieu de la supposer. */
+  await ouvrirFiche(page, 'Suivi');
+  const suivi = await page.locator('body').innerText();
+  check('le suivi montre son niveau au 10 km, et où le plan le mène',
+    /au 10 km, aujourd’hui/i.test(suivi) && /objectif \d+:\d\d/i.test(suivi)
+      && /prévu par le plan/i.test(suivi),
+    suivi.split('\n').find((l) => /au 10 km, aujourd/i.test(l)) ?? '');
+  check('et dit pourquoi la projection dit ce qu’elle dit',
+    /de la charge prévue faite|Pas encore de semaine écoulée/i.test(suivi)
+      && /La projection avance à \d+ %/i.test(suivi),
+    suivi.split('\n').find((l) => /La projection avance/i.test(l)) ?? '');
+  if (process.env.MSC_CAPTURES) {
+    const carte = page.locator("svg[aria-label^=\"Niveau au 10 km\"]").first();
+    await carte.screenshot({ path: `${process.env.MSC_CAPTURES}/suivi.png` });
+  }
+
   await ouvrirFiche(page, 'Strava');
   const stravaTexte = await page.locator('body').innerText();
   check('Strava, pour l’athlète affiché : sa liaison et son application à lui',

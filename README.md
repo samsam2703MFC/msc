@@ -1225,6 +1225,43 @@ since is never overwritten. `check:db` compares the natures in the database
 against `src/data/reference.ts`, which is what would catch a plan that lost
 them.
 
+### Où en est son niveau, et où le plan le mène
+
+A level, here, is a 10 km reference pace — the same unit as everything else,
+the one that sets every session's paces. Three things move it, and they are the
+three that get measured: **what he does** (load completed against load
+planned), **how he recovers** (HRV and resting heart rate against their own
+baselines), and **what he runs** (race times, converted to their 10 km
+equivalent).
+
+The plan already says where he should be each week: a block's share places the
+reference between his start and his objective, interpolated across the block's
+weeks so the curve rises rather than steps. So `src/data/progression.ts` does
+not invent a trajectory — it **corrects that one**. Completion over the last
+eight weeks gives a factor between 0.55 and 1.15, recovery nudges it ±10 %, and
+the projection is the plan's own line scaled by it. A curve from a formula that
+ignored the plan would say the same thing to someone training and someone doing
+nothing.
+
+A race time is the only direct measurement of a level, so it wins over anything
+the model can infer: those are the filled dots. The model does not claim to
+predict performance — it says *at the rate you execute this plan and recover,
+here is where your reference lands*, and the competitions are drawn as
+reference points so the answer is one glance: does the projection pass above
+the marker or below it.
+
+The chart itself: one axis, inverted (higher is faster, the only direction in
+which "up" means progress); the plan dashed and recessive because it is a
+reference, not a series; the projection solid, labelled at its end; race
+markers in amber, each carrying its target. The palette was run through the
+validator rather than eyeballed (emerald 600 against amber: ΔE 9.8 protan, 20
+normal, both above 3:1 on white), and the chart carries a legend, an end label
+per line, a hover readout, and a table of the reference points — identity is
+never colour alone. Rendering it and *looking* at it caught two things a test
+never would: stretched text from a non-uniform viewBox, and a curve that left
+the top of the frame because a week outside every block fell back to the last
+block's share.
+
 ### Le calendrier d'un athlète, en entier
 
 The model, stated plainly: the weekly matrix plus the objective's dates
