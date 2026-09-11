@@ -32,6 +32,8 @@ import { StravaScreen } from './StravaScreen';
 import { StructureScreen } from './StructureScreen';
 import { Historique } from '../components/Historique';
 import { FormeCourbes } from '../components/FormeCourbes';
+import { Deroule } from '../components/Deroule';
+import { deroule } from '../data/deroule';
 
 /** « 3:20:00 », « 41:40 » ou « 2500 » → secondes. Un marathon se vise en
     heures, une référence 10 km en minutes : les deux passent par ici. */
@@ -1615,6 +1617,10 @@ function CalendrierEntrainement({ app, large = false }: { app: App; large?: bool
   const lang = app.lang;
   const fr = lang === 'fr';
   const [tout, setTout] = useState(false);
+  /* La séance ouverte, une à la fois : la ligne dit quoi et combien de temps,
+     et ce qu'on déplie dit comment — l'échauffement, les blocs, les allures et
+     les plages de FC. Une seule ouverte, sinon le tableau devient illisible. */
+  const [ouverte, setOuverte] = useState<number | null>(null);
 
   const seances = db.select('msc_session').slice().sort((a, b) => a.date.localeCompare(b.date)
     || a.id - b.id);
@@ -1769,15 +1775,23 @@ function CalendrierEntrainement({ app, large = false }: { app: App; large?: bool
                       const st = db.statutDe(s, aujourdhui, etat);
                       const vu = visuelDuStatut(st);
                       const course = competitions.get(s.date);
+                      const ouvert = ouverte === s.id;
                       return (
+                        <Fragment key={s.id}>
                         <tr
-                          key={s.id}
+                          onClick={() => setOuverte(ouvert ? null : s.id)}
                           style={{
                             background: course ? C.warningBg : s.date === aujourdhui ? C.accentSoft : 'transparent',
                             fontWeight: course ? 600 : 400,
+                            cursor: 'pointer',
                           }}
                         >
-                          <td style={cellule}><Mono size={11} color={C.inkQuiet}>{String(s.id)}</Mono></td>
+                          <td style={cellule}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                              <Icon name={ouvert ? 'chevron-down' : 'chevron-right'} size={12} />
+                              <Mono size={11} color={C.inkQuiet}>{String(s.id)}</Mono>
+                            </span>
+                          </td>
                           <td style={cellule}><Mono size={11.5} color={C.inkBody}>{s.date}</Mono></td>
                           <td style={cellule}><Mono size={11} color={C.inkQuiet}>{s.jour[lang]}</Mono></td>
                           <td style={cellule}><Mono size={11} color={C.teal}>{s.bloc}</Mono></td>
@@ -1798,6 +1812,27 @@ function CalendrierEntrainement({ app, large = false }: { app: App; large?: bool
                             </span>
                           </td>
                         </tr>
+                        {ouvert && (
+                          <tr>
+                            <td colSpan={10} style={{ ...cellule, whiteSpace: 'normal', background: C.surfaceAlt, padding: '12px 14px' }}>
+                              {/* La cellule fait la largeur de la table, qui déborde sur un
+                                  téléphone : collée à gauche, le déroulé reste lisible sans
+                                  faire défiler le tableau de côté. */}
+                              <div style={{ position: 'sticky', left: 14, width: 'min(520px, calc(100vw - 76px))' }}>
+                              {deroule(s)
+                                ? <Deroule session={s} lang={lang} />
+                                : (
+                                  <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.5 }}>
+                                    {s.detail[lang] || (fr
+                                      ? 'Pas de déroulé pour ce type de séance : il se calcule pour la course à pied.'
+                                      : 'Brak przebiegu dla tego typu sesji: liczy się go dla biegania.')}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </Fragment>
@@ -1808,8 +1843,8 @@ function CalendrierEntrainement({ app, large = false }: { app: App; large?: bool
         </div>
         <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>
           {fr
-            ? 'L’allure n’est pas stockée : elle se calcule du type de la séance et de la référence de sa période. La stocker, ce serait en avoir deux versions dont une fausse le jour où il progresse.'
-            : 'Tempo nie jest zapisane: wylicza się z typu sesji i odniesienia okresu.'}
+            ? 'Touche une ligne pour son déroulé — échauffement, blocs, récupérations, allures et plages de FC. Rien de tout ça n’est stocké : l’allure se calcule du type de la séance et de la référence de sa période, la FC de sa réserve cardiaque. Les stocker, ce serait en avoir deux versions dont une fausse le jour où il progresse.'
+            : 'Dotknij wiersza, aby zobaczyć przebieg. Nic nie jest zapisane: tempo liczy się z typu sesji i odniesienia okresu, tętno z rezerwy.'}
         </div>
       </Card>
     </div>

@@ -571,6 +571,18 @@ try {
   check('chaque semaine porte son sous-total : heures, séances, charge',
     /\d+[.,]\d\s*h\s*·\s*\d+\s*séances/i.test(calendrier) && /charge\s*\d+/i.test(calendrier),
     calendrier.split('\n').find((l) => /^S\d+\s*·/.test(l.trim()))?.slice(0, 80) ?? '');
+  /* Une ligne s'ouvre sur le déroulé de sa séance. « 60′ · seuil » dit ce que
+     la séance coûte ; le déroulé dit ce qu'on fait — et c'est ce qu'un coach
+     cherche quand il ouvre le calendrier d'un athlète. */
+  await page.locator('table tr').filter({ hasText: 'Course à pied' }).first().click();
+  await page.waitForTimeout(700);
+  const deplie = await page.locator('body').innerText();
+  check('et une ligne s’ouvre sur le déroulé de sa séance, FC comprises',
+    /Le déroulé/i.test(deplie) && /\d+–\d+ bpm/.test(deplie),
+    deplie.split('\n').filter((x) => /bpm|^\d+× /.test(x)).slice(0, 2).join(' · '));
+  if (process.env.MSC_CAPTURES) {
+    await page.screenshot({ path: `${process.env.MSC_CAPTURES}/calendrier.png` });
+  }
 
   console.log('\n=== le back office ===');
   /* Les objectifs par discipline : l'athlète les remplit depuis son téléphone,
