@@ -1928,6 +1928,31 @@ view once a day, click twice, participate, draw once and not twice, the
 winner sees it, the analysis adds up — and `check:app` participates from the
 phone and reads the section.
 
+### Le back office du fournisseur
+
+A sponsor gets **his own login** and a back office that contains only his:
+his offers, what each one gave (views, participations, clicks, the winner),
+the **draw** at the press of a button, and his audience. Role
+`fournisseur` on the account, `msc_sponsor.compte_id` to tie it to one
+sponsor — **one account, one sponsor**, because two would make "his" sponsor
+meaningless, and the server refuses the second.
+
+**His audience is anonymous, and that is the design, not an oversight.** A
+sponsor needs to know who he is talking to — how many they are, which sports,
+which age brackets — not who they are. He gets counts, never names. The one
+name he sees is the winner's, because that is the person he hands the lot to.
+
+An offer's **trigger** is its rule: the share of the week's sessions an
+athlete must have done to enter; zero and it is open to everyone.
+
+The isolation is one rule rather than twenty checks: a `fournisseur` account
+is answered on `/api/fournisseur` and refused everywhere else — a single gate
+before the club's routes. `check:api` proves it: he sees his sponsor and an
+audience with no athlete's name in it, he writes his own offers, he gets
+`404` on another sponsor's offer and on its draw, and `403` on the back
+office and on the athletes. The screen is his and only his, whatever the size
+of the device — he has no training and no club to show.
+
 ### D'où vient chacun, et ce qu'il fait
 
 Two more columns an admin running a club reads before anything else: **D'où**

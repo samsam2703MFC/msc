@@ -269,7 +269,7 @@ export const GROUPES: Array<{ code: 'entrainement' | 'application'; titre: Recor
 /** Les sections d'un compte. Le back office est au coach et à l'admin : un
     athlète n'en a pas du tout — son application, c'est ses cinq onglets, et
     « Moi » y tient tout ce qui lui appartient. */
-export function sectionsDe(role: 'athlete' | 'coach' | 'admin' | undefined): Section[] {
+export function sectionsDe(role: 'athlete' | 'coach' | 'admin' | 'fournisseur' | undefined): Section[] {
   if (role !== 'coach' && role !== 'admin') return [];
   return [
     'athletes', 'calendrier', 'classement', 'param',

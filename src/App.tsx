@@ -16,6 +16,7 @@ import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { MotDePasseSheet } from './components/MotDePasseSheet';
 import { MotDuCoach } from './components/MotDuCoach';
+import { FournisseurScreen } from './screens/FournisseurScreen';
 import { TypeSheet } from './components/TypeSheet';
 import { MoiScreen } from './screens/AdminScreen';
 import { ChargementScreen, ConnexionScreen, PanneScreen } from './screens/ConnexionScreen';
@@ -338,6 +339,18 @@ export function App() {
   const app = useApp();
   const framed = useMedia(FRAME_QUERY);
   const large = useMedia(BUREAU_QUERY);
+
+  /* Le fournisseur n'a ni entraînement ni club : son écran est le sien, et
+     c'est le seul qu'il voit — quelle que soit la taille de l'appareil. */
+  if (app.amorce === 'pret' && app.identite?.compte.role === 'fournisseur') {
+    return (
+      <IOSDevice standalone>
+        <div className="msc-scroll" style={{ height: '100%', overflowY: 'auto', background: C.page }}>
+          <FournisseurScreen app={app} />
+        </div>
+      </IOSDevice>
+    );
+  }
 
   /* Le bureau du coach : une fois connecté, sur un écran large. Le back
      office, et rien d'autre — mon entraînement est sur mon téléphone. */

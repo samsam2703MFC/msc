@@ -174,7 +174,7 @@ export interface Compte {
   id: number;
   email?: string;
   nom: string;
-  role: 'athlete' | 'coach' | 'admin';
+  role: 'athlete' | 'coach' | 'admin' | 'fournisseur';
 }
 
 export interface AthleteVisible {
@@ -511,7 +511,7 @@ export interface CompteAdmin {
   id: number;
   email: string;
   nom: string;
-  role: 'athlete' | 'coach' | 'admin';
+  role: 'athlete' | 'coach' | 'admin' | 'fournisseur';
   actif: boolean;
   sans_mot_de_passe: boolean;
   cree_le: string;
@@ -608,6 +608,8 @@ export function lienDeConnexion(compteId: number): Promise<{
 
 export interface Sponsor {
   id: number; nom: string; ville: string | null; url: string | null; actif: boolean;
+  /** Le compte fournisseur qui le tient, s'il en a un. */
+  compte_id?: number | null;
 }
 export interface Offre {
   id: number; sponsor_id: number; titre: string; lot: string | null; voucher: string | null;
@@ -640,7 +642,9 @@ export function noterPartenaire(corps: { sponsor_id: number; offre_id?: number; 
 export function adminPartenaires(): Promise<{ sponsors: SponsorAvecOffres[] }> {
   return appeler('/admin/partenaires');
 }
-export function ecrireSponsor(corps: { id?: number; nom: string; ville?: string; url?: string; actif?: boolean }): Promise<{ sponsor: Sponsor }> {
+export function ecrireSponsor(corps: {
+  id?: number; nom: string; ville?: string; url?: string; actif?: boolean; compte_id?: number | null;
+}): Promise<{ sponsor: Sponsor }> {
   return appeler('/admin/partenaires/sponsor', { method: 'POST', body: JSON.stringify(corps) });
 }
 export function ecrireOffre(corps: {
@@ -651,6 +655,32 @@ export function ecrireOffre(corps: {
 export function tirerOffre(offreId: number): Promise<{ offre: Offre; gagnant: { id: number; nom: string; prenom: string | null }; participants: number }> {
   return appeler(`/admin/partenaires/offre/${offreId}/tirer`, { method: 'POST' });
 }
+/* ------------------------------------------------------- le fournisseur */
+
+export interface OffreFournisseur extends Offre { vues: number; clics: number }
+export interface VueFournisseur {
+  sponsor: Sponsor;
+  offres: OffreFournisseur[];
+  audience: {
+    athletes: number; vues: number; clics: number; cliqueurs: number;
+    sports: Array<{ nom: string; n: number }>;
+    ages: Array<{ tranche: string; n: number }>;
+  };
+}
+
+/** Son sponsor, ses offres, son audience — et rien d'autre. */
+export function fournisseur(): Promise<VueFournisseur> {
+  return appeler<VueFournisseur>('/fournisseur');
+}
+export function ecrireOffreFournisseur(corps: {
+  id?: number; titre: string; lot?: string; voucher?: string; regle_pct?: number; debut?: string; fin: string;
+}): Promise<{ offre: Offre }> {
+  return appeler('/fournisseur/offre', { method: 'POST', body: JSON.stringify(corps) });
+}
+export function tirerOffreFournisseur(offreId: number): Promise<{ gagnant: { id: number; nom: string } }> {
+  return appeler(`/fournisseur/offre/${offreId}/tirer`, { method: 'POST' });
+}
+
 export function analysePartenaires(): Promise<AnalysePartenaires> {
   return appeler('/admin/partenaires/analyse');
 }

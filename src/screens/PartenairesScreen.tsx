@@ -21,6 +21,7 @@ const T = {
     intro: 'Un sponsor local met un lot en jeu ; les athlètes participent en s’entraînant ; tu tires au sort. Le bon d’achat — un code, et sa boutique s’il en a une — se voit dans leur application. Ce qui se compte : les vues, les participations, les gagnants, les clics vers la boutique.',
     sponsors: 'Sponsors', aucun: 'Aucun sponsor encore.', nouveau: 'Nouveau sponsor', nom: 'Nom', ville: 'Ville',
     url: 'Boutique (adresse)', urlAide: 'Facultatif : un kiné n’a pas de boutique, son code se montre au cabinet.',
+    compte: 'Son compte (id)', compteAide: 'Le compte fournisseur qui tient ce sponsor : il se connecte et ne voit que ses offres et une audience anonyme. Crée-le dans Comptes, rôle « fournisseur », puis pose son id ici.',
     creer: 'Créer', enregistrer: 'Enregistrer', actif: 'actif', inactif: 'inactif', desactiver: 'Désactiver', activer: 'Réactiver',
     offres: 'Offres', aucuneOffre: 'Aucune offre.', nouvelleOffre: 'Nouvelle offre', titre: 'Titre', lot: 'Lot à gagner',
     voucher: 'Code (voucher)', regle: 'Séances faites requises', regleAide: '% des séances de la semaine — 0 : tout le monde peut participer',
@@ -33,6 +34,7 @@ const T = {
     intro: 'Lokalny sponsor daje nagrodę; zawodnicy biorą udział trenując; ty losujesz. Voucher — kod i sklep, jeśli go ma — widać w ich aplikacji. Liczymy: wyświetlenia, udziały, zwycięzców, kliknięcia do sklepu.',
     sponsors: 'Sponsorzy', aucun: 'Brak sponsorów.', nouveau: 'Nowy sponsor', nom: 'Nazwa', ville: 'Miasto',
     url: 'Sklep (adres)', urlAide: 'Opcjonalnie: fizjo nie ma sklepu, kod pokazuje się w gabinecie.',
+    compte: 'Jego konto (id)', compteAide: 'Konto dostawcy prowadzące tego sponsora: loguje się i widzi tylko swoje oferty i anonimową publiczność. Utwórz je w Kontach, rola „fournisseur”, i wpisz tu id.',
     creer: 'Utwórz', enregistrer: 'Zapisz', actif: 'aktywny', inactif: 'nieaktywny', desactiver: 'Wyłącz', activer: 'Włącz',
     offres: 'Oferty', aucuneOffre: 'Brak ofert.', nouvelleOffre: 'Nowa oferta', titre: 'Tytuł', lot: 'Nagroda',
     voucher: 'Kod (voucher)', regle: 'Wymagane treningi', regleAide: '% treningów tygodnia — 0: każdy może wziąć udział',
@@ -114,13 +116,22 @@ function LigneSponsor({ s, t, lang, onChange }: { s: SponsorAvecOffres; t: typeo
   const [nom, setNom] = useState(s.nom);
   const [ville, setVille] = useState(s.ville ?? '');
   const [url, setUrl] = useState(s.url ?? '');
+  const [compte, setCompte] = useState(s.compte_id ? String(s.compte_id) : '');
   const [erreur, setErreur] = useState<string | null>(null);
   const [ouvert, setOuvert] = useState(false);
-  const modifie = nom !== s.nom || ville !== (s.ville ?? '') || url !== (s.url ?? '');
+  const modifie = nom !== s.nom || ville !== (s.ville ?? '') || url !== (s.url ?? '')
+    || compte !== (s.compte_id ? String(s.compte_id) : '');
 
   const envoyer = async (corps: Partial<Parameters<typeof api.ecrireSponsor>[0]> = {}) => {
     setErreur(null);
-    try { await api.ecrireSponsor({ id: s.id, nom, ville, url, actif: s.actif, ...corps }); onChange(); }
+    try {
+      await api.ecrireSponsor({
+        id: s.id, nom, ville, url, actif: s.actif,
+        compte_id: compte.trim() ? Number(compte) : null,
+        ...corps,
+      });
+      onChange();
+    }
     catch (e) { setErreur(e instanceof Error ? e.message : String(e)); }
   };
   const tirer = async (o: Offre) => {
@@ -151,6 +162,7 @@ function LigneSponsor({ s, t, lang, onChange }: { s: SponsorAvecOffres; t: typeo
             <Champ label={t.nom} value={nom} onChange={setNom} />
             <Champ label={t.ville} value={ville} onChange={setVille} />
             <Champ label={t.url} value={url} onChange={setUrl} mono aide={t.urlAide} />
+            <Champ label={t.compte} value={compte} onChange={setCompte} mono aide={t.compteAide} />
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button" disabled={!modifie} onClick={() => void envoyer({})} style={{ ...BOUTON, opacity: modifie ? 1 : 0.5 }}>{t.enregistrer}</button>

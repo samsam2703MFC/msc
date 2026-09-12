@@ -34,7 +34,8 @@ const entier = (v, min, max, defaut) => {
 };
 
 const formeSponsor = (s) => ({
-  id: s.id, nom: s.nom, ville: s.ville ?? null, url: s.url ?? null, actif: Boolean(s.actif), cree_le: s.cree_le,
+  id: s.id, nom: s.nom, ville: s.ville ?? null, url: s.url ?? null, actif: Boolean(s.actif),
+  compte_id: s.compte_id ?? null, cree_le: s.cree_le,
 });
 
 const formeOffre = (o) => ({
@@ -57,7 +58,7 @@ const formeOffre = (o) => ({
 
 export async function partenaires() {
   const [sponsors, offres] = await Promise.all([
-    lignes('SELECT id, nom, ville, url, actif, cree_le FROM msc_sponsor ORDER BY actif DESC, nom'),
+    lignes('SELECT id, nom, ville, url, actif, compte_id, cree_le FROM msc_sponsor ORDER BY actif DESC, nom'),
     lignes(
       `SELECT o.*, a.nom AS gagnant_nom, a.prenom AS gagnant_prenom,
               (SELECT COUNT(*) FROM msc_participation p WHERE p.offre_id = o.id) AS participations
@@ -80,10 +81,26 @@ export async function ecrireSponsor(corps = {}) {
   const url = texte(corps.url, 255) || null;
   if (url && !/^https?:\/\/\S+$/i.test(url)) throw new SponsorError('L’adresse de la boutique commence par http:// ou https://.');
   const actif = corps.actif === undefined ? 1 : (corps.actif ? 1 : 0);
+  /* Le compte qui tient ce sponsor. Un compte par sponsor : deux sponsors sur
+     le même login, et « son » sponsor ne veut plus rien dire. */
+  let compteId = null;
+  if (corps.compte_id) {
+    const c = await ligne('SELECT id, role FROM compte WHERE id = :id', { id: Number(corps.compte_id) });
+    if (!c) throw new SponsorError(`Aucun compte ${corps.compte_id}.`, 404);
+    const pris = await ligne(
+      'SELECT id FROM msc_sponsor WHERE compte_id = :c AND id <> :s',
+      { c: c.id, s: Number(corps.id ?? 0) },
+    );
+    if (pris) throw new SponsorError('Ce compte tient déjà un autre sponsor.', 409);
+    compteId = c.id;
+  }
   if (corps.id) {
     const [r] = await bd().execute(
-      'UPDATE msc_sponsor SET nom = ?, ville = ?, url = ?, actif = ? WHERE id = ?',
-      [nom, ville, url, actif, Number(corps.id)],
+      `UPDATE msc_sponsor SET nom = ?, ville = ?, url = ?, actif = ?${corps.compte_id !== undefined ? ', compte_id = ?' : ''}
+       WHERE id = ?`,
+      corps.compte_id !== undefined
+        ? [nom, ville, url, actif, compteId, Number(corps.id)]
+        : [nom, ville, url, actif, Number(corps.id)],
     );
     if (r.affectedRows === 0 && !(await ligne('SELECT id FROM msc_sponsor WHERE id = :id', { id: Number(corps.id) }))) {
       throw new SponsorError(`Aucun sponsor ${corps.id}.`, 404);
@@ -91,8 +108,8 @@ export async function ecrireSponsor(corps = {}) {
     return formeSponsor(await ligne('SELECT * FROM msc_sponsor WHERE id = :id', { id: Number(corps.id) }));
   }
   const [r] = await bd().execute(
-    'INSERT INTO msc_sponsor (nom, ville, url, actif) VALUES (?, ?, ?, ?)',
-    [nom, ville, url, actif],
+    'INSERT INTO msc_sponsor (nom, ville, url, actif, compte_id) VALUES (?, ?, ?, ?, ?)',
+    [nom, ville, url, actif, compteId],
   );
   return formeSponsor(await ligne('SELECT * FROM msc_sponsor WHERE id = :id', { id: r.insertId }));
 }
@@ -291,4 +308,93 @@ export async function noter(athleteId, corps = {}) {
     [sponsor.id, offreId, athleteId, type],
   );
   return { ok: true };
+}
+
+/* ---------------------------------------------------------- le fournisseur
+
+   Le sponsor a son propre login, et son back office ne contient que le sien :
+   ses offres, ce qu'elles ont donné, et son audience.
+
+   Son audience est anonyme, et ce n'est pas une négligence : un sponsor n'a
+   pas à connaître les noms, les allures ni la forme de qui que ce soit. Il a
+   besoin de savoir à qui il parle — combien ils sont, quels sports, quels
+   niveaux — et ce que son offre a donné. C'est ce qu'il obtient, et rien de
+   plus. */
+
+/** Le sponsor que ce compte tient, ou null — c'est la porte de tout le reste. */
+export async function sponsorDuCompte(compteId) {
+  const s = await ligne('SELECT * FROM msc_sponsor WHERE compte_id = :c LIMIT 1', { c: Number(compteId) });
+  return s ? formeSponsor(s) : null;
+}
+
+async function sienOuRien(compteId, offreId) {
+  const sponsor = await sponsorDuCompte(compteId);
+  if (!sponsor) throw new SponsorError('Ce compte ne tient aucun sponsor.', 403);
+  if (offreId !== undefined) {
+    const o = await ligne('SELECT id, sponsor_id FROM msc_offre WHERE id = :id', { id: Number(offreId) });
+    if (!o || o.sponsor_id !== sponsor.id) throw new SponsorError(`Aucune offre ${offreId}.`, 404);
+  }
+  return sponsor;
+}
+
+/** Tout ce que le fournisseur voit : son sponsor, ses offres, son audience. */
+export async function pourFournisseur(compteId) {
+  const sponsor = await sponsorDuCompte(compteId);
+  if (!sponsor) throw new SponsorError('Ce compte ne tient aucun sponsor.', 403);
+  const [offres, compte, sports, paliers] = await Promise.all([
+    lignes(
+      `SELECT o.*, a.nom AS gagnant_nom, a.prenom AS gagnant_prenom,
+              (SELECT COUNT(*) FROM msc_participation p WHERE p.offre_id = o.id) AS participations,
+              (SELECT COUNT(*) FROM msc_sponsor_evenement e WHERE e.offre_id = o.id AND e.type = 'vue') AS vues,
+              (SELECT COUNT(*) FROM msc_sponsor_evenement e WHERE e.offre_id = o.id AND e.type = 'clic') AS clics
+       FROM msc_offre o LEFT JOIN msc_athlete a ON a.id = o.gagnant_id
+       WHERE o.sponsor_id = :s ORDER BY o.debut DESC, o.id DESC`,
+      { s: sponsor.id },
+    ),
+    ligne(
+      `SELECT (SELECT COUNT(*) FROM msc_athlete) AS athletes,
+              (SELECT COUNT(*) FROM msc_sponsor_evenement e WHERE e.sponsor_id = :s AND e.type = 'vue') AS vues,
+              (SELECT COUNT(*) FROM msc_sponsor_evenement e WHERE e.sponsor_id = :s AND e.type = 'clic') AS clics,
+              (SELECT COUNT(DISTINCT e.athlete_id) FROM msc_sponsor_evenement e WHERE e.sponsor_id = :s AND e.type = 'clic') AS cliqueurs`,
+      { s: sponsor.id },
+    ),
+    /* Les sports du club, par leur semaine type : à qui il parle. Des
+       comptes, jamais des noms. */
+    lignes(
+      `SELECT discipline, COUNT(DISTINCT athlete_id) AS n FROM msc_structure
+       WHERE discipline <> 'Repos' GROUP BY discipline ORDER BY n DESC`,
+    ),
+    lignes(
+      `SELECT COUNT(*) AS n, CASE WHEN annee_naissance IS NULL THEN 'inconnu'
+         WHEN YEAR(CURDATE()) - annee_naissance < 30 THEN 'moins de 30'
+         WHEN YEAR(CURDATE()) - annee_naissance < 45 THEN '30 à 44'
+         ELSE '45 et plus' END AS tranche
+       FROM msc_athlete GROUP BY tranche ORDER BY n DESC`,
+    ),
+  ]);
+  return {
+    sponsor,
+    offres: offres.map((o) => ({
+      ...formeOffre(o), vues: Number(o.vues ?? 0), clics: Number(o.clics ?? 0),
+    })),
+    audience: {
+      athletes: Number(compte?.athletes ?? 0),
+      vues: Number(compte?.vues ?? 0),
+      clics: Number(compte?.clics ?? 0),
+      cliqueurs: Number(compte?.cliqueurs ?? 0),
+      sports: sports.map((x) => ({ nom: x.discipline, n: Number(x.n) })),
+      ages: paliers.map((x) => ({ tranche: x.tranche, n: Number(x.n) })),
+    },
+  };
+}
+
+/** Il écrit ses offres, et seulement les siennes. */
+export async function ecrireOffreFournisseur(compteId, corps = {}) {
+  const sponsor = await sienOuRien(compteId, corps.id === undefined ? undefined : corps.id);
+  return ecrireOffre({ ...corps, sponsor_id: sponsor.id });
+}
+
+export async function tirerFournisseur(compteId, offreId) {
+  await sienOuRien(compteId, offreId);
+  return tirer(offreId);
 }

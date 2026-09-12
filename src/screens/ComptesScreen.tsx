@@ -26,8 +26,8 @@ const T = {
     chargement: 'Lecture des comptes…',
     intro: 'Qui se connecte, avec quel rôle, et quel athlète chacun voit. Un compte se désactive, il ne se supprime pas : ce qu’il a écrit reste à lui. L’onboarding d’un athlète, avec son compte, se fait dans Athlètes.',
     comptes: 'Comptes', aucun: 'Aucun compte.',
-    roles: { athlete: 'athlète', coach: 'coach', admin: 'admin' } as Record<Role, string>,
-    rolesAide: 'Un admin ouvre le back office ; un athlète a son plan. Le coach, c’est l’IA.',
+    roles: { athlete: 'athlète', coach: 'coach', admin: 'admin', fournisseur: 'fournisseur' } as Record<Role, string>,
+    rolesAide: 'Un admin ouvre le back office ; un athlète a son plan ; un fournisseur tient ses offres et ne voit rien du club. Le coach, c’est l’IA.',
     actif: 'actif', inactif: 'désactivé', sansMdp: 'sans mot de passe',
     aucunAthlete: 'ne voit aucun athlète',
     droits: { lecture: 'lecture', ecriture: 'écriture' } as Record<Droit, string>,
@@ -69,8 +69,8 @@ const T = {
     chargement: 'Wczytywanie kont…',
     intro: 'Kto się loguje, z jaką rolą i którego zawodnika widzi. Konto się dezaktywuje, nie usuwa: to, co zapisało, zostaje przy nim. Onboarding zawodnika z kontem robi się w Zawodnikach.',
     comptes: 'Konta', aucun: 'Brak kont.',
-    roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin' } as Record<Role, string>,
-    rolesAide: 'Admin otwiera zaplecze; zawodnik ma swój plan. Trenerem jest AI.',
+    roles: { athlete: 'zawodnik', coach: 'trener', admin: 'admin', fournisseur: 'dostawca' } as Record<Role, string>,
+    rolesAide: 'Admin otwiera zaplecze; zawodnik ma swój plan; dostawca prowadzi swoje oferty. Trenerem jest AI.',
     actif: 'aktywne', inactif: 'wyłączone', sansMdp: 'bez hasła',
     aucunAthlete: 'nie widzi żadnego zawodnika',
     droits: { lecture: 'odczyt', ecriture: 'zapis' } as Record<Droit, string>,
@@ -112,7 +112,10 @@ const T = {
 
 /* Deux rôles : l'athlète, et l'admin. Le coach, c'est l'IA — un compte
    « coach » d'avant reste lu, mais on n'en crée plus. */
-const ROLES: Role[] = ['athlete', 'admin'];
+/* Trois rôles se créent : l'athlète, l'admin, et le fournisseur — un sponsor
+   qui tient ses offres et ne voit rien du club. Le coach, c'est l'IA : un
+   compte « coach » d'avant reste lu, on n'en crée plus. */
+const ROLES: Role[] = ['athlete', 'admin', 'fournisseur'];
 
 const ENTREE: React.CSSProperties = {
   width: '100%', minWidth: 0, boxSizing: 'border-box',

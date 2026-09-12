@@ -76,6 +76,9 @@ try {
     /* D'où vient un athlète — inscrit lui-même, encodé par l'admin, semé —
        ce que l'admin d'un club regarde en premier dans sa liste. */
     ['msc_athlete', 'origine', "ADD COLUMN origine VARCHAR(16) NULL AFTER coach"],
+    /* Le fournisseur : un sponsor qui se connecte pour tenir ses propres
+       offres. Le rôle rejoint l'ENUM, et le compte rejoint le sponsor. */
+    ['msc_sponsor', 'compte_id', 'ADD COLUMN compte_id INT UNSIGNED NULL AFTER actif'],
     ['msc_mesure', 'hrv_ms', "ADD COLUMN hrv_ms SMALLINT UNSIGNED NULL AFTER fc_repos"],
     /* Le coach qui parlait, sur chaque réponse et chaque analyse : le back
        office montre le ton avec le texte. */
@@ -132,6 +135,22 @@ try {
   /* msc_analyse.type gagne « glissant », et la contrainte de portée le connaît.
      Lus dans information_schema avant d'y toucher : une base créée depuis
      schema.sql les a déjà. */
+  /* Le rôle « fournisseur » : un sponsor qui se connecte pour tenir ses
+     offres. L'ENUM s'élargit, il ne se réécrit pas — les rôles existants
+     restent ce qu'ils sont. */
+  const [[roleType]] = await cnx.query(
+    `SELECT COLUMN_TYPE AS t FROM information_schema.columns
+     WHERE table_schema = ? AND table_name = 'compte' AND column_name = 'role'`,
+    [nom],
+  );
+  if (roleType && !/fournisseur/.test(String(roleType.t))) {
+    await cnx.query(
+      `ALTER TABLE compte MODIFY role ENUM('athlete','coach','admin','fournisseur')
+       NOT NULL DEFAULT 'athlete'`,
+    );
+    console.log('+ compte.role : fournisseur');
+  }
+
   const [[colType]] = await cnx.query(
     `SELECT COLUMN_TYPE AS t FROM information_schema.columns
      WHERE table_schema = ? AND table_name = 'msc_analyse' AND column_name = 'type'`,

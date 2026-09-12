@@ -56,6 +56,7 @@ function client() {
    m'est refusé » n'est pas testable, et c'est la seule assertion qui compte
    vraiment dans un contrôle d'accès. */
 await bd().execute("DELETE FROM msc_sponsor WHERE nom LIKE 'Sponsor du contrôle%'");
+await bd().execute('DELETE FROM compte WHERE email = ?', [`fournisseur-${EMAIL}`]);
 await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?, ?, ?, ?)',
   [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`, `inscrit-${EMAIL}`, `libre-${EMAIL}`, `libre2-${EMAIL}`]);
 await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?, ?, ?)',
@@ -978,6 +979,63 @@ try {
     JSON.stringify({ sponsor: ligneSponsor, athlete: ligneAthlete }).slice(0, 160));
   const refusAthlete = await c3.appel('/api/admin/partenaires');
   check('les partenaires du back office sont refusés à un athlète', refusAthlete.statut === 403, String(refusAthlete.statut));
+
+  /* Le fournisseur : son compte tient un sponsor, et il ne voit que le sien.
+     C'est la seule assertion qui compte vraiment ici — un sponsor qui verrait
+     les offres d'un autre, ou les noms des athlètes, serait une fuite. */
+  const compteF = await c.appel('/api/admin/comptes', {
+    method: 'POST',
+    body: JSON.stringify({ email: `fournisseur-${EMAIL}`, nom: 'Fournisseur', role: 'fournisseur', mot_de_passe: MOT_DE_PASSE }),
+  });
+  check('un compte fournisseur se crée', compteF.statut === 200 && compteF.corps.compte?.role === 'fournisseur',
+    `${compteF.statut} ${compteF.corps.erreur ?? ''}`);
+  const relie = await c.appel('/api/admin/partenaires/sponsor', {
+    method: 'POST',
+    body: JSON.stringify({ id: sponsorId, nom: 'Sponsor du contrôle', ville: 'Dupki', url: 'https://boutique.exemple.tld/', compte_id: compteF.corps.compte?.id }),
+  });
+  check('l’admin relie ce compte au sponsor', relie.statut === 200 && relie.corps.sponsor?.compte_id === compteF.corps.compte?.id,
+    `${relie.statut} ${relie.corps.erreur ?? ''}`);
+  /* Un second sponsor sur le même compte : « son » sponsor ne voudrait plus
+     rien dire. */
+  const deuxieme = await c.appel('/api/admin/partenaires/sponsor', {
+    method: 'POST',
+    body: JSON.stringify({ nom: 'Sponsor du contrôle 3', compte_id: compteF.corps.compte?.id }),
+  });
+  check('un compte ne tient qu’un sponsor', deuxieme.statut === 409, deuxieme.corps.erreur);
+
+  const cf = client();
+  await cf.appel('/api/connexion', {
+    method: 'POST', body: JSON.stringify({ email: `fournisseur-${EMAIL}`, mot_de_passe: MOT_DE_PASSE }),
+  });
+  const sien = await cf.appel('/api/fournisseur');
+  check('le fournisseur voit son sponsor, ses offres et une audience anonyme',
+    sien.statut === 200 && sien.corps.sponsor?.id === sponsorId
+      && sien.corps.offres?.some((o: any) => o.id === offreId)
+      && typeof sien.corps.audience?.athletes === 'number'
+      && Array.isArray(sien.corps.audience?.sports)
+      /* Aucun nom d'athlète dans l'audience : ce sont des comptes. */
+      && !JSON.stringify(sien.corps.audience).includes('Sam'),
+    `${sien.statut} ${JSON.stringify(sien.corps.audience ?? sien.corps.erreur).slice(0, 90)}`);
+  const sonOffre = await cf.appel('/api/fournisseur/offre', {
+    method: 'POST', body: JSON.stringify({ titre: 'Offre du fournisseur', voucher: 'FOURN-1', fin: '2099-12-31' }),
+  });
+  check('il écrit ses propres offres', sonOffre.statut === 200 && sonOffre.corps.offre?.sponsor_id === sponsorId,
+    `${sonOffre.statut} ${sonOffre.corps.erreur ?? ''}`);
+  /* L'offre d'un autre sponsor : elle ne lui appartient pas. */
+  const autreSponsor = await c.appel('/api/admin/partenaires/sponsor', { method: 'POST', body: JSON.stringify({ nom: 'Sponsor du contrôle 4' }) });
+  const autreOffre = await c.appel('/api/admin/partenaires/offre', {
+    method: 'POST', body: JSON.stringify({ sponsor_id: autreSponsor.corps.sponsor?.id, titre: 'Pas la sienne', fin: '2099-12-31' }),
+  });
+  const offreVolee = await cf.appel('/api/fournisseur/offre', {
+    method: 'POST', body: JSON.stringify({ id: autreOffre.corps.offre?.id, titre: 'Volée', fin: '2099-12-31' }),
+  });
+  const tirageVole = await cf.appel(`/api/fournisseur/offre/${autreOffre.corps.offre?.id}/tirer`, { method: 'POST' });
+  check('il ne touche pas l’offre d’un autre sponsor', offreVolee.statut === 404 && tirageVole.statut === 404,
+    `${offreVolee.statut} ${tirageVole.statut}`);
+  const ferme2 = await cf.appel('/api/admin/partenaires');
+  const fermeAthletes = await cf.appel('/api/apercu');
+  check('et il n’a ni back office ni athlètes', ferme2.statut === 403 && fermeAthletes.statut >= 400,
+    `${ferme2.statut} ${fermeAthletes.statut}`);
   const horsPlage = await c.appel('/api/admin/athletes', {
     method: 'POST', body: JSON.stringify({ nom: 'Athlète créé du contrôle', actuelle: '1:30', cible: '1:20' }),
   });
@@ -1210,6 +1268,7 @@ try {
 } finally {
   serveur.kill('SIGTERM');
   await bd().execute("DELETE FROM msc_sponsor WHERE nom LIKE 'Sponsor du contrôle%'");
+  await bd().execute('DELETE FROM compte WHERE email = ?', [`fournisseur-${EMAIL}`]);
   await bd().execute('DELETE FROM msc_journal WHERE date IN (?, ?)', ['2026-10-20', '2026-10-21']);
   await bd().execute('DELETE FROM msc_journal WHERE athlete_id = 1 AND session_id = ?',
     [msc_session.find((s) => s.type !== 'repos')!.id]);

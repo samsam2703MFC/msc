@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS compte (
   email           VARCHAR(190) NOT NULL,
   mot_de_passe    VARCHAR(255) NOT NULL COMMENT 'argon2id ou bcrypt — jamais le mot de passe',
   nom             VARCHAR(120) NOT NULL,
-  role            ENUM('athlete','coach','admin') NOT NULL DEFAULT 'athlete',
+  role            ENUM('athlete','coach','admin','fournisseur') NOT NULL DEFAULT 'athlete' COMMENT 'fournisseur : un sponsor, qui ne voit que ses offres et une audience anonyme',
   actif           TINYINT(1) NOT NULL DEFAULT 1,
   cree_le         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   maj_le          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -973,8 +973,11 @@ CREATE TABLE IF NOT EXISTS msc_sponsor (
   ville    VARCHAR(80) NULL,
   url      VARCHAR(255) NULL COMMENT 'sa boutique — là où le code envoie ; NULL pour un kiné, dont le code se montre au cabinet',
   actif    TINYINT(1) NOT NULL DEFAULT 1,
+  compte_id INT UNSIGNED NULL COMMENT 'le compte fournisseur qui gère ce sponsor — il ne voit que lui',
   cree_le  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  KEY ix_sponsor_compte (compte_id),
+  CONSTRAINT fk_sponsor_compte FOREIGN KEY (compte_id) REFERENCES compte (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS msc_offre (

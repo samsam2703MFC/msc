@@ -408,6 +408,29 @@ async function router(req, res, url) {
     return json(res, 200, await sponsors.noter(athlete_id, await lireCorps(req, 2_000)));
   }
 
+  /* Le back office du fournisseur : un sponsor qui se connecte pour tenir ses
+     offres. Il ne voit que le sien — sponsors.mjs le vérifie à chaque geste —
+     et une audience anonyme : combien ils sont, quels sports, quelles
+     tranches d'âge. Jamais un nom, sauf celui du gagnant, à qui il remet le
+     lot. */
+  if (chemin.startsWith('/api/fournisseur')) {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    if (identite.bypass) return json(res, 403, { erreur: 'Pas de fournisseur en mode développement.' });
+    const compteId = identite.compte.id;
+    if (chemin === '/api/fournisseur' && req.method === 'GET') {
+      return json(res, 200, await sponsors.pourFournisseur(compteId));
+    }
+    if (chemin === '/api/fournisseur/offre' && req.method === 'POST') {
+      return json(res, 200, { offre: await sponsors.ecrireOffreFournisseur(compteId, await lireCorps(req, 4_000)) });
+    }
+    const tirageF = chemin.match(/^\/api\/fournisseur\/offre\/(\d+)\/tirer$/);
+    if (tirageF && req.method === 'POST') {
+      return json(res, 200, await sponsors.tirerFournisseur(compteId, Number(tirageF[1])));
+    }
+    return json(res, 404, { erreur: 'Route inconnue.' });
+  }
+
   if (chemin === '/api/connexion/lien' && req.method === 'POST') {
     const { jeton } = await lireCorps(req, 4_000);
     const compte = await consommerLien(jeton);
@@ -453,6 +476,15 @@ async function router(req, res, url) {
 
   /* La vue coach : chaque athlète visible en un coup d'œil. Même règle que
      /api/moi pour la liste — msc_acces tranche, ou la porte de service. */
+  /* Un fournisseur n'a qu'une surface : la sienne, /api/fournisseur, traitée
+     plus haut. Tout ce qui suit appartient au club — les athlètes, les plans,
+     le classement, le back office — et une porte fermée en un endroit vaut
+     mieux qu'une vérification oubliée dans la vingtième route. */
+  const quiParle = await identifier(req);
+  if (quiParle && !quiParle.bypass && quiParle.compte.role === 'fournisseur') {
+    return json(res, 403, { erreur: 'Un compte fournisseur ne voit que ses offres.' });
+  }
+
   if (chemin === '/api/apercu' && req.method === 'GET') {
     const identite = await identifier(req);
     if (!identite) return json(res, 401, { erreur: 'Non connecté.' });

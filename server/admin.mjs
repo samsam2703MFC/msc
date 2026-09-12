@@ -26,7 +26,7 @@ export class AdminError extends Error {
   }
 }
 
-const ROLES = ['athlete', 'coach', 'admin'];
+const ROLES = ['athlete', 'coach', 'admin', 'fournisseur'];
 const DROITS = ['lecture', 'ecriture'];
 
 /* ------------------------------------------------------------- les comptes */
