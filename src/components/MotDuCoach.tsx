@@ -22,6 +22,7 @@ import { C, F, R } from '../design/theme';
 import { coachDe } from '../data/coachs';
 import { CoachAvatar } from './CoachAvatar';
 import { Icon } from './Icon';
+import { Sheet, SheetCloseButton } from './Sheet';
 import type { App } from '../state/useApp';
 
 const T: Record<Lang, Record<string, string>> = {
@@ -84,76 +85,70 @@ export function MotDuCoach({ app, taille = 38 }: { app: App; taille?: number }) 
     void app.demanderCoach(cle, aDesSeances ? t.question : t.repos, contexteDuJour(app.date, lang));
   };
 
+  /* Pas de `position: relative` ici : la feuille se pose sur le cadre de
+     l'application, pas dans les 38 pixels de l'avatar. */
   return (
-    <div style={{ position: 'relative', flexShrink: 0 }}>
+    <div style={{ flexShrink: 0 }}>
       <button
         type="button"
         onClick={demander}
         aria-label={`${t.ouvrir} — ${coach.nom[lang]}`}
         style={{
-          display: 'block', padding: 0, border: 'none', background: 'transparent',
-          lineHeight: 0, position: 'relative',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+          padding: 0, border: 'none', background: 'transparent', cursor: 'pointer',
         }}
       >
-        <CoachAvatar code={db.athlete.coach} taille={taille} />
-        {/* la bulle : ce qui dit qu'il a quelque chose à dire */}
+        <span style={{ position: 'relative', lineHeight: 0 }}>
+          <CoachAvatar code={db.athlete.coach} taille={taille} />
+          {/* la bulle : ce qui dit qu'il a quelque chose à dire */}
+          <span
+            style={{
+              position: 'absolute', right: -3, top: -3,
+              width: 17, height: 17, borderRadius: R.full,
+              background: C.accent, color: C.accentInk,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: `2px solid ${C.surface}`, boxSizing: 'border-box',
+            }}
+          >
+            <Icon name="message-circle" size={9} />
+          </span>
+        </span>
+        {/* Sous l'avatar, son nom : sinon on ne sait pas qui va parler. */}
         <span
           style={{
-            position: 'absolute', right: -3, top: -3,
-            width: 17, height: 17, borderRadius: R.full,
-            background: C.accent, color: C.accentInk,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: `2px solid ${C.surface}`, boxSizing: 'border-box',
+            fontSize: 10, fontWeight: 600, color: C.inkSecondary, lineHeight: 1,
+            maxWidth: taille + 24, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
         >
-          <Icon name="message-circle" size={9} />
+          {coach.nom[lang]}
         </span>
       </button>
 
+      {/* Une feuille, et pas une bulle accrochée à l'avatar : accrochée, elle
+          sortait par la gauche de l'écran dès que le texte dépassait deux
+          lignes — et c'est le panneau que toute l'application utilise déjà. */}
       {ouvert && (
-        <>
-          {/* le voile : toucher à côté referme, comme une feuille */}
-          <div
-            onClick={() => setOuvert(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 79 }}
-          />
-          <div
-            role="dialog"
-            aria-label={t.ouvrir}
-            style={{
-              position: 'absolute', top: taille + 10, right: 0, zIndex: 80,
-              width: 'min(300px, calc(100vw - 32px))',
-              background: C.surface, borderRadius: R.card, border: `1px solid ${C.border}`,
-              boxShadow: C.shadowSheet, padding: '12px 14px',
-              display: 'flex', flexDirection: 'column', gap: 8,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CoachAvatar code={db.athlete.coach} taille={26} />
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{coach.nom[lang]}</span>
+        <Sheet onClose={() => setOuvert(false)} zIndex={110} label={t.ouvrir} gap={12}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CoachAvatar code={db.athlete.coach} taille={40} />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <span style={{ fontFamily: F.display, fontSize: 17, fontWeight: 700, color: C.ink }}>
+                {coach.nom[lang]}
+              </span>
+              <span style={{ fontSize: 11.5, color: C.inkQuiet }}>{t.ouvrir}</span>
             </div>
-            <div style={{ fontSize: 13, color: C.inkBody, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-              {encours
-                ? <span style={{ color: C.inkQuiet }}>{t.encours}</span>
-                : dernier?.texte
-                  ?? <span style={{ color: C.negative }}>{app.chatErreur ?? ''}</span>}
-            </div>
-            {!encours && !dernier && !app.chatErreur && (
-              <div style={{ fontSize: 11.5, color: C.inkQuiet, fontStyle: 'italic' }}>{coach.devise[lang]}</div>
-            )}
-            <button
-              type="button"
-              onClick={() => setOuvert(false)}
-              style={{
-                alignSelf: 'flex-start', padding: '5px 10px', borderRadius: R.full,
-                border: `1px solid ${C.border}`, background: C.surface,
-                color: C.inkSecondary, fontSize: 11.5, fontWeight: 600, fontFamily: F.body,
-              }}
-            >
-              {t.fermer}
-            </button>
           </div>
-        </>
+          <div style={{ fontSize: 14.5, color: C.inkBody, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+            {encours
+              ? <span style={{ color: C.inkQuiet }}>{t.encours}</span>
+              : dernier?.texte
+                ?? <span style={{ color: C.negative }}>{app.chatErreur ?? ''}</span>}
+          </div>
+          {!encours && !dernier && !app.chatErreur && (
+            <div style={{ fontSize: 12.5, color: C.inkQuiet, fontStyle: 'italic' }}>{coach.devise[lang]}</div>
+          )}
+          <SheetCloseButton label={t.fermer} onClick={() => setOuvert(false)} />
+        </Sheet>
       )}
     </div>
   );
