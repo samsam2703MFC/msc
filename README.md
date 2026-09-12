@@ -1865,6 +1865,19 @@ write nothing, because an empty row is not an objective. Free sign-up still
 asks for both paces (pre-filled 5:30 → 5:00): it addresses an athlete
 registering alone, and his profile corrects them.
 
+### Les objectifs, en tableau
+
+An objective used to be a card: a menu, three labelled fields, a toggle and
+two buttons, stacked. Three objectives and you scrolled a whole screen to
+compare two dates. It is a **table** now — one row per objective, one column
+per thing, the type as a **drop list in its cell**, the date, the km, the
+target time with what it is worth over 10 km underneath, a star for the main
+objective, and the actions at the end. What only makes sense sometimes
+unfolds under the row: a multi-discipline race's legs, and the confirmation
+before removing a race from his calendar. The table scrolls sideways on a
+phone and the unfolded panel stays stuck to the left edge, as the training
+calendar's does.
+
 ### Le coach à côté de l'athlète, et sa bulle
 
 The athlete's avatar says who he is; the coach's, next to it in the header,

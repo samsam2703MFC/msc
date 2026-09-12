@@ -142,31 +142,62 @@ function Bascule({
    Choisir un type pose la distance officielle et, si le nom n'a pas été
    touché, le nom de la course. */
 function ChoixType({
-  valeur, lang, onChange,
+  valeur, lang, onChange, nu = false,
 }: {
   valeur: string | undefined; lang: Lang; onChange: (t: TypeCourse) => void;
+  /** Sans étiquette : dans un tableau, c'est l'en-tête de colonne qui la porte. */
+  nu?: boolean;
 }) {
   const groupes = typesGroupes(lang);
+  const liste = (
+    <select
+      value={valeur ?? ''}
+      aria-label={lang === 'fr' ? 'Type de course' : 'Typ zawodów'}
+      onChange={(e) => {
+        const t = typeCourse(e.target.value);
+        if (t) onChange(t);
+      }}
+      style={nu ? { ...CHAMP, padding: '6px 7px', fontSize: 12.5, width: '100%' } : CHAMP}
+    >
+      <option value="">{lang === 'fr' ? '— choisir —' : '— wybierz —'}</option>
+      {groupes.map((g) => (
+        <optgroup key={g.discipline} label={g.discipline}>
+          {g.types.map((t) => <option key={t.code} value={t.code}>{t.nom}</option>)}
+        </optgroup>
+      ))}
+    </select>
+  );
+  if (nu) return liste;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={{ fontSize: 11, color: C.inkSecondary }}>{lang === 'fr' ? 'Type de course' : 'Typ zawodów'}</span>
-        <select
-          value={valeur ?? ''}
-          onChange={(e) => {
-            const t = typeCourse(e.target.value);
-            if (t) onChange(t);
-          }}
-          style={CHAMP}
-        >
-          <option value="">{lang === 'fr' ? '— choisir —' : '— wybierz —'}</option>
-          {groupes.map((g) => (
-            <optgroup key={g.discipline} label={g.discipline}>
-              {g.types.map((t) => <option key={t.code} value={t.code}>{t.nom}</option>)}
-            </optgroup>
-          ))}
-        </select>
+        {liste}
       </label>
+    </div>
+  );
+}
+
+/* Une cellule qui s'écrit : la même règle que `Champ` — on écrit en sortant
+   du champ, pas à chaque lettre — mais sans étiquette, parce que dans un
+   tableau c'est l'en-tête de colonne qui la porte. */
+function Cellule({
+  valeur, onChange, onBlur, type = 'text', large = 92, aide, ariaLabel,
+}: {
+  valeur: string; onChange: (v: string) => void; onBlur?: (v: string) => void;
+  type?: string; large?: number; aide?: string; ariaLabel: string;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <input
+        type={type}
+        value={valeur}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => onBlur?.(e.target.value)}
+        style={{ ...CHAMP, padding: '6px 7px', fontSize: 12.5, fontFamily: F.mono, width: large, boxSizing: 'border-box' }}
+      />
+      {aide && <span style={{ fontSize: 10, color: C.inkQuiet, whiteSpace: 'nowrap' }}>{aide}</span>}
     </div>
   );
 }
@@ -1022,16 +1053,36 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
             ? 'Un objectif, c’est un type de course, une date et un chrono visé. Son nom est celui du type ; le vrai nom d’une course — Rome, l’Alpsman — vit dans Starts, où elle se relie à cet objectif.'
             : 'Cel to typ zawodów, data i cel czasowy. Nazwę bierze z typu; prawdziwa nazwa zawodów żyje w Startach, gdzie wiąże się z tym celem.'}
         </div>
-        {courses.map((c) => (
-          <LigneObjectif
-            key={c.id}
-            course={c}
-            lang={app.lang}
-            refCible={versSecondes(cible) / 10}
-            onChange={(patch) => majCourse(c, patch)}
-            onRetirer={() => void app.supprimerCompetition(c.id)}
-          />
-        ))}
+        {courses.length > 0 && (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
+              <thead>
+                <tr>
+                  {[fr ? 'Type de course' : 'Typ zawodów', 'Date', 'km',
+                    fr ? 'Temps visé' : 'Cel czasowy', '★', ''].map((h, i) => (
+                    <th key={i} scope="col" style={{
+                      textAlign: i === 4 ? 'center' : 'left', padding: '6px 7px', fontSize: 10, fontWeight: 600,
+                      letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary,
+                      borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {courses.map((c) => (
+                  <LigneObjectif
+                    key={c.id}
+                    course={c}
+                    lang={app.lang}
+                    refCible={versSecondes(cible) / 10}
+                    onChange={(patch) => majCourse(c, patch)}
+                    onRetirer={() => void app.supprimerCompetition(c.id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <button
           type="button"
           className="msc-hover-accent"
@@ -1320,6 +1371,15 @@ function Generateur({ app, large = false }: { app: App; large?: boolean }) {
    champ : une requête par lettre serait ridicule, et ne rien écrire du tout
    était le bug d'avant. Les listes et les bascules, elles, écrivent tout de
    suite : il n'y a rien à finir de taper. */
+/* Un objectif, en une ligne de tableau.
+
+   C'était une carte par objectif : un menu, trois champs étiquetés, une
+   bascule et deux boutons, empilés. Trois objectifs et on faisait défiler un
+   écran entier pour comparer deux dates. Une ligne par objectif, une colonne
+   par chose, et l'œil compare — c'est à ça que sert un tableau.
+
+   Ce qui se déplie sous la ligne : les parties d'un enchaînement, qui n'ont
+   de sens que pour un triathlon, et la confirmation d'un retrait. */
 function LigneObjectif({
   course, lang, refCible, onChange, onRetirer,
 }: {
@@ -1345,115 +1405,144 @@ function LigneObjectif({
   }, [course.date, course.distance_km, course.cible_s]);
 
   const multi = estMulti(course.type_course ?? '');
+  const cellule: React.CSSProperties = {
+    padding: '6px 7px', borderTop: `1px solid ${C.borderSoft}`, verticalAlign: 'top',
+    background: course.principal ? C.accentSoft : 'transparent',
+  };
+  const aligne = Math.round(depuis10k(refCible, course.distance_km));
 
   return (
-    <div
-      style={{
-        display: 'flex', flexDirection: 'column', gap: 8, padding: 12, borderRadius: 12,
-        border: `1px solid ${course.principal ? C.accent : C.border}`,
-        background: course.principal ? C.accentSoft : 'transparent',
-      }}
-    >
-      <ChoixType
-        valeur={course.type_course}
-        lang={lang}
-        onChange={(t) => onChange({
-          type_course: t.code,
-          distance_km: t.distance_km,
-          discipline: t.discipline,
-          /* Le nom, c'est le type : « Semi-marathon », « Triathlon M ». Le
-             vrai nom — Rome, l'Alpsman — se corrige dans Starts, et reste. */
-          nom: course.nom && course.type_course ? course.nom : t.nom[lang],
-        })}
-      />
-      <Grid cols={3} gap={8}>
-        <Champ label="Date" value={date} onChange={setDate}
-          onBlur={(v) => v && v !== course.date && onChange({ date: v })} type="date" mono />
-        <Champ label="km" value={km} onChange={setKm}
-          onBlur={(v) => Number(v) > 0 && Number(v) !== course.distance_km
-            && onChange({ distance_km: Number(v) })} mono />
-        <Champ
-          label={fr ? 'Temps visé' : 'Cel czasowy'}
-          value={chrono}
-          onChange={setChrono}
-          onBlur={(v) => {
-            const s = versSecondes(v);
-            if (s !== (course.cible_s ?? 0)) onChange({ cible_s: s, cible_haute_s: s || undefined });
-          }}
-          mono
-          /* Ce que ce chrono vaut sur dix kilomètres. Sans cette ligne, un semi
-             et un marathon posés à la même allure ne se voyaient pas — et c'est
-             pourtant impossible : un semi se court plus vite. */
-          aide={multi
-            ? (fr ? 'total, transitions comprises' : 'łącznie ze strefami zmian')
-            : course.cible_s
-              ? `≡ ${versTexte(Math.round(equivalent10k(course.cible_s, course.distance_km) * 10))} ${fr ? 'au 10 km' : 'na 10 km'}`
-              : `${fr ? 'à son allure cible' : 'w tempie docelowym'} : ${versTexte(Math.round(depuis10k(refCible, course.distance_km)))}`}
-        />
-      </Grid>
-      {multi && (
-        <PartiesObjectif
-          objectif={{
-            date: course.date, nom: course.nom, type_course: course.type_course,
-            discipline: course.discipline, parties: course.parties,
-            cible_s: course.cible_s ?? 0, cible_haute_s: course.cible_haute_s,
-            distance_km: course.distance_km, principal: !!course.principal,
-          }}
-          lang={lang}
-          onChange={(patch) => onChange({
-            parties: patch.parties ?? course.parties,
-            cible_s: patch.cible_s ?? course.cible_s,
-          })}
-        />
-      )}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Bascule
-          label={fr ? 'Objectif principal' : 'Cel główny'}
-          on={!!course.principal}
-          onChange={(v) => onChange({ principal: v })}
-        />
-        {/* Aligner : le chrono que son objectif 10 km vaut sur cette distance.
-            Un clic plutôt qu'une conversion de tête, qui est exactement
-            l'endroit où deux courses finissent à la même allure. */}
-        {!multi && (
+    <Fragment>
+      <tr>
+        <td style={{ ...cellule, minWidth: 150 }}>
+          <ChoixType
+            nu
+            valeur={course.type_course}
+            lang={lang}
+            onChange={(t) => onChange({
+              type_course: t.code,
+              distance_km: t.distance_km,
+              discipline: t.discipline,
+              /* Le nom, c'est le type : « Semi-marathon », « Triathlon M ». Le
+                 vrai nom — Rome, l'Alpsman — se corrige dans Starts, et reste. */
+              nom: course.nom && course.type_course ? course.nom : t.nom[lang],
+            })}
+          />
+        </td>
+        <td style={cellule}>
+          <Cellule
+            ariaLabel="Date" type="date" large={128} valeur={date} onChange={setDate}
+            onBlur={(v) => v && v !== course.date && onChange({ date: v })}
+          />
+        </td>
+        <td style={cellule}>
+          <Cellule
+            ariaLabel="km" large={62} valeur={km} onChange={setKm}
+            onBlur={(v) => Number(v) > 0 && Number(v) !== course.distance_km && onChange({ distance_km: Number(v) })}
+          />
+        </td>
+        <td style={cellule}>
+          <Cellule
+            ariaLabel={fr ? 'Temps visé' : 'Cel czasowy'}
+            large={86}
+            valeur={chrono}
+            onChange={setChrono}
+            onBlur={(v) => {
+              const s = versSecondes(v);
+              if (s !== (course.cible_s ?? 0)) onChange({ cible_s: s, cible_haute_s: s || undefined });
+            }}
+            /* Ce que ce chrono vaut sur dix kilomètres. Sans cette ligne, un semi
+               et un marathon posés à la même allure ne se voyaient pas — et c'est
+               pourtant impossible : un semi se court plus vite. */
+            aide={multi
+              ? (fr ? 'total' : 'łącznie')
+              : course.cible_s
+                ? `≡ ${versTexte(Math.round(equivalent10k(course.cible_s, course.distance_km) * 10))} ${fr ? '/10 km' : '/10 km'}`
+                : `${fr ? 'cible' : 'cel'} ${versTexte(aligne)}`}
+          />
+        </td>
+        {/* L'objectif principal : celui qui termine le plan. Une étoile dans
+            une colonne plutôt qu'une bascule étiquetée sur chaque carte. */}
+        <td style={{ ...cellule, textAlign: 'center' }}>
           <button
             type="button"
-            className="msc-hover-accent"
-            onClick={() => {
-              const t = Math.round(depuis10k(refCible, course.distance_km));
-              onChange({ cible_s: t, cible_haute_s: t });
+            onClick={() => onChange({ principal: !course.principal })}
+            aria-pressed={!!course.principal}
+            aria-label={fr ? 'Objectif principal' : 'Cel główny'}
+            title={fr ? 'Objectif principal' : 'Cel główny'}
+            style={{
+              padding: '5px 7px', borderRadius: R.full, border: 'none', background: 'transparent',
+              color: course.principal ? C.accentDeep : C.inkQuiet, lineHeight: 0,
             }}
-            style={{ fontSize: 12, color: C.inkSecondary, padding: '9px 11px' }}
           >
-            {fr
-              ? `Aligner sur sa cible (${versTexte(Math.round(depuis10k(refCible, course.distance_km)))})`
-              : `Wyrównaj do celu (${versTexte(Math.round(depuis10k(refCible, course.distance_km)))})`}
+            <Icon name={course.principal ? 'circle-check' : 'circle'} size={17} />
           </button>
-        )}
-        {/* Retirer, c'est retirer la course de son calendrier : elle n'est pas
-            qu'un objectif. On le dit avant de le faire. */}
-        {confirme ? (
-          <>
-            <span style={{ fontSize: 11.5, color: C.inkSecondary }}>
-              {fr ? `Retirer « ${course.nom} » de ses courses ?` : `Usunąć „${course.nom}” z jego zawodów?`}
-            </span>
-            <button type="button" onClick={onRetirer}
-              style={{ fontSize: 12, color: C.negative, fontWeight: 600, padding: '9px 11px' }}>
-              {fr ? 'Oui, retirer' : 'Tak, usuń'}
+        </td>
+        <td style={{ ...cellule, whiteSpace: 'nowrap', textAlign: 'right' }}>
+          {/* Aligner : le chrono que son objectif 10 km vaut sur cette distance.
+              Un clic plutôt qu'une conversion de tête, qui est exactement
+              l'endroit où deux courses finissent à la même allure. */}
+          {!multi && (
+            <button
+              type="button"
+              className="msc-hover-accent"
+              onClick={() => onChange({ cible_s: aligne, cible_haute_s: aligne })}
+              style={{ fontSize: 11.5, color: C.inkSecondary, padding: '6px 8px' }}
+            >
+              {fr ? `Aligner (${versTexte(aligne)})` : `Wyrównaj (${versTexte(aligne)})`}
             </button>
-            <button type="button" onClick={() => setConfirme(false)}
-              style={{ fontSize: 12, color: C.inkQuiet, padding: '9px 11px' }}>
-              {fr ? 'Annuler' : 'Anuluj'}
-            </button>
-          </>
-        ) : (
-          <button type="button" onClick={() => setConfirme(true)}
-            style={{ fontSize: 12, color: C.inkQuiet, padding: '9px 11px' }}>
+          )}
+          {/* Retirer, c'est retirer la course de son calendrier : elle n'est pas
+              qu'un objectif. On le dit avant de le faire. */}
+          <button
+            type="button"
+            onClick={() => setConfirme((v) => !v)}
+            style={{ fontSize: 11.5, color: confirme ? C.ink : C.inkQuiet, padding: '6px 8px' }}
+          >
             {fr ? 'Retirer' : 'Usuń'}
           </button>
-        )}
-      </div>
-    </div>
+        </td>
+      </tr>
+
+      {(multi || confirme) && (
+        <tr>
+          <td colSpan={6} style={{ padding: '8px 7px 12px', background: C.surfaceAlt, whiteSpace: 'normal' }}>
+            <div style={{ position: 'sticky', left: 7, width: 'min(520px, calc(100vw - 76px))', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {multi && (
+                <PartiesObjectif
+                  objectif={{
+                    date: course.date, nom: course.nom, type_course: course.type_course,
+                    discipline: course.discipline, parties: course.parties,
+                    cible_s: course.cible_s ?? 0, cible_haute_s: course.cible_haute_s,
+                    distance_km: course.distance_km, principal: !!course.principal,
+                  }}
+                  lang={lang}
+                  onChange={(patch) => onChange({
+                    parties: patch.parties ?? course.parties,
+                    cible_s: patch.cible_s ?? course.cible_s,
+                  })}
+                />
+              )}
+              {confirme && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11.5, color: C.inkSecondary }}>
+                    {fr ? `Retirer « ${course.nom} » de ses courses ?` : `Usunąć „${course.nom}” z jego zawodów?`}
+                  </span>
+                  <button type="button" onClick={onRetirer}
+                    style={{ fontSize: 12, color: C.negative, fontWeight: 600, padding: '7px 10px' }}>
+                    {fr ? 'Oui, retirer' : 'Tak, usuń'}
+                  </button>
+                  <button type="button" onClick={() => setConfirme(false)}
+                    style={{ fontSize: 12, color: C.inkQuiet, padding: '7px 10px' }}>
+                    {fr ? 'Annuler' : 'Anuluj'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }
 

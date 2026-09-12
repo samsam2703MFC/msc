@@ -591,6 +591,15 @@ try {
   await page.waitForTimeout(900);
   await ouvrirOnglet(page, 'Aujourd');
   await ouvrirMoi(page, 'Mon plan');
+  /* Les objectifs sont un tableau : une ligne par objectif, une colonne par
+     chose, et les listes déroulantes dans leurs cellules. Empilés en cartes,
+     trois objectifs faisaient défiler un écran entier pour comparer deux
+     dates. */
+  check('les objectifs sont un tableau : un type en liste par ligne',
+    (await page.locator('table').filter({ has: page.locator('select') }).count()) >= 1
+      && (await page.locator('table select').count()) >= 1,
+    `${await page.locator('table select').count()} listes`);
+
   check('et une course retirée ne revient pas',
     (await lignes()) === avantAjout, `${await lignes()} · attendu ${avantAjout}`);
 
