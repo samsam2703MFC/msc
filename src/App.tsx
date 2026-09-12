@@ -15,6 +15,7 @@ import { MiseAJour } from './components/MiseAJour';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { MotDePasseSheet } from './components/MotDePasseSheet';
+import { MotDuCoach } from './components/MotDuCoach';
 import { TypeSheet } from './components/TypeSheet';
 import { MoiScreen } from './screens/AdminScreen';
 import { ChargementScreen, ConnexionScreen, PanneScreen } from './screens/ConnexionScreen';
@@ -192,6 +193,8 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        {/* Le coach, à côté de l'athlète : on le touche, il lit la journée. */}
+        <MotDuCoach app={app} />
         {/* Prénom + nom pour les initiales ; sous la pastille, le surnom seul. */}
         <Avatar
           nom={[db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ')}

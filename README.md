@@ -1865,6 +1865,25 @@ write nothing, because an empty row is not an objective. Free sign-up still
 asks for both paces (pre-filled 5:30 → 5:00): it addresses an athlete
 registering alone, and his profile corrects them.
 
+### Le coach à côté de l'athlète, et sa bulle
+
+The athlete's avatar says who he is; the coach's, next to it in the header,
+says who is talking to him. Touch it and the coach **reads the day**: what
+the morning says about his form, what today's session asks of him, and why
+it sits there in the plan — two to four sentences, because that is what gets
+read standing in a kitchen. On a rest day he says what the rest is worth.
+
+The **tone is the coach chosen for that athlete** (`msc_athlete.coach`, set
+in his profile and in the back office), and the server reads it itself
+rather than taking the screen's word for it — otherwise there would be two
+truths about who is speaking. Nothing new server-side: it is the same
+`/api/coach` route as a question asked from a session sheet, with the
+question written in `MotDuCoach.tsx` and the day's context (the morning
+measure, the session, its paces, its block). The thread `jour:AAAA-MM-JJ`
+files the answer like any other, so the back office reads it with the rest.
+Without an Anthropic key the bubble says so instead of spinning forever, and
+that is the path `check:app` verifies.
+
 ### Les partenaires — un lot à gagner, un code, une boutique
 
 The business the app is meant to carry: a **local sponsor** — the running

@@ -206,6 +206,10 @@ try {
     /* Le 401 sur /api/moi EST le chemin « pas encore connecté », et celui sur
        /api/connexion est le mauvais mot de passe qu'on envoie exprès. */
     if (r.status() === 401 && /\/api\/(moi|connexion)$/.test(r.url())) return;
+    /* Celui sur /api/coach est le chemin sans clé Anthropic : le contrôle
+       tourne sans clé, et ce qu'on vérifie est justement que la bulle le dit
+       au lieu de tourner sans fin. */
+    if (r.status() === 401 && /\/api\/coach(\?|$)/.test(r.url())) return;
     if (r.status() >= 400) erreurs.push(`HTTP ${r.status()} ${r.url()}`);
   });
 
@@ -427,6 +431,22 @@ try {
      cachée derrière un bouton, la carte de proposition apparaît, l'athlète
      corrige, et la mesure rejoint la série. Sans clé Anthropic la lecture
      échoue — c'est le chemin dégradé, et c'est celui qu'il faut voir marcher. */
+  /* Le coach, à côté de l'athlète : on le touche, il lit la journée. Sans clé
+     Anthropic il ne peut pas répondre — et c'est le chemin qu'on vérifie ici :
+     la bulle s'ouvre, le coach est nommé, et l'échec se dit au lieu de rester
+     sur « il regarde ta journée… » pour toujours. */
+  await ouvrirOnglet(page, /Aujourd/);
+  await page.getByRole('button', { name: /Le mot du coach/ }).click();
+  await page.waitForTimeout(2500);
+  const bulle = page.getByRole('dialog', { name: 'Le mot du coach' });
+  const bulleTexte = await bulle.innerText();
+  check('le coach est à côté de l’athlète, et sa bulle s’ouvre sur la journée',
+    (await bulle.count()) === 1 && /tortionnaire|gentil|gros porc/i.test(bulleTexte)
+      && !/Il regarde ta journée…/.test(bulleTexte),
+    bulleTexte.replace(/\n+/g, ' · ').slice(0, 90));
+  await bulle.getByRole('button', { name: 'Fermer' }).click();
+  await page.waitForTimeout(300);
+
   /* Les partenaires, sur Aujourd'hui : l'offre du kiné, son code, et
      « Participer ». Sans boutique, pas de lien vers une boutique. */
   await ouvrirOnglet(page, /Aujourd/);
