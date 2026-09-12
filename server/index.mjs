@@ -34,6 +34,7 @@ import { AuthError, athleteDe, athletesVisibles, connecter, cookieSession, hache
 import { bd, BdError, scellementPret } from './bd.mjs';
 import * as admin from './admin.mjs';
 import { consommerLien, creerLien, LienError } from './lien.mjs';
+import * as sponsors from './sponsors.mjs';
 import * as depots from './depots.mjs';
 import { construireMethode } from './methode.mjs';
 import * as photo from './photo.mjs';
@@ -390,6 +391,23 @@ async function router(req, res, url) {
      périme dans la même requête. La session s'ouvre comme après une
      connexion, et la réponse dit qu'il reste un mot de passe à poser — c'est
      la raison d'être du lien. */
+  /* Les partenaires, vus de l'athlète : les offres en cours et ce qu'il peut
+     en faire, participer, et les deux gestes qui se comptent — une vue, un
+     clic vers la boutique. */
+  if (chemin === '/api/partenaires' && req.method === 'GET') {
+    const { athlete_id } = await athleteDe(req, url, 'lecture');
+    return json(res, 200, await sponsors.pourAthlete(athlete_id));
+  }
+  const participerA = chemin.match(/^\/api\/partenaires\/(\d+)\/participer$/);
+  if (participerA && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    return json(res, 200, await sponsors.participer(athlete_id, Number(participerA[1])));
+  }
+  if (chemin === '/api/partenaires/evenement' && req.method === 'POST') {
+    const { athlete_id } = await athleteDe(req, url, 'ecriture');
+    return json(res, 200, await sponsors.noter(athlete_id, await lireCorps(req, 2_000)));
+  }
+
   if (chemin === '/api/connexion/lien' && req.method === 'POST') {
     const { jeton } = await lireCorps(req, 4_000);
     const compte = await consommerLien(jeton);
@@ -529,6 +547,23 @@ async function router(req, res, url) {
       return json(res, 403, { erreur: 'Réservé à un compte admin.' });
     }
     const appelant = identite.compte.id;
+    /* Les partenaires : sponsors, offres, tirage, et l'analyse. */
+    if (chemin === '/api/admin/partenaires' && req.method === 'GET') {
+      return json(res, 200, await sponsors.partenaires());
+    }
+    if (chemin === '/api/admin/partenaires/sponsor' && req.method === 'POST') {
+      return json(res, 200, { sponsor: await sponsors.ecrireSponsor(await lireCorps(req, 4_000)) });
+    }
+    if (chemin === '/api/admin/partenaires/offre' && req.method === 'POST') {
+      return json(res, 200, { offre: await sponsors.ecrireOffre(await lireCorps(req, 4_000)) });
+    }
+    const tirage = chemin.match(/^\/api\/admin\/partenaires\/offre\/(\d+)\/tirer$/);
+    if (tirage && req.method === 'POST') {
+      return json(res, 200, await sponsors.tirer(Number(tirage[1])));
+    }
+    if (chemin === '/api/admin/partenaires/analyse' && req.method === 'GET') {
+      return json(res, 200, await sponsors.analyse());
+    }
     if (chemin === '/api/admin/comptes' && req.method === 'GET') {
       return json(res, 200, await admin.comptes());
     }
@@ -895,6 +930,7 @@ const server = createServer(async (req, res) => {
     if (e instanceof depots.DepotError) return json(res, e.code, { erreur: e.message });
     if (e instanceof admin.AdminError) return json(res, e.code, { erreur: e.message });
     if (e instanceof LienError) return json(res, e.code, { erreur: e.message });
+    if (e instanceof sponsors.SponsorError) return json(res, e.code, { erreur: e.message });
     if (e instanceof BdError) return json(res, 500, { erreur: e.message });
     if (e instanceof params.ParamError) return json(res, e.statut, { erreur: e.message });
 

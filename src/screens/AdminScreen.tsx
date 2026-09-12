@@ -26,6 +26,7 @@ import { Dupki } from './DupkiScreen';
 import { ProfilScreen } from './ProfilScreen';
 import { CalendrierScreen } from './CalendrierScreen';
 import { ParamScreen } from './ParamScreen';
+import { PartenairesScreen } from './PartenairesScreen';
 import { ComptesScreen } from './ComptesScreen';
 import { SystemeScreen } from './SystemeScreen';
 import { StravaScreen } from './StravaScreen';
@@ -188,8 +189,8 @@ function ChoixType({
    la fiche porte ce qui vaut pour une personne, et elle dit laquelle. */
 
 export const SECTIONS = {
-  fr: { athletes: 'Athlètes', calendrier: 'Calendrier', classement: 'Classement', param: 'Paramètres', comptes: 'Comptes', systeme: 'Système' },
-  pl: { athletes: 'Zawodnicy', calendrier: 'Kalendarz', classement: 'Ranking', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
+  fr: { athletes: 'Athlètes', calendrier: 'Calendrier', classement: 'Classement', partenaires: 'Partenaires', param: 'Paramètres', comptes: 'Comptes', systeme: 'Système' },
+  pl: { athletes: 'Zawodnicy', calendrier: 'Kalendarz', classement: 'Ranking', partenaires: 'Partnerzy', param: 'Ustawienia', comptes: 'Konta', systeme: 'System' },
 } as const;
 
 export type Section = keyof typeof SECTIONS.fr;
@@ -217,7 +218,7 @@ const ONGLET_AIDE: Record<Onglet, Record<Lang, string>> = {
 };
 
 export const ICONES_SECTION: Record<Section, string> = {
-  athletes: 'footprints', calendrier: 'calendar-days', classement: 'zap',
+  athletes: 'footprints', calendrier: 'calendar-days', classement: 'zap', partenaires: 'gift',
   param: 'settings', comptes: 'user', systeme: 'database',
 };
 
@@ -230,7 +231,7 @@ export const ICONES_ONGLET: Record<Onglet, string> = {
    l'application est. Le menu du bureau les affiche ainsi, la barre du
    téléphone à la suite. */
 export const GROUPES: Array<{ code: 'entrainement' | 'application'; titre: Record<Lang, string>; sections: Section[] }> = [
-  { code: 'entrainement', titre: { fr: 'Entraînement', pl: 'Trening' }, sections: ['athletes', 'calendrier', 'classement'] },
+  { code: 'entrainement', titre: { fr: 'Entraînement', pl: 'Trening' }, sections: ['athletes', 'calendrier', 'classement', 'partenaires'] },
   { code: 'application', titre: { fr: 'Application', pl: 'Aplikacja' }, sections: ['param', 'comptes', 'systeme'] },
 ];
 
@@ -241,7 +242,9 @@ export function sectionsDe(role: 'athlete' | 'coach' | 'admin' | undefined): Sec
   if (role !== 'coach' && role !== 'admin') return [];
   return [
     'athletes', 'calendrier', 'classement', 'param',
-    ...(role === 'admin' ? (['comptes', 'systeme'] as Section[]) : []),
+    /* Les partenaires sont l'affaire de l'admin : c'est lui qui vend un lot
+       à un sponsor et qui tire au sort. */
+    ...(role === 'admin' ? (['partenaires', 'comptes', 'systeme'] as Section[]) : []),
   ];
 }
 
@@ -270,6 +273,7 @@ export function SectionAdmin({
     case 'athletes': return <Athletes app={app} vue={vue} onVue={onVue} large={large} />;
     case 'calendrier': return <CalendrierScreen app={app} />;
     case 'classement': return <Dupki app={app} />;
+    case 'partenaires': return <PartenairesScreen app={app} />;
     case 'param': return <ParamScreen app={app} large={large} groupe={vue.groupe} />;
     /* « Relier Strava » / « Écrire son plan » à la fin de l'assistant : ce
        sont des onglets de la fiche du nouvel athlète, pas des sections. */

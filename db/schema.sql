@@ -961,3 +961,60 @@ CREATE TABLE IF NOT EXISTS msc_mutation (
   KEY ix_mutation_athlete (athlete_id, cree_le),
   CONSTRAINT fk_mutation_athlete FOREIGN KEY (athlete_id) REFERENCES msc_athlete (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Les partenaires du club : un sponsor local, ses offres — un lot à gagner,
+-- un code à montrer, la boutique où il envoie s'il en a une — ce que les
+-- athlètes en font (participer, gagner), et ce qui se compte pour lui : les
+-- vues et les clics. Pas d'achat ici : l'achat se fait chez lui, avec son
+-- code, et c'est lui qui le voit passer.
+CREATE TABLE IF NOT EXISTS msc_sponsor (
+  id       INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  nom      VARCHAR(80) NOT NULL,
+  ville    VARCHAR(80) NULL,
+  url      VARCHAR(255) NULL COMMENT 'sa boutique — là où le code envoie ; NULL pour un kiné, dont le code se montre au cabinet',
+  actif    TINYINT(1) NOT NULL DEFAULT 1,
+  cree_le  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS msc_offre (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  sponsor_id  INT UNSIGNED NOT NULL,
+  titre       VARCHAR(120) NOT NULL,
+  lot         VARCHAR(120) NULL COMMENT 'ce qu''on gagne : « 10 gels », « une séance de kiné »',
+  voucher     VARCHAR(40) NULL COMMENT 'le code à montrer',
+  regle_pct   TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'part des séances de la semaine à avoir faites pour participer — 0 : tout le monde',
+  debut       DATE NOT NULL,
+  fin         DATE NOT NULL,
+  tirage_le   DATETIME(3) NULL,
+  gagnant_id  INT UNSIGNED NULL,
+  cree_le     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  KEY ix_offre_sponsor (sponsor_id),
+  CONSTRAINT fk_offre_sponsor FOREIGN KEY (sponsor_id) REFERENCES msc_sponsor (id) ON DELETE CASCADE,
+  CONSTRAINT fk_offre_gagnant FOREIGN KEY (gagnant_id) REFERENCES msc_athlete (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS msc_participation (
+  offre_id   INT UNSIGNED NOT NULL,
+  athlete_id INT UNSIGNED NOT NULL,
+  date       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (offre_id, athlete_id),
+  CONSTRAINT fk_participation_offre FOREIGN KEY (offre_id) REFERENCES msc_offre (id) ON DELETE CASCADE,
+  CONSTRAINT fk_participation_athlete FOREIGN KEY (athlete_id) REFERENCES msc_athlete (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS msc_sponsor_evenement (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  sponsor_id INT UNSIGNED NOT NULL,
+  offre_id   INT UNSIGNED NULL,
+  athlete_id INT UNSIGNED NOT NULL,
+  type       ENUM('vue','clic') NOT NULL COMMENT 'une vue par athlète et par jour ; un clic chaque fois',
+  date       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  KEY ix_evenement_sponsor (sponsor_id, type),
+  KEY ix_evenement_athlete (athlete_id),
+  CONSTRAINT fk_evenement_sponsor FOREIGN KEY (sponsor_id) REFERENCES msc_sponsor (id) ON DELETE CASCADE,
+  CONSTRAINT fk_evenement_offre FOREIGN KEY (offre_id) REFERENCES msc_offre (id) ON DELETE CASCADE,
+  CONSTRAINT fk_evenement_athlete FOREIGN KEY (athlete_id) REFERENCES msc_athlete (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

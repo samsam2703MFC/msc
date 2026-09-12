@@ -604,6 +604,57 @@ export function lienDeConnexion(compteId: number): Promise<{
   return appeler(`/admin/comptes/${compteId}/lien`, { method: 'POST' });
 }
 
+/* ------------------------------------------------------- les partenaires */
+
+export interface Sponsor {
+  id: number; nom: string; ville: string | null; url: string | null; actif: boolean;
+}
+export interface Offre {
+  id: number; sponsor_id: number; titre: string; lot: string | null; voucher: string | null;
+  regle_pct: number; debut: string; fin: string; tirage_le: string | null;
+  gagnant: { id: number; nom: string } | null; participations: number;
+}
+export type SponsorAvecOffres = Sponsor & { offres: Offre[] };
+export interface OffrePourMoi {
+  id: number; sponsor: Sponsor; titre: string; lot: string | null; voucher: string | null;
+  regle_pct: number; debut: string; fin: string;
+  participe: boolean; tire: boolean; gagnant: boolean; eligible: boolean;
+}
+export interface AnalysePartenaires {
+  sponsors: Array<{ id: number; nom: string; ville: string | null; actif: boolean; offres: number; vues: number; participations: number; gagnants: number; clics: number }>;
+  athletes: Array<{ id: number; nom: string; prenom: string | null; participations: number; gagnes: number; clics: number; dernier_clic: string | null }>;
+}
+
+/** Les offres en cours, vues de l'athlète affiché, et sa semaine telle que
+    le plan la compte — c'est elle qui dit s'il peut participer. */
+export function partenaires(): Promise<{ offres: OffrePourMoi[]; semaine: { prevues: number; faites: number; part: number } }> {
+  return appeler('/partenaires');
+}
+export function participer(offreId: number): Promise<{ ok: boolean }> {
+  return appeler(`/partenaires/${offreId}/participer`, { method: 'POST' });
+}
+/** Une vue (une par jour) ou un clic vers la boutique — ce qui se compte. */
+export function noterPartenaire(corps: { sponsor_id: number; offre_id?: number; type: 'vue' | 'clic' }): Promise<{ ok: boolean }> {
+  return appeler('/partenaires/evenement', { method: 'POST', body: JSON.stringify(corps) });
+}
+export function adminPartenaires(): Promise<{ sponsors: SponsorAvecOffres[] }> {
+  return appeler('/admin/partenaires');
+}
+export function ecrireSponsor(corps: { id?: number; nom: string; ville?: string; url?: string; actif?: boolean }): Promise<{ sponsor: Sponsor }> {
+  return appeler('/admin/partenaires/sponsor', { method: 'POST', body: JSON.stringify(corps) });
+}
+export function ecrireOffre(corps: {
+  id?: number; sponsor_id: number; titre: string; lot?: string; voucher?: string; regle_pct?: number; debut?: string; fin: string;
+}): Promise<{ offre: Offre }> {
+  return appeler('/admin/partenaires/offre', { method: 'POST', body: JSON.stringify(corps) });
+}
+export function tirerOffre(offreId: number): Promise<{ offre: Offre; gagnant: { id: number; nom: string; prenom: string | null }; participants: number }> {
+  return appeler(`/admin/partenaires/offre/${offreId}/tirer`, { method: 'POST' });
+}
+export function analysePartenaires(): Promise<AnalysePartenaires> {
+  return appeler('/admin/partenaires/analyse');
+}
+
 /** droit null : retirer l'accès. */
 export function majAcces(corps: {
   compte_id: number; athlete_id: number; droit: AthleteVisible['droit'] | null;

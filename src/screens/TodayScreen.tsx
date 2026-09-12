@@ -13,6 +13,7 @@ import { CoachAvatar } from '../components/CoachAvatar';
 import { Icon } from '../components/Icon';
 import { Limites } from '../components/Limites';
 import { Observations } from '../components/Observations';
+import { Partenaires } from '../components/Partenaires';
 import {
   AccentButton,
   BarChart,
@@ -93,6 +94,9 @@ export function TodayScreen({ app }: { app: App }) {
       </Card>
 
       <Hier app={app} />
+
+      {/* les partenaires du club : un lot à gagner en s'entraînant, un code */}
+      <Partenaires app={app} />
 
       {/* the paces the engine derives for this block */}
       {allures.length > 0 && (

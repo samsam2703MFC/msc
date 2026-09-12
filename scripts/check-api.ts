@@ -55,6 +55,7 @@ function client() {
 /* Deux comptes et deux athlètes : sans un second, « ce qui ne m'appartient pas
    m'est refusé » n'est pas testable, et c'est la seule assertion qui compte
    vraiment dans un contrôle d'accès. */
+await bd().execute("DELETE FROM msc_sponsor WHERE nom LIKE 'Sponsor du contrôle%'");
 await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?, ?, ?, ?)',
   [EMAIL, `autre-${EMAIL}`, `cree-${EMAIL}`, `inscrit-${EMAIL}`, `libre-${EMAIL}`, `libre2-${EMAIL}`]);
 await bd().execute('DELETE FROM msc_athlete WHERE nom IN (?, ?, ?, ?)',
@@ -918,6 +919,65 @@ try {
   check('l’email d’un compte se change, mis en minuscules', renomme.statut === 200 && renomme.corps.compte?.email === `renomme-${EMAIL}`,
     `${renomme.statut} ${renomme.corps.compte?.email ?? renomme.corps.erreur ?? ''}`);
   await c.appel(`/api/admin/comptes/${creeId}`, { method: 'PUT', body: JSON.stringify({ email: `cree-${EMAIL}` }) });
+
+  /* Les partenaires : un sponsor, une offre avec son code, l'athlète qui la
+     voit, participe et clique vers la boutique, le tirage, et l'analyse qui
+     compte tout ça — ce qu'on montre au sponsor. */
+  console.log('\n=== les partenaires ===');
+  const sansNom = await c.appel('/api/admin/partenaires/sponsor', { method: 'POST', body: JSON.stringify({ nom: ' ' }) });
+  check('un sponsor a un nom', sansNom.statut === 400, sansNom.corps.erreur);
+  const sponsor = await c.appel('/api/admin/partenaires/sponsor', {
+    method: 'POST', body: JSON.stringify({ nom: 'Sponsor du contrôle', ville: 'Dupki', url: 'https://boutique.exemple.tld/' }),
+  });
+  check('un sponsor se crée, avec sa boutique', sponsor.statut === 200 && sponsor.corps.sponsor?.url === 'https://boutique.exemple.tld/',
+    `${sponsor.statut} ${sponsor.corps.erreur ?? ''}`);
+  const sponsorId = sponsor.corps.sponsor?.id;
+  const mauvaiseUrl = await c.appel('/api/admin/partenaires/sponsor', { method: 'POST', body: JSON.stringify({ nom: 'Sponsor du contrôle 2', url: 'boutique' }) });
+  check('une adresse de boutique sans http est refusée', mauvaiseUrl.statut === 400, mauvaiseUrl.corps.erreur);
+  const finAvant = await c.appel('/api/admin/partenaires/offre', {
+    method: 'POST', body: JSON.stringify({ sponsor_id: sponsorId, titre: 'Test', debut: '2026-12-31', fin: '2026-01-01' }),
+  });
+  check('une offre qui finit avant de commencer est refusée', finAvant.statut === 400, finAvant.corps.erreur);
+  const offre = await c.appel('/api/admin/partenaires/offre', {
+    method: 'POST',
+    body: JSON.stringify({ sponsor_id: sponsorId, titre: 'Dix gels à gagner', lot: '10 gels', voucher: 'GELS-10', regle_pct: 0, fin: '2099-12-31' }),
+  });
+  check('une offre se crée : un lot, un code, ouverte à tous', offre.statut === 200 && offre.corps.offre?.voucher === 'GELS-10' && offre.corps.offre.regle_pct === 0,
+    `${offre.statut} ${offre.corps.erreur ?? ''}`);
+  const offreId = offre.corps.offre?.id;
+  const vues = await c.appel('/api/partenaires');
+  const laMienne = vues.corps.offres?.find((o: any) => o.id === offreId);
+  check('l’athlète voit l’offre en cours, avec son code et sa boutique, et peut participer',
+    vues.statut === 200 && laMienne?.voucher === 'GELS-10' && laMienne.sponsor?.url === 'https://boutique.exemple.tld/'
+      && laMienne.eligible === true && laMienne.participe === false,
+    JSON.stringify(laMienne ?? vues.corps).slice(0, 120));
+  const vue1 = await c.appel('/api/partenaires/evenement', { method: 'POST', body: JSON.stringify({ sponsor_id: sponsorId, offre_id: offreId, type: 'vue' }) });
+  const vue2 = await c.appel('/api/partenaires/evenement', { method: 'POST', body: JSON.stringify({ sponsor_id: sponsorId, offre_id: offreId, type: 'vue' }) });
+  check('une vue se compte une fois par jour', vue1.statut === 200 && vue2.corps.deja === true, JSON.stringify(vue2.corps));
+  const clic = await c.appel('/api/partenaires/evenement', { method: 'POST', body: JSON.stringify({ sponsor_id: sponsorId, offre_id: offreId, type: 'clic' }) });
+  const clic2 = await c.appel('/api/partenaires/evenement', { method: 'POST', body: JSON.stringify({ sponsor_id: sponsorId, offre_id: offreId, type: 'clic' }) });
+  check('un clic vers la boutique se compte à chaque fois', clic.statut === 200 && clic2.statut === 200 && !clic2.corps.deja);
+  const tirageVide = await c.appel(`/api/admin/partenaires/offre/${offreId}/tirer`, { method: 'POST' });
+  check('sans participant, rien à tirer', tirageVide.statut === 400, tirageVide.corps.erreur);
+  const participe = await c.appel(`/api/partenaires/${offreId}/participer`, { method: 'POST' });
+  const revu = await c.appel('/api/partenaires');
+  check('participer, une fois', participe.statut === 200 && revu.corps.offres?.find((o: any) => o.id === offreId)?.participe === true);
+  const tirage = await c.appel(`/api/admin/partenaires/offre/${offreId}/tirer`, { method: 'POST' });
+  check('le tirage désigne un participant', tirage.statut === 200 && tirage.corps.gagnant?.id === 1 && tirage.corps.participants === 1,
+    JSON.stringify(tirage.corps).slice(0, 100));
+  const retirage = await c.appel(`/api/admin/partenaires/offre/${offreId}/tirer`, { method: 'POST' });
+  check('… et pas deux fois', retirage.statut === 409, retirage.corps.erreur);
+  const gagne = await c.appel('/api/partenaires');
+  check('le gagnant le voit', gagne.corps.offres?.find((o: any) => o.id === offreId)?.gagnant === true);
+  const analyse = await c.appel('/api/admin/partenaires/analyse');
+  const ligneSponsor = analyse.corps.sponsors?.find((x: any) => x.id === sponsorId);
+  const ligneAthlete = analyse.corps.athletes?.find((x: any) => x.id === 1);
+  check('l’analyse compte tout : vues, participations, gagnants, clics — par sponsor et par athlète',
+    analyse.statut === 200 && ligneSponsor?.vues === 1 && ligneSponsor.participations === 1 && ligneSponsor.gagnants === 1 && ligneSponsor.clics === 2
+      && ligneAthlete?.clics === 2 && ligneAthlete.gagnes === 1 && ligneAthlete.participations === 1,
+    JSON.stringify({ sponsor: ligneSponsor, athlete: ligneAthlete }).slice(0, 160));
+  const refusAthlete = await c3.appel('/api/admin/partenaires');
+  check('les partenaires du back office sont refusés à un athlète', refusAthlete.statut === 403, String(refusAthlete.statut));
   const horsPlage = await c.appel('/api/admin/athletes', {
     method: 'POST', body: JSON.stringify({ nom: 'Athlète créé du contrôle', actuelle: '1:30', cible: '1:20' }),
   });
@@ -1149,6 +1209,7 @@ try {
   }
 } finally {
   serveur.kill('SIGTERM');
+  await bd().execute("DELETE FROM msc_sponsor WHERE nom LIKE 'Sponsor du contrôle%'");
   await bd().execute('DELETE FROM msc_journal WHERE date IN (?, ?)', ['2026-10-20', '2026-10-21']);
   await bd().execute('DELETE FROM msc_journal WHERE athlete_id = 1 AND session_id = ?',
     [msc_session.find((s) => s.type !== 'repos')!.id]);

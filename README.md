@@ -1865,6 +1865,37 @@ write nothing, because an empty row is not an objective. Free sign-up still
 asks for both paces (pre-filled 5:30 → 5:00): it addresses an athlete
 registering alone, and his profile corrects them.
 
+### Les partenaires — un lot à gagner, un code, une boutique
+
+The business the app is meant to carry: a **local sponsor** — the running
+shop, the bike shop, the physio — puts a lot in play (ten gels, a physio
+session); athletes **participate by training** — an offer may require a
+share of the week's sessions done, and it is the plan that says so, the same
+faites/prévues count as the coach's overview, not a checkbox; the admin
+**draws** a winner from the back office; and everyone sees the **voucher** —
+a code, and the link to the shop when the sponsor has one. A physio has no
+shop: the card shows the code with « montre ce code chez lui » and offers no
+link that does not exist. Nothing is bought inside the app: the purchase
+happens at the sponsor's, with the code, and it is the sponsor who sees it
+come through.
+
+What gets counted, because it is what a sponsor is sold: **views** (one per
+athlete per offer per day), **participations**, **winners**, and **clicks**
+to the shop (every one — someone who comes back is someone who comes back).
+`server/sponsors.mjs`; tables `msc_sponsor`, `msc_offre`,
+`msc_participation`, `msc_sponsor_evenement`. The athlete's routes:
+`/api/partenaires` (the offers in progress, what he can do with each, and
+his week as the plan counts it), `POST …/:offre/participer`, `POST
+…/evenement` (`vue` | `clic`). The admin's, under `/api/admin/partenaires`:
+sponsors, offers, `…/offre/:id/tirer`, and `…/analyse` — two tables, per
+sponsor (offers, views, participations, winners, clicks) and per athlete
+(participations, lots won, clicks, the last one). The card sits on
+**Aujourd'hui** under the day's session; the **Partenaires** section of the
+back office is the admin's. `check:api` runs the whole cycle — create, see,
+view once a day, click twice, participate, draw once and not twice, the
+winner sees it, the analysis adds up — and `check:app` participates from the
+phone and reads the section.
+
 ### D'où vient chacun, et ce qu'il fait
 
 Two more columns an admin running a club reads before anything else: **D'où**

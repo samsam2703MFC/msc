@@ -20,6 +20,19 @@ const URL = `http://127.0.0.1:${PORT}`;
 const EMAIL = 'navigateur@mysmartcoach.local';
 const MOT_DE_PASSE = 'un-mot-de-passe-de-controle';
 
+/* Un partenaire en cours, pour que la carte ait quelque chose à montrer : un
+   kiné — pas de boutique, un code à montrer au cabinet. */
+/* On part d'une table de partenaires vide — le seed n'en pose aucun, et un
+   autre contrôle a pu y laisser un sponsor avec boutique : « pas de boutique
+   pour un kiné » se lit sur toute la carte. */
+await bd().execute('DELETE FROM msc_sponsor');
+const [kine] = await bd().execute("INSERT INTO msc_sponsor (nom, ville, url) VALUES ('Kiné du navigateur', 'Dupki', NULL)");
+await bd().execute(
+  `INSERT INTO msc_offre (sponsor_id, titre, lot, voucher, regle_pct, debut, fin)
+   VALUES (?, 'Une séance offerte', 'une séance de kiné', 'FIZJO-1', 0, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY))`,
+  [kine.insertId],
+);
+
 let fails = 0;
 const check = (nom, ok, detail = '') => {
   if (!ok) fails++;
@@ -414,6 +427,22 @@ try {
      cachée derrière un bouton, la carte de proposition apparaît, l'athlète
      corrige, et la mesure rejoint la série. Sans clé Anthropic la lecture
      échoue — c'est le chemin dégradé, et c'est celui qu'il faut voir marcher. */
+  /* Les partenaires, sur Aujourd'hui : l'offre du kiné, son code, et
+     « Participer ». Sans boutique, pas de lien vers une boutique. */
+  await ouvrirOnglet(page, /Aujourd/);
+  await page.waitForTimeout(900);
+  const auj = await page.locator('body').innerText();
+  check('Aujourd’hui porte les partenaires : l’offre, le lot, le code — et pas de boutique pour un kiné',
+    /PARTENAIRES/.test(auj) && /Kiné du navigateur/.test(auj) && /FIZJO-1/.test(auj)
+      && /Montre ce code/.test(auj) && !/Voir la boutique/.test(auj)
+      && (await page.getByRole('button', { name: /^Participer$/ }).count()) === 1,
+    auj.split('\n').find((l) => /FIZJO/.test(l)) ?? '');
+  await page.getByRole('button', { name: /^Participer$/ }).click();
+  await page.waitForTimeout(900);
+  check('… et participer se note', /Tu participes/.test(await page.locator('body').innerText()));
+  /* La photo se dépose depuis l'écran Coach : on y revient avant de continuer. */
+  await ouvrirOnglet(page, 'Coach');
+
   console.log('\n=== la photo ===');
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=',
@@ -807,6 +836,13 @@ try {
     profilTexte.split('\n').find((l) => /non connecté|connecté|non configuré/i.test(l)) ?? '');
   /* Paramètres, sur le bureau : un groupe à la fois, choisi dans le rail — sept
      cartes en colonnes ne se lisaient pas. « Paramètres » ouvre le premier. */
+  /* Les partenaires du back office : les sponsors, leurs offres, l'analyse. */
+  await ouvrirSection(page, 'Partenaires');
+  const partTexte = await page.locator('body').innerText();
+  check('Partenaires liste les sponsors, leurs offres, et l’analyse par sponsor et par athlète',
+    /Kiné du navigateur/.test(partTexte) && /Nouveau sponsor/.test(partTexte) && /Par sponsor/.test(partTexte) && /Par athlète/.test(partTexte),
+    partTexte.split('\n').find((l) => /Kiné/.test(l)) ?? '');
+
   await ouvrirSection(page, 'Paramètres');
   const moteurTexte = await page.locator('body').innerText();
   check('Paramètres s’ouvre sur un groupe seul, pleine largeur, et le rail liste les autres',
@@ -1062,6 +1098,7 @@ try {
   if (nav) await nav.close();
   serveur.kill('SIGTERM');
   await bd().execute("DELETE FROM msc_competition WHERE nom LIKE '%de contrôle'");
+  await bd().execute("DELETE FROM msc_sponsor WHERE nom LIKE '%du navigateur'");
   await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `libre-${EMAIL}`]);
   await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Libre du navigateur']);
   await fermer();
