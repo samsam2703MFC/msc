@@ -799,13 +799,25 @@ try {
   check('Profil vérifie la connexion Strava d’un bouton',
     /Connexion Strava/i.test(profilTexte) && /non connecté|connecté|non configuré/i.test(profilTexte),
     profilTexte.split('\n').find((l) => /non connecté|connecté|non configuré/i.test(l)) ?? '');
+  /* Paramètres, sur le bureau : un groupe à la fois, choisi dans le rail — sept
+     cartes en colonnes ne se lisaient pas. « Paramètres » ouvre le premier. */
   await ouvrirSection(page, 'Paramètres');
-  const reglagesTexte = await page.locator('body').innerText();
+  const moteurTexte = await page.locator('body').innerText();
+  check('Paramètres s’ouvre sur un groupe seul, pleine largeur, et le rail liste les autres',
+    /Paramètres · Moteur/.test(moteurTexte) && /Dérive tolérée/i.test(moteurTexte) && !/Clé API Anthropic/i.test(moteurTexte)
+      && (await page.getByRole('navigation', { name: 'Back office' }).getByRole('button', { name: 'Niveaux', exact: true }).count()) === 1,
+    moteurTexte.split('\n').find((l) => /Paramètres · /.test(l)) ?? '');
+  await ouvrirSection(page, 'Coach');
+  const coachTexte = await page.locator('body').innerText();
+  await ouvrirSection(page, 'Application Strava');
+  const stravaParams = await page.locator('body').innerText();
   check('les paramètres de l’application sont réunis dans Paramètres : clé Anthropic, application Strava commune',
-    /Clé API Anthropic/i.test(reglagesTexte) && /Strava · Client ID/i.test(reglagesTexte));
+    /Clé API Anthropic/i.test(coachTexte) && /Strava · Client ID/i.test(stravaParams));
   /* Les six paliers y sont en entier — la tête, le nom, le seuil — à côté des
      réglages qui les déplacent : régler « palier 4 » sans voir ce qu'est le
      palier 4, c'est régler à l'aveugle. */
+  await ouvrirSection(page, 'Niveaux');
+  const reglagesTexte = await page.locator('body').innerText();
   check('et les six paliers y sont, avec leur tête et le niveau qu’ils demandent',
     /Les six paliers/i.test(reglagesTexte) && /Terrien/.test(reglagesTexte)
       && /Ultra/.test(reglagesTexte) && /à partir de \d+\/100/.test(reglagesTexte),
@@ -845,8 +857,11 @@ try {
       && /Athlètes/.test(menuTexte) && /Calendrier/.test(menuTexte) && /Classement/.test(menuTexte)
       && /Paramètres/.test(menuTexte) && /Comptes/.test(menuTexte) && /Système/.test(menuTexte),
     menuTexte.replace(/\n+/g, ' · ').slice(0, 200));
+  /* « Application Strava » — le réglage commun — est bien dans le rail ; le
+     Strava d'un athlète, l'onglet nommé « Strava » tout court, n'y est pas. */
   check('et rien qui dépende d’un athlète choisi ailleurs',
-    !/Suivi/.test(menuTexte) && !/Starts/.test(menuTexte) && !/Strava/.test(menuTexte),
+    !/Suivi/.test(menuTexte) && !/Starts/.test(menuTexte)
+      && (await menu.getByRole('button', { name: 'Strava', exact: true }).count()) === 0,
     menuTexte.replace(/\n+/g, ' · ').slice(0, 120));
   /* Le back office est au coach, et à lui seul : mon entraînement n'y est
      pas, pas même derrière une bascule. Il est sur mon téléphone. */

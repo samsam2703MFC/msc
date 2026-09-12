@@ -255,6 +255,8 @@ export function titreSection(section: Section, lang: Lang): string {
 export interface Vue {
   section: Section;
   onglet?: Onglet;
+  /** Pour « Paramètres » sur le bureau : le groupe de réglages ouvert. */
+  groupe?: string;
 }
 
 /** `large` : le bureau, qui a de la largeur — les sections s'y posent en
@@ -268,7 +270,7 @@ export function SectionAdmin({
     case 'athletes': return <Athletes app={app} vue={vue} onVue={onVue} large={large} />;
     case 'calendrier': return <CalendrierScreen app={app} />;
     case 'classement': return <Dupki app={app} />;
-    case 'param': return <ParamScreen app={app} large={large} />;
+    case 'param': return <ParamScreen app={app} large={large} groupe={vue.groupe} />;
     /* « Relier Strava » / « Écrire son plan » à la fin de l'assistant : ce
        sont des onglets de la fiche du nouvel athlète, pas des sections. */
     case 'comptes': return <ComptesScreen app={app} onSection={(o: Onglet) => onVue({ section: 'athletes', onglet: o })} large={large} />;

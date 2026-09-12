@@ -1671,6 +1671,14 @@ redeploy. The catalogue — keys, types, defaults, labels — is
 `server/params.mjs`; `db:migrate` lays it into the table and the table only
 carries the value chosen.
 
+On the desktop the rail lists the groups under **Paramètres** — Moteur,
+Forme, Coach, Niveaux, Application Strava, Enchaînements, Sécurité — and the
+page shows **one group at a time, full width**, its settings in columns:
+seven cards side by side did not read. The phone still stacks them all. The
+shared Strava application is named « Application Strava » there and not
+« Strava », because a bare Strava in the rail, next to the club's sections,
+would read as an athlete's — his is in his file.
+
 Three sources, in this order: the value in the table if set, the environment
 variable when the parameter has one, then the code's default. **The table wins
 over `.env`, on purpose** — what the screen shows is what applies. Each row

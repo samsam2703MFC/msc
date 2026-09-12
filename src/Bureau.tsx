@@ -12,7 +12,7 @@
    Rien ici ne décide de quoi que ce soit : les sections, les rôles, les
    données sont ceux de l'application ; ce fichier ne fait que les disposer. */
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { ReactNode } from 'react';
 import * as db from './data/db';
 import { C, F, R } from './design/theme';
@@ -22,6 +22,7 @@ import { MiseAJour } from './components/MiseAJour';
 import { ProfilSheet } from './components/ProfilSheet';
 import { SettingsSheet } from './components/SettingsSheet';
 import { GROUPES, ICONES_SECTION, SectionAdmin, sectionsDe, titreSection } from './screens/AdminScreen';
+import { GROUPES_PARAM } from './screens/ParamScreen';
 import type { Vue } from './screens/AdminScreen';
 import type { App } from './state/useApp';
 
@@ -31,9 +32,11 @@ const T = {
 } as const;
 
 function Entree({
-  icon, label, actif, onClick,
+  icon, label, actif, onClick, sous = false,
 }: {
   icon: string; label: string; actif: boolean; onClick: () => void;
+  /** Un sous-menu : en retrait, plus discret — un groupe de Paramètres. */
+  sous?: boolean;
 }) {
   return (
     <button
@@ -43,12 +46,13 @@ function Entree({
       className={actif ? undefined : 'msc-hover-surface'}
       style={{
         display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-        padding: '8px 12px', borderRadius: R.md, fontSize: 13, fontWeight: 600,
+        padding: sous ? '6px 12px 6px 36px' : '8px 12px', borderRadius: R.md,
+        fontSize: sous ? 12.5 : 13, fontWeight: 600,
         background: actif ? C.accentSoft : 'transparent',
-        color: actif ? C.accentDeep : C.inkMuted,
+        color: actif ? C.accentDeep : sous ? C.inkSecondary : C.inkMuted,
       }}
     >
-      <Icon name={icon} size={17} />
+      <Icon name={icon} size={sous ? 14 : 17} />
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
     </button>
   );
@@ -75,9 +79,14 @@ export function Bureau({ app }: { app: App }) {
   /* La fiche d'un athlète porte son nom en titre : c'est de lui qu'il s'agit,
      et le menu, lui, ne parle que du club et de l'application. */
   const fiche = vue.section === 'athletes' && vue.onglet;
+  const groupeParam = vue.section === 'param' && vue.groupe
+    ? GROUPES_PARAM.find((g) => g.code === vue.groupe)
+    : null;
   const titre = fiche
     ? [db.athlete.prenom, db.athlete.nom].filter(Boolean).join(' ') || db.athlete.nom
-    : titreSection(vue.section, lang);
+    : groupeParam
+      ? `${titreSection(vue.section, lang)} · ${groupeParam.nom[lang]}`
+      : titreSection(vue.section, lang);
 
   return (
     <div
@@ -114,13 +123,26 @@ export function Bureau({ app }: { app: App }) {
           return (
             <Groupe key={g.code} titre={g.titre[lang]}>
               {siennes.map((x) => (
-                <Entree
-                  key={x}
-                  icon={ICONES_SECTION[x]}
-                  label={titreSection(x, lang)}
-                  actif={vue.section === x}
-                  onClick={() => setVue({ section: x })}
-                />
+                <Fragment key={x}>
+                  <Entree
+                    icon={ICONES_SECTION[x]}
+                    label={titreSection(x, lang)}
+                    actif={vue.section === x && (x !== 'param' || !vue.groupe)}
+                    onClick={() => setVue(x === 'param' ? { section: x, groupe: GROUPES_PARAM[0].code } : { section: x })}
+                  />
+                  {/* Les réglages, un groupe à la fois : sept cartes en
+                      colonnes ne se lisaient pas. */}
+                  {x === 'param' && GROUPES_PARAM.map((g) => (
+                    <Entree
+                      key={g.code}
+                      sous
+                      icon={g.icon}
+                      label={g.nom[lang]}
+                      actif={vue.section === 'param' && vue.groupe === g.code}
+                      onClick={() => setVue({ section: 'param', groupe: g.code })}
+                    />
+                  ))}
+                </Fragment>
               ))}
             </Groupe>
           );

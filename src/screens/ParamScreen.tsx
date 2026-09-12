@@ -14,12 +14,18 @@ import { Icon } from '../components/Icon';
 import { AvatarNiveau } from '../components/AvatarNiveau';
 import type { App } from '../state/useApp';
 
-const GROUPES: Array<{ code: string; icon: string; nom: Record<Lang, string> }> = [
+/* Les groupes de réglages. Le bureau les pose en sous-menus sous
+   « Paramètres » : un groupe à la fois, pleine largeur — sept cartes en
+   colonnes, c'était illisible. Le téléphone, lui, les empile tous. */
+export const GROUPES_PARAM: Array<{ code: string; icon: string; nom: Record<Lang, string> }> = [
   { code: 'moteur', icon: 'gauge', nom: { fr: 'Moteur', pl: 'Silnik' } },
   { code: 'forme', icon: 'heart-pulse', nom: { fr: 'Forme', pl: 'Forma' } },
   { code: 'coach', icon: 'bot', nom: { fr: 'Coach', pl: 'Trener' } },
   { code: 'niveau', icon: 'zap', nom: { fr: 'Niveaux', pl: 'Poziomy' } },
-  { code: 'strava', icon: 'link', nom: { fr: 'Strava', pl: 'Strava' } },
+  /* « Application Strava », pas « Strava » : dans le rail, à côté des sections
+     du club, un « Strava » nu se lirait comme celui d'un athlète — le sien est
+     dans sa fiche. Ici c'est l'application commune, client ID et secret. */
+  { code: 'strava', icon: 'link', nom: { fr: 'Application Strava', pl: 'Aplikacja Strava' } },
   { code: 'multi', icon: 'repeat', nom: { fr: 'Enchaînements', pl: 'Wieloboje' } },
   { code: 'securite', icon: 'user', nom: { fr: 'Sécurité', pl: 'Bezpieczeństwo' } },
 ];
@@ -196,7 +202,11 @@ function Paliers({ paliers, lang, t }: {
   );
 }
 
-export function ParamScreen({ app, large = false }: { app: App; large?: boolean }) {
+export function ParamScreen({ app, large = false, groupe }: {
+  app: App; large?: boolean;
+  /** Un seul groupe, pleine largeur — le bureau. Sans lui, tous, empilés. */
+  groupe?: string;
+}) {
   const t = T[app.lang];
   const [params, setParams] = useState<MscParam[] | null>(null);
   const [paliers, setPaliers] = useState<Classement['paliers']>([]);
@@ -235,18 +245,18 @@ export function ParamScreen({ app, large = false }: { app: App; large?: boolean 
   }
   if (params === null) return <div style={{ color: C.inkSecondary, fontSize: 13 }}>{t.chargement}</div>;
 
+  const groupes = groupe ? GROUPES_PARAM.filter((g) => g.code === groupe) : GROUPES_PARAM;
+
   return (
-    /* Sur le bureau, les groupes se posent en colonnes ; le téléphone empile. */
-    <div style={large
-      ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 12, alignItems: 'start' }
-      : { display: 'flex', flexDirection: 'column', gap: 12 }}
-    >
-      <div style={{ fontSize: 12.5, color: C.inkSecondary, lineHeight: 1.5, gridColumn: '1 / -1' }}>{t.intro}</div>
-      {GROUPES.map((g) => {
+    /* Un groupe seul prend toute la largeur, ses réglages en colonnes ; tous
+       les groupes (le téléphone) s'empilent. */
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ fontSize: 12.5, color: C.inkSecondary, lineHeight: 1.5 }}>{t.intro}</div>
+      {groupes.map((g) => {
         const lignes = params.filter((p) => p.groupe === g.code).sort((a, b) => a.ordre - b.ordre);
         if (lignes.length === 0) return null;
         return (
-          <div key={g.code} style={{ borderRadius: R.card, border: `1px solid ${C.border}`, background: C.surface, padding: '12px 14px', boxShadow: C.shadowCard }}>
+          <div key={g.code} style={{ borderRadius: R.card, border: `1px solid ${C.border}`, background: C.surface, padding: '12px 18px', boxShadow: C.shadowCard }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <Icon name={g.icon} size={16} color={C.teal} />
               <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.teal }}>
@@ -254,7 +264,12 @@ export function ParamScreen({ app, large = false }: { app: App; large?: boolean 
               </div>
             </div>
             {g.code === 'niveau' && <Paliers paliers={paliers} lang={app.lang} t={t} />}
-            {lignes.map((p) => <Reglage key={p.cle} p={p} lang={app.lang} onSave={enregistrer} />)}
+            <div style={large && groupe
+              ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', columnGap: 32, alignItems: 'start' }
+              : undefined}
+            >
+              {lignes.map((p) => <Reglage key={p.cle} p={p} lang={app.lang} onSave={enregistrer} />)}
+            </div>
           </div>
         );
       })}
