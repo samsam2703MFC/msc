@@ -350,10 +350,14 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
      login à lui. Un compte d'admin qui voit tout le monde n'est pas « son »
      compte, et le désactiver couperait tout le club. */
   const compteDe = (athleteId: number): CompteAdmin | null => {
-    const vus = listes?.comptes.filter((c) => c.athletes.some((a) => a.id === athleteId)) ?? [];
-    return vus.find((c) => c.athletes.length === 1 && c.athletes[0].droit === 'ecriture')
-      ?? vus.find((c) => c.role === 'athlete')
-      ?? null;
+    /* Un compte n'est le sien que s'il ne voit que lui. Un compte qui en voit
+       plusieurs — l'admin, un coach — n'est celui de personne : le prendre
+       pour son login affichait la même adresse sur toute la liste, et le
+       « Désactiver » de sa ligne aurait coupé tout le club. */
+    const siens = listes?.comptes.filter(
+      (c) => c.athletes.length === 1 && c.athletes[0].id === athleteId,
+    ) ?? [];
+    return siens.find((c) => c.athletes[0].droit === 'ecriture') ?? siens[0] ?? null;
   };
 
   const [message, setMessage] = useState<string | null>(null);

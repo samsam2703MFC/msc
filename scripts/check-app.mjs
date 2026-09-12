@@ -751,6 +751,10 @@ try {
     hubTexte.split('\n').find((l) => /ATHLÈTES · /i.test(l)) ?? '');
   /* Son compte, sur sa ligne : l'adresse, et de quoi lui envoyer un lien, le
      désactiver ou le supprimer sans ouvrir sa fiche pour le savoir. */
+  /* Le compte affiché est celui qui ne voit que lui. Le compte du navigateur
+     voit l'athlète semé ET celui de l'assistant : il n'est donc celui de
+     personne, et la colonne dit « sans login » plutôt que de coller la même
+     adresse sur toute la liste. */
   check('et, pour l’admin, le compte de chacun : son adresse, un lien, désactiver, supprimer',
     /COMPTE/.test(hubTexte) && hubTexte.includes(EMAIL)
       && (await page.getByRole('button', { name: /^Lien$/ }).count()) > 0
