@@ -372,7 +372,7 @@ async function router(req, res, url) {
       athlete: { nom, prenom: prenom || null, actuelle: corps.actuelle, cible: corps.cible, debut: corps.debut },
       compte: { email: corps.email, nom: [prenom, nom].filter(Boolean).join(' '), role: 'athlete', mot_de_passe: corps.mot_de_passe },
       droit: 'ecriture',
-    });
+    }, 'inscription');
     noterInscription(adresse);
     const compte = await connecter(corps.email, corps.mot_de_passe);
     res.setHeader('set-cookie', cookieSession(ouvrirSession(compte.id)));

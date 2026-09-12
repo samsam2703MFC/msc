@@ -727,6 +727,12 @@ try {
       && (await page.getByRole('button', { name: /^Lien$/ }).count()) > 0
       && (await page.getByRole('button', { name: /^Désactiver$/ }).count()) > 0
       && (await page.getByRole('button', { name: /^Supprimer…$/ }).count()) > 0);
+  /* D'où vient chacun, et ce qu'il fait : l'athlète semé est « démo », et ses
+     sports sont ceux de sa semaine type — ou de son plan tant qu'il n'en a pas. */
+  check('et d’où vient chacun, depuis quand, et ses sports',
+    /D’OÙ/.test(hubTexte) && /SPORTS/.test(hubTexte) && /démo · \d+ /.test(hubTexte)
+      && /Course à pied|Natation|Vélo|Hyrox/.test(hubTexte),
+    hubTexte.split('\n').find((l) => /démo · /.test(l))?.slice(0, 80) ?? '');
   await page.getByRole('button', { name: /^Lien$/ }).first().click();
   await page.waitForTimeout(700);
   const apresLien = await page.locator('body').innerText();

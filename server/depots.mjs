@@ -609,6 +609,20 @@ async function apercuDe({ id, droit }) {
   ]);
   if (!a) throw new Error(`athlète ${id} inconnu`);
   const { mesure, base, reglages } = matin;
+  /* Ses sports : ceux de sa semaine type — c'est elle qui dit ce qu'il fait —
+     et, tant qu'il n'en a pas, ceux des séances de son plan actif. */
+  const sports = (await lignes(
+    `SELECT DISTINCT discipline FROM msc_structure WHERE athlete_id = :a AND discipline <> 'Repos'
+     ORDER BY discipline`,
+    { a: id },
+  )).map((r) => r.discipline);
+  const sportsDuPlan = sports.length === 0 && plan
+    ? (await lignes(
+        `SELECT DISTINCT discipline FROM msc_session WHERE plan_id = :p AND discipline <> 'Repos'
+         ORDER BY discipline`,
+        { p: plan.id },
+      )).map((r) => r.discipline)
+    : [];
   /* Ce qui a bloqué sur cette dernière séance : la ligne que le coach lit
      avant le chiffre. */
   const limitesRpe = rpe
@@ -713,6 +727,10 @@ async function apercuDe({ id, droit }) {
     annee_naissance: a.annee_naissance ?? null,
     ref_actuelle_s: a.ref_actuelle_s,
     ref_cible_s: a.ref_cible_s,
+    /* D'où il vient, et depuis quand : ce qu'un admin de club lit en premier. */
+    origine: a.origine ?? null,
+    depuis: a.cree_le ? new Date(a.cree_le).toISOString().slice(0, 10) : null,
+    sports: sports.length ? sports : sportsDuPlan,
     plan: plan ? { nom: plan.nom, debut: plan.debut, fin: plan.fin } : null,
     semaine,
     total,

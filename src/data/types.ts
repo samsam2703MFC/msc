@@ -770,6 +770,13 @@ export interface ApercuAthlete {
   annee_naissance: number | null;
   ref_actuelle_s: number;
   ref_cible_s: number;
+  /** D'où il vient : inscrit lui-même, encodé par l'admin, semé — ou d'avant
+      que ça se note. */
+  origine: 'inscription' | 'admin' | 'demo' | null;
+  /** Le jour où il est entré (ISO). */
+  depuis: string | null;
+  /** Ses sports, ceux de sa semaine type — ou de son plan tant qu'il n'en a pas. */
+  sports: string[];
   plan: { nom: string; debut: string; fin: string } | null;
   semaine: number;
   total: number;

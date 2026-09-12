@@ -154,8 +154,8 @@ async function athlete(cnx: Cnx): Promise<number> {
   const [r] = (await cnx.query(
     `INSERT INTO msc_athlete (compte_id, nom, annee_naissance, ref_actuelle_s, ref_cible_s,
        fc_repos, fc_repos_moy7, fc_moy_reference, derive_reference_pct, plancher_heures,
-       plancher_km_sortie, debut, note_fr, note_pl)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       plancher_km_sortie, debut, note_fr, note_pl, origine)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'demo')`,
     [compteId, ATHLETE.nom, ATHLETE.annee_naissance ?? null,
      ATHLETE.ref_actuelle_s, ATHLETE.ref_cible_s, ATHLETE.fc_repos,
      ATHLETE.fc_repos_moy7, ATHLETE.fc_moy_reference, ATHLETE.derive_reference_pct,

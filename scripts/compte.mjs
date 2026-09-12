@@ -136,8 +136,8 @@ try {
        coach, sans login à lui ». `debut` par défaut à aujourd'hui. */
     const debut = new Date().toISOString().slice(0, 10);
     const [r] = await bd().execute(
-      `INSERT INTO msc_athlete (compte_id, nom, ref_actuelle_s, ref_cible_s, debut)
-       VALUES (NULL, ?, ?, ?, ?)`,
+      `INSERT INTO msc_athlete (compte_id, nom, ref_actuelle_s, ref_cible_s, debut, origine)
+       VALUES (NULL, ?, ?, ?, ?, 'admin')`,
       [nom, a, c, debut],
     );
     const id = r.insertId;

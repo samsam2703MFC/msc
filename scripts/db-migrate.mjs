@@ -73,6 +73,9 @@ try {
     ['msc_athlete', 'annee_naissance', "ADD COLUMN annee_naissance SMALLINT UNSIGNED NULL AFTER prenom"],
     ['msc_athlete', 'surnom', "ADD COLUMN surnom VARCHAR(40) NULL AFTER annee_naissance"],
     ['msc_athlete', 'coach', "ADD COLUMN coach VARCHAR(16) NOT NULL DEFAULT 'gentil' AFTER surnom"],
+    /* D'où vient un athlète — inscrit lui-même, encodé par l'admin, semé —
+       ce que l'admin d'un club regarde en premier dans sa liste. */
+    ['msc_athlete', 'origine', "ADD COLUMN origine VARCHAR(16) NULL AFTER coach"],
     ['msc_mesure', 'hrv_ms', "ADD COLUMN hrv_ms SMALLINT UNSIGNED NULL AFTER fc_repos"],
     /* Le coach qui parlait, sur chaque réponse et chaque analyse : le back
        office montre le ton avec le texte. */

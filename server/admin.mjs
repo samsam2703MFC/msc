@@ -257,7 +257,13 @@ function objectifsPropres(x, sports) {
     }));
 }
 
-export async function creerAthlete(corps) {
+/* D'où vient un athlète. « inscription » : il a créé son compte lui-même ;
+   « admin » : le back office ou la ligne de commande ; « demo » : semé. Les
+   routes le disent, le corps de la requête ne peut pas le choisir. */
+const ORIGINES = ['inscription', 'admin', 'demo'];
+const originePropre = (x) => (ORIGINES.includes(x) ? x : 'admin');
+
+export async function creerAthlete(corps, origine = 'admin') {
   const nom = nomPropre(corps.nom);
   const prenom = corps.prenom ? String(corps.prenom).trim().slice(0, 80) : null;
   const sports = sportsPropres(corps.sports);
@@ -269,9 +275,9 @@ export async function creerAthlete(corps) {
   /* compte_id NULL : un athlète existe par lui-même, un login se rattache
      après (msc_acces). */
   const [r] = await bd().execute(
-    `INSERT INTO msc_athlete (compte_id, nom, prenom, ref_actuelle_s, ref_cible_s, debut)
-     VALUES (NULL, ?, ?, ?, ?, ?)`,
-    [nom, prenom, actuelle, cible, debut],
+    `INSERT INTO msc_athlete (compte_id, nom, prenom, ref_actuelle_s, ref_cible_s, debut, origine)
+     VALUES (NULL, ?, ?, ?, ?, ?, ?)`,
+    [nom, prenom, actuelle, cible, debut, originePropre(origine)],
   );
   const id = r.insertId;
   for (const o of objectifs) await ecrireObjectifSport(id, o);
@@ -410,7 +416,7 @@ async function unAthlete(id) {
  *     droit, compte_id (un compte existant pour l'athlète),
  *     athlete_id (un athlète existant pour le compte) }
  */
-export async function inscrire(corps = {}) {
+export async function inscrire(corps = {}, origine = 'admin') {
   const avecAthlete = Boolean(corps.athlete && typeof corps.athlete === 'object');
   const avecCompte = Boolean(corps.compte && typeof corps.compte === 'object');
   if (!avecAthlete && !avecCompte) throw new AdminError('Rien à créer : ni athlète, ni compte.');
@@ -465,9 +471,10 @@ export async function inscrire(corps = {}) {
       }
       if (a) {
         const [r] = await cnx.execute(
-          `INSERT INTO msc_athlete (compte_id, nom, prenom, ref_actuelle_s, ref_cible_s, debut)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [compteId && droit === 'ecriture' ? compteId : null, a.nom, a.prenom, a.actuelle, a.cible, a.debut],
+          `INSERT INTO msc_athlete (compte_id, nom, prenom, ref_actuelle_s, ref_cible_s, debut, origine)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [compteId && droit === 'ecriture' ? compteId : null, a.nom, a.prenom, a.actuelle, a.cible, a.debut,
+            originePropre(origine)],
         );
         athleteId = r.insertId;
         for (const o of a.objectifs) await ecrireObjectifSport(athleteId, o, cnx);

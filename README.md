@@ -1865,6 +1865,17 @@ write nothing, because an empty row is not an objective. Free sign-up still
 asks for both paces (pre-filled 5:30 → 5:00): it addresses an athlete
 registering alone, and his profile corrects them.
 
+### D'où vient chacun, et ce qu'il fait
+
+Two more columns an admin running a club reads before anything else: **D'où**
+— `inscrit lui-même`, `encodé par l'admin`, `démo`, or `d'avant` for rows
+older than the column — with the day he came in, and **Sports** — the
+disciplines of his weekly matrix, or of his active plan while he has none.
+`msc_athlete.origine` is written by whoever creates the athlete — the free
+sign-up route says `inscription`, the back office and the command line say
+`admin`, the seed says `demo` — and never by the request body: where someone
+comes from is not something the request gets to claim.
+
 ### Son compte, depuis la liste — et le lien de connexion
 
 The athlete list now says, per row, **which account is his** — the login that

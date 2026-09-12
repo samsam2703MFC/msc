@@ -40,7 +40,9 @@ const T: Record<Lang, Record<string, string>> = {
         compte: 'Compte', sansLogin: 'sans login', desactive: 'désactivé',
         lien: 'Lien', lienEnCours: '…', copie: 'Lien copié — à usage unique, envoie-le-lui',
         desactiver: 'Désactiver', reactiver: 'Réactiver', supprimer: 'Supprimer…',
-        actions: 'Son compte' },
+        actions: 'Son compte',
+        dou: 'D’où', sports: 'Sports', luiMeme: 'inscrit lui-même', parAdmin: 'encodé par l’admin',
+        demo: 'démo', avant: 'd’avant', sansSport: '—' },
   pl: { semaine: 'Tydzień', sansPlan: 'Brak aktywnego planu', seances: 'treningi', faites: 'zrobione',
         volume: 'Objętość', rpe: 'Ostatnie RPE', voir: 'Otwórz', chargement: 'Wczytywanie zawodników…',
         titre: 'Zawodnicy', reserve: 'Tworzenie zawodników i kont jest zastrzeżone dla admina.',
@@ -48,8 +50,24 @@ const T: Record<Lang, Record<string, string>> = {
         compte: 'Konto', sansLogin: 'bez loginu', desactive: 'wyłączone',
         lien: 'Link', lienEnCours: '…', copie: 'Link skopiowany — jednorazowy, wyślij mu go',
         desactiver: 'Wyłącz', reactiver: 'Włącz', supprimer: 'Usuń…',
-        actions: 'Jego konto' },
+        actions: 'Jego konto',
+        dou: 'Skąd', sports: 'Sporty', luiMeme: 'sam się zapisał', parAdmin: 'dodany przez admina',
+        demo: 'demo', avant: 'sprzed', sansSport: '—' },
 };
+
+/* D'où vient un athlète, en clair — et depuis quand. Une inscription libre et
+   un athlète encodé par l'admin ne se lisent pas pareil quand on compte qui
+   vient tout seul. */
+function origineEnClair(a: ApercuAthlete, t: Record<string, string>, lang: Lang): string {
+  const quoi = a.origine === 'inscription' ? t.luiMeme
+    : a.origine === 'admin' ? t.parAdmin
+      : a.origine === 'demo' ? t.demo
+        : t.avant;
+  const quand = a.depuis
+    ? new Date(`${a.depuis}T00:00:00`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
+  return quand ? `${quoi} · ${quand}` : quoi;
+}
 
 function h(min: number): string {
   const hh = Math.floor(min / 60); const mm = min % 60;
@@ -383,7 +401,7 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
                   <thead>
                     <tr>
-                      {[t.titre.replace(/s$/, ''), t.compte, fr ? 'Plan' : 'Plan', '10 km', fr ? 'Séances · semaine' : 'Treningi · tydzień', t.rpe, ''].map((h, i) => (
+                      {[t.titre.replace(/s$/, ''), t.compte, t.dou, t.sports, fr ? 'Plan' : 'Plan', '10 km', fr ? 'Séances · semaine' : 'Treningi · tydzień', t.rpe, ''].map((h, i) => (
                         <th key={i} scope="col" style={{ textAlign: 'left', padding: '6px 8px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -419,6 +437,12 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                                 </span>
                               );
                             })()}
+                          </td>
+                          <td style={{ ...cellule, fontSize: 12, color: C.inkSecondary, whiteSpace: 'nowrap' }}>
+                            {origineEnClair(a, t, app.lang)}
+                          </td>
+                          <td style={{ ...cellule, fontSize: 12, color: C.inkBody }}>
+                            {a.sports.length ? a.sports.join(' · ') : t.sansSport}
                           </td>
                           <td style={cellule}>
                             {a.bloc && phase
@@ -478,6 +502,11 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                       <span>{`· 10 km ${db.format10k(a.ref_actuelle_s)} → ${db.format10k(a.ref_cible_s)}`}</span>
                       <span>{`· ${fr ? 'séances' : 'treningi'} ${a.cette_semaine.faites}/${a.cette_semaine.prevues}`}</span>
                     </div>
+                    {admin && (
+                      <div style={{ fontSize: 11, color: C.inkSecondary }}>
+                        {`${origineEnClair(a, t, app.lang)}${a.sports.length ? ` · ${a.sports.join(' · ')}` : ''}`}
+                      </div>
+                    )}
                     {admin && (() => {
                       const compte = compteDe(a.id);
                       return (

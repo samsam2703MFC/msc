@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS msc_athlete (
   annee_naissance      SMALLINT UNSIGNED NULL,
   surnom               VARCHAR(40) NULL COMMENT 'ce qui s''affiche sous l''avatar, et rien d''autre',
   coach                VARCHAR(16) NOT NULL DEFAULT 'gentil' COMMENT 'le coach choisi — tortionnaire, gentil, gros_porc — et donc son ton',
+  origine              VARCHAR(16) NULL COMMENT 'd''où il vient : inscription (lui-même), admin (le back office), demo (semé)',
   ref_actuelle_s       SMALLINT UNSIGNED NOT NULL COMMENT 'allure 10 km actuelle, s/km — le test de 30 min la réécrit',
   ref_cible_s          SMALLINT UNSIGNED NOT NULL COMMENT 'allure 10 km visée, s/km',
   fc_repos             TINYINT UNSIGNED NULL,
