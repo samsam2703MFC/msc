@@ -35,6 +35,8 @@ const T = {
     nouveauMdp: 'Nouveau mot de passe', mdpAide: '12 caractères au moins par défaut (Paramètres · Sécurité).',
     enregistrer: 'Enregistrer', modifier: 'Modifier', fermer: 'Fermer', enregistre: 'Enregistré',
     activer: 'Réactiver', desactiver: 'Désactiver',
+    lien: 'Lien de connexion', lienEnCours: 'Fabrication…', copier: 'Copier', copie: 'Copié',
+    lienAide: 'À usage unique, et il périme. Envoie-le-lui comme tu veux — il entre en le touchant, puis pose son mot de passe. Tu ne verras plus ce lien après avoir quitté cet écran.',
     email: 'Email', nom: 'Nom', role: 'Rôle', mdp: 'Mot de passe',
     relier: 'Relié à l’athlète', personne: '— aucun —',
     nouveau: 'Onboarding · un athlète et son compte',
@@ -76,6 +78,8 @@ const T = {
     nouveauMdp: 'Nowe hasło', mdpAide: 'Domyślnie co najmniej 12 znaków (Ustawienia · Bezpieczeństwo).',
     enregistrer: 'Zapisz', modifier: 'Edytuj', fermer: 'Zamknij', enregistre: 'Zapisano',
     activer: 'Włącz', desactiver: 'Wyłącz',
+    lien: 'Link logowania', lienEnCours: 'Tworzenie…', copier: 'Kopiuj', copie: 'Skopiowano',
+    lienAide: 'Jednorazowy i wygasa. Wyślij mu go, jak chcesz — wchodzi jednym dotknięciem, potem ustawia hasło. Po wyjściu z ekranu linku już nie zobaczysz.',
     email: 'E-mail', nom: 'Nazwisko', role: 'Rola', mdp: 'Hasło',
     relier: 'Powiązany z zawodnikiem', personne: '— brak —',
     nouveau: 'Onboarding · zawodnik i jego konto',
@@ -286,13 +290,17 @@ function LigneCompte({
   const [ouvert, setOuvert] = useState(false);
   const [role, setRole] = useState<Role>(c.role);
   const [nom, setNom] = useState(c.nom);
+  const [email, setEmail] = useState(c.email);
   const [mdp, setMdp] = useState('');
-  const [job, setJob] = useState<'idle' | 'saving' | 'fait'>('idle');
+  const [job, setJob] = useState<'idle' | 'saving' | 'fait' | 'lien'>('idle');
   const [erreur, setErreur] = useState<string | null>(null);
+  const [lien, setLien] = useState<string | null>(null);
 
-  useEffect(() => { setRole(c.role); setNom(c.nom); }, [c.role, c.nom]);
+  useEffect(() => { setRole(c.role); setNom(c.nom); setEmail(c.email); }, [c.role, c.nom, c.email]);
 
-  const modifie = role !== c.role || nom.trim() !== c.nom || mdp !== '';
+  const emailChange = email.trim().toLowerCase() !== c.email;
+  const modifie = role !== c.role || nom.trim() !== c.nom || mdp !== ''
+    || (emailChange && emailOk(email));
 
   const envoyer = async (corps: Parameters<typeof api.majCompte>[1]) => {
     setJob('saving'); setErreur(null);
@@ -304,6 +312,21 @@ function LigneCompte({
       setTimeout(() => setJob('idle'), 1500);
     } catch (e) {
       setErreur(message(e)); setJob('idle');
+    }
+  };
+
+  /* Le lien : le serveur donne le jeton, l'écran en fait une adresse. C'est
+     le navigateur de l'admin qui sait sur quelle adresse publique il parle —
+     mieux que n'importe quel réglage à tenir à jour. */
+  const engendrerLien = async () => {
+    setJob('lien'); setErreur(null); setLien(null);
+    try {
+      const r = await api.lienDeConnexion(c.id);
+      setLien(`${window.location.origin}${import.meta.env.BASE_URL}?lien=${r.jeton}`);
+    } catch (e) {
+      setErreur(message(e));
+    } finally {
+      setJob('idle');
     }
   };
 
@@ -351,6 +374,12 @@ function LigneCompte({
       {ouvert && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 42 }}>
           <Champ label={t.nom} value={nom} onChange={setNom} />
+          {/* L'adresse se change ici, et nulle part ailleurs : c'est le login,
+              et la ligne de commande n'est pas un back office. */}
+          <Champ
+            label={t.email} value={email} onChange={setEmail} type="email" inputMode="email" mono
+            autoComplete="off" aide={emailChange && !emailOk(email) ? t.emailAide : undefined}
+          />
           <Choix<Role> label={t.role} options={ROLES.map((r) => ({ v: r, l: t.roles[r] }))} value={role} onChange={setRole} />
           <Champ label={t.nouveauMdp} value={mdp} onChange={setMdp} type="password" autoComplete="new-password" aide={t.mdpAide} />
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -359,6 +388,7 @@ function LigneCompte({
               disabled={!modifie || job === 'saving'}
               onClick={() => void envoyer({
                 ...(nom.trim() !== c.nom ? { nom: nom.trim() } : {}),
+                ...(emailChange && emailOk(email) ? { email: email.trim().toLowerCase() } : {}),
                 ...(role !== c.role ? { role } : {}),
                 ...(mdp ? { mot_de_passe: mdp } : {}),
               })}
@@ -371,7 +401,18 @@ function LigneCompte({
                 {c.actif ? t.desactiver : t.activer}
               </button>
             )}
+            {c.actif && (
+              <button
+                type="button"
+                disabled={job === 'saving'}
+                onClick={() => void engendrerLien()}
+                style={BOUTON_SOBRE}
+              >
+                {job === 'lien' ? t.lienEnCours : t.lien}
+              </button>
+            )}
           </div>
+          {lien && <LienCopiable lien={lien} t={t} />}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 11, color: C.inkSecondary }}>{t.acces}</span>
@@ -425,6 +466,30 @@ function allureOk(v: string): boolean {
     if (m) n = Number(m[1]) * 60 + Number(m[2]);
   }
   return n !== null && n >= 120 && n <= 900;
+}
+
+/* Un lien qu'on ne reverra pas : il s'affiche en entier, il se copie d'un
+   bouton, et on dit qu'il ne vaut qu'une fois. Le cacher derrière un « copier »
+   seul obligerait à faire confiance au presse-papiers. */
+function LienCopiable({ lien, t }: { lien: string; t: { copier: string; copie: string; lienAide: string } }) {
+  const [copie, setCopie] = useState(false);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '9px 11px', borderRadius: R.md, background: C.surfaceAlt, border: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: 11.5, fontFamily: F.mono, color: C.ink, wordBreak: 'break-all', lineHeight: 1.4 }}>{lien}</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard?.writeText(lien).then(() => setCopie(true)).catch(() => undefined);
+          }}
+          style={BOUTON_SOBRE}
+        >
+          {copie ? t.copie : t.copier}
+        </button>
+      </div>
+      <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>{t.lienAide}</div>
+    </div>
+  );
 }
 
 function emailOk(v: string): boolean {

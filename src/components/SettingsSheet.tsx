@@ -205,24 +205,41 @@ export function SettingsSheet({ app }: { app: App }) {
             {`${lang === 'fr' ? 'version' : 'wersja'} ${__MSC_VERSION__}`}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => void app.seDeconnecter()}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            borderRadius: R.full,
-            border: `1px solid ${C.border}`,
-            background: C.surface,
-            color: C.inkSecondary,
-            fontSize: 11,
-          }}
-        >
-          <Icon name="log-out" size={14} />
-          {lang === 'fr' ? 'Déconnexion' : 'Wyloguj'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+          {/* Son mot de passe est à lui : il le change ici, sans demander à
+              l'admin — qui ne doit connaître celui de personne. */}
+          <button
+            type="button"
+            onClick={app.ouvrirMotDePasse}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+              borderRadius: R.full, border: `1px solid ${C.border}`,
+              background: C.surface, color: C.inkSecondary, fontSize: 11, whiteSpace: 'nowrap',
+            }}
+          >
+            <Icon name="key" size={14} />
+            {lang === 'fr' ? 'Mot de passe' : 'Hasło'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void app.seDeconnecter()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: R.full,
+              border: `1px solid ${C.border}`,
+              background: C.surface,
+              color: C.inkSecondary,
+              fontSize: 11,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Icon name="log-out" size={14} />
+            {lang === 'fr' ? 'Déconnexion' : 'Wyloguj'}
+          </button>
+        </div>
       </div>
 
       <SheetCloseButton label={ui.modalClose} onClick={app.closeSettings} />

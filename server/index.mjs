@@ -29,10 +29,11 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
-import { AuthError, athleteDe, athletesVisibles, connecter, cookieSession, identifier, ouvrirSession }
+import { AuthError, athleteDe, athletesVisibles, connecter, cookieSession, hacher, identifier, ouvrirSession }
   from './auth.mjs';
-import { BdError, scellementPret } from './bd.mjs';
+import { bd, BdError, scellementPret } from './bd.mjs';
 import * as admin from './admin.mjs';
+import { consommerLien, creerLien, LienError } from './lien.mjs';
 import * as depots from './depots.mjs';
 import { construireMethode } from './methode.mjs';
 import * as photo from './photo.mjs';
@@ -385,8 +386,39 @@ async function router(req, res, url) {
     return json(res, 200, { compte, athletes: await athletesVisibles(compte.id) });
   }
 
+  /* Entrer par un lien. Le jeton vaut une fois : la base le consomme et le
+     périme dans la même requête. La session s'ouvre comme après une
+     connexion, et la réponse dit qu'il reste un mot de passe à poser — c'est
+     la raison d'être du lien. */
+  if (chemin === '/api/connexion/lien' && req.method === 'POST') {
+    const { jeton } = await lireCorps(req, 4_000);
+    const compte = await consommerLien(jeton);
+    res.setHeader('set-cookie', cookieSession(ouvrirSession(compte.id)));
+    return json(res, 200, {
+      compte, athletes: await athletesVisibles(compte.id), poser_mot_de_passe: true,
+    });
+  }
+
   if (chemin === '/api/deconnexion' && req.method === 'POST') {
     res.setHeader('set-cookie', cookieSession(null));
+    return json(res, 200, { ok: true });
+  }
+
+  /* Son propre mot de passe. C'est le geste qui suit un lien de connexion, et
+     celui de quiconque veut changer le sien — sans passer par l'admin, qui ne
+     doit jamais connaître un mot de passe de toute façon. */
+  if (chemin === '/api/moi/motdepasse' && req.method === 'POST') {
+    const identite = await identifier(req);
+    if (!identite) return json(res, 401, { erreur: 'Non connecté.' });
+    if (identite.bypass) return json(res, 403, { erreur: 'Pas de mot de passe à poser en mode développement.' });
+    const { mot_de_passe } = await lireCorps(req, 4_000);
+    const min = Number(await params.param('securite.mdp_min')) || 12;
+    if (String(mot_de_passe ?? '').length < min) {
+      return json(res, 400, { erreur: `Le mot de passe fait ${min} caractères au moins.` });
+    }
+    await bd().execute('UPDATE compte SET mot_de_passe = ? WHERE id = ?', [
+      hacher(mot_de_passe), identite.compte.id,
+    ]);
     return json(res, 200, { ok: true });
   }
 
@@ -507,6 +539,12 @@ async function router(req, res, url) {
     if (unCompte && req.method === 'PUT') {
       const corps = await lireCorps(req, 8_000);
       return json(res, 200, { compte: await admin.modifierCompte(Number(unCompte[1]), corps, appelant) });
+    }
+    /* Un lien de connexion à usage unique pour ce compte. Le jeton ne sort
+       qu'ici, une fois : l'écran en fabrique l'adresse et l'admin l'envoie. */
+    const lienCompte = chemin.match(/^\/api\/admin\/comptes\/(\d+)\/lien$/);
+    if (lienCompte && req.method === 'POST') {
+      return json(res, 200, await creerLien(Number(lienCompte[1])));
     }
     if (chemin === '/api/admin/inscription' && req.method === 'POST') {
       return json(res, 200, await admin.inscrire(await lireCorps(req, 8_000)));
@@ -856,6 +894,7 @@ const server = createServer(async (req, res) => {
     if (e instanceof photo.PhotoError) return json(res, e.code, { erreur: e.message });
     if (e instanceof depots.DepotError) return json(res, e.code, { erreur: e.message });
     if (e instanceof admin.AdminError) return json(res, e.code, { erreur: e.message });
+    if (e instanceof LienError) return json(res, e.code, { erreur: e.message });
     if (e instanceof BdError) return json(res, 500, { erreur: e.message });
     if (e instanceof params.ParamError) return json(res, e.statut, { erreur: e.message });
 

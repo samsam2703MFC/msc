@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process';
 import { chromium } from 'playwright-core';
 import { hacher } from '../server/auth.mjs';
 import { bd, fermer } from '../server/bd.mjs';
+import { creerLien } from '../server/lien.mjs';
 
 const PORT = Number(process.env.MSC_CHECK_PORT ?? 8898);
 const URL = `http://127.0.0.1:${PORT}`;
@@ -363,8 +364,21 @@ try {
 
   /* Le bilan d'une séance passée : les deux voies, et la bonne question sous
      chacune. « Pas faite » demande pourquoi ; « faite » ouvre Strava et le
-     ressenti. C'est le geste de l'athlète le dimanche soir. */
-  await page.locator('button.msc-hover-surface').nth(1).click();
+     ressenti. C'est le geste de l'athlète le dimanche soir.
+
+     La séance se choisit en base — la dernière passée de la semaine du plan
+     où l'on est — et se clique par son titre, pas par sa position : « la
+     deuxième » était celle d'aujourd'hui un vendredi à deux séances, et celle
+     de demain le samedi d'après. Un lundi, c'est celle du jour. */
+  const [[passee]] = await bd().execute(
+    `SELECT s.titre_court_fr AS titre FROM msc_session s JOIN msc_plan p ON p.id = s.plan_id
+     WHERE p.athlete_id = 1 AND p.actif = 1 AND s.discipline <> 'Repos' AND s.date <= CURDATE()
+       AND s.semaine = (SELECT s2.semaine FROM msc_session s2 JOIN msc_plan p2 ON p2.id = s2.plan_id
+                        WHERE p2.athlete_id = 1 AND p2.actif = 1 AND s2.date <= CURDATE()
+                        ORDER BY s2.date DESC LIMIT 1)
+     ORDER BY s.date DESC, s.ordre DESC LIMIT 1`,
+  );
+  await page.locator('button.msc-hover-surface').filter({ hasText: passee.titre }).first().click();
   await page.waitForTimeout(900);
   const fiche = await page.locator('body').innerText();
   check('une séance passée s’ouvre sur son bilan, en deux voies',
@@ -688,6 +702,14 @@ try {
     comptesTexte.split('\n').find((l) => l.includes(EMAIL)) ?? '');
   check('et, pour un compte seul, l’assistant part de l’étape Compte',
     /Nouveau compte/i.test(comptesTexte) && /Un compte seul/.test(comptesTexte) && !/ONBOARDING/.test(comptesTexte));
+  /* Un compte s'ouvre : son adresse se change là — c'est le login, et la
+     ligne de commande n'est pas un back office — et un lien de connexion
+     s'engendre là aussi. */
+  await page.getByRole('button', { name: new RegExp(EMAIL.replace('.', '\\.')) }).first().click();
+  await page.waitForTimeout(400);
+  check('un compte ouvert montre son adresse, modifiable, et un lien de connexion',
+    (await page.getByLabel('Email', { exact: true }).count()) > 0
+      && (await page.getByRole('button', { name: 'Lien de connexion' }).count()) > 0);
 
   /* Le club : la liste des athlètes, et l'assistant qui en crée un avec son
      compte — pas à pas, sans laisser passer une étape invalide. */
@@ -698,6 +720,19 @@ try {
   check('Athlètes liste les athlètes visibles, avec « Ouvrir »',
     /ATHLÈTES · \d/i.test(hubTexte) && /Ouvrir|en cours/i.test(hubTexte),
     hubTexte.split('\n').find((l) => /ATHLÈTES · /i.test(l)) ?? '');
+  /* Son compte, sur sa ligne : l'adresse, et de quoi lui envoyer un lien, le
+     désactiver ou le supprimer sans ouvrir sa fiche pour le savoir. */
+  check('et, pour l’admin, le compte de chacun : son adresse, un lien, désactiver, supprimer',
+    /COMPTE/.test(hubTexte) && hubTexte.includes(EMAIL)
+      && (await page.getByRole('button', { name: /^Lien$/ }).count()) > 0
+      && (await page.getByRole('button', { name: /^Désactiver$/ }).count()) > 0
+      && (await page.getByRole('button', { name: /^Supprimer…$/ }).count()) > 0);
+  await page.getByRole('button', { name: /^Lien$/ }).first().click();
+  await page.waitForTimeout(700);
+  const apresLien = await page.locator('body').innerText();
+  check('« Lien » engendre un lien de connexion pour ce compte',
+    /Lien copié|\?lien=/.test(apresLien),
+    apresLien.split('\n').find((l) => /Lien copié|\?lien=/.test(l))?.slice(0, 70) ?? '');
   check('et porte l’onboarding pas à pas — un athlète et son compte, une fois',
     /Onboarding/i.test(hubTexte) && /Un athlète et son compte/.test(hubTexte));
   await page.getByRole('button', { name: 'Suivant' }).click();
@@ -959,10 +994,44 @@ try {
   await page.waitForTimeout(500);
   check('les paramètres nomment le compte connecté',
     (await page.locator('body').innerText()).includes(EMAIL));
+  check('et proposent de changer son mot de passe — le sien, sans l’admin',
+    (await page.getByRole('button', { name: /^Mot de passe$/ }).count()) > 0);
   await page.click('text=Déconnexion');
   await page.waitForTimeout(900);
   check('on retourne à la connexion', await page.getByText('Connecte-toi').isVisible());
   check('et le plan a disparu de l’écran', (await page.locator('nav').count()) === 0);
+
+  /* Entrer par un lien : l'adresse que l'admin envoie ouvre la session, le
+     jeton disparaît de la barre d'adresse, et la première chose qu'on voit
+     est « pose ton mot de passe » — la raison d'être du lien. */
+  console.log('\n=== entrer par un lien ===');
+  const [[compteNav]] = await bd().execute('SELECT id FROM compte WHERE email = ?', [EMAIL]);
+  const lienEntree = await creerLien(compteNav.id);
+  await page.goto(`${URL}/?lien=${lienEntree.jeton}`);
+  await page.waitForTimeout(2500);
+  const dialogueMdp = page.getByRole('dialog', { name: 'Pose ton mot de passe' });
+  check('le lien ouvre l’application, et demande d’abord un mot de passe',
+    (await dialogueMdp.count()) > 0 && !page.url().includes('lien='),
+    page.url());
+  const champsMdp = dialogueMdp.locator('input[type=password]');
+  await champsMdp.nth(0).fill('un-mot-de-passe-posé-par-lien');
+  await champsMdp.nth(1).fill('un-mot-de-passe-posé-par-lien');
+  await dialogueMdp.getByRole('button', { name: 'Enregistrer' }).click();
+  await page.waitForTimeout(900);
+  check('… posé, et on est dedans',
+    (await page.getByRole('dialog', { name: 'Pose ton mot de passe' }).count()) === 0
+      && (await page.locator('nav').count()) > 0);
+  /* Le même lien, depuis un autre navigateur — sans session : il ne vaut plus
+     rien, et l'écran de connexion le dit. */
+  const autreNav = await nav.newContext({ viewport: { width: 420, height: 900 } });
+  const autrePage = await autreNav.newPage();
+  await autrePage.goto(`${URL}/?lien=${lienEntree.jeton}`);
+  await autrePage.waitForTimeout(2000);
+  const autreTexte = await autrePage.locator('body').innerText();
+  check('le même lien une seconde fois ne rouvre rien : il ne valait qu’une fois',
+    (await autrePage.getByText('Connecte-toi').count()) > 0 && /plus valable/.test(autreTexte),
+    autreTexte.split('\n').find((l) => /valable/.test(l)) ?? '');
+  await autreNav.close();
 
   console.log('');
   check('aucune erreur en chemin', erreurs.length === 0, erreurs.slice(0, 2).join(' | '));

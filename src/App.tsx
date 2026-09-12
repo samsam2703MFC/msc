@@ -14,6 +14,7 @@ import { MatinSheet } from './components/MatinSheet';
 import { MiseAJour } from './components/MiseAJour';
 import { SessionSheet } from './components/SessionSheet';
 import { SettingsSheet } from './components/SettingsSheet';
+import { MotDePasseSheet } from './components/MotDePasseSheet';
 import { TypeSheet } from './components/TypeSheet';
 import { MoiScreen } from './screens/AdminScreen';
 import { ChargementScreen, ConnexionScreen, PanneScreen } from './screens/ConnexionScreen';
@@ -280,6 +281,17 @@ function Phone({ app, framed }: { app: ReturnType<typeof useApp>; framed: boolea
       </nav>
 
       {app.settingsOpen && <SettingsSheet app={app} />}
+      {/* Entré par un lien : il reste un mot de passe à poser, et c'est la
+          première chose à faire — le lien ne resservira pas. */}
+      {app.motDePasse && (
+        <MotDePasseSheet
+          lang={app.lang}
+          zIndex={130}
+          apresLien={app.motDePasse === 'lien'}
+          onEnregistrer={app.changerMotDePasse}
+          onFermer={app.fermerMotDePasse}
+        />
+      )}
       {app.profilOpen && <ProfilSheet app={app} />}
       {/* par-dessus tout : le parcours du matin — le signal, hier, aujourd'hui */}
       {app.matinOuvert && <MatinSheet app={app} />}

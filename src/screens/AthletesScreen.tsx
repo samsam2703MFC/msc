@@ -36,11 +36,19 @@ const T: Record<Lang, Record<string, string>> = {
   fr: { semaine: 'Semaine', sansPlan: 'Pas de plan actif', seances: 'séances', faites: 'faites',
         volume: 'Volume', rpe: 'Dernier RPE', voir: 'Ouvrir', chargement: 'Lecture des athlètes…',
         titre: 'Athlètes', reserve: 'Créer un athlète ou un compte est réservé à l’admin.',
-        aucun: 'Aucun athlète visible pour ce compte.', courant: 'en cours' },
+        aucun: 'Aucun athlète visible pour ce compte.', courant: 'en cours',
+        compte: 'Compte', sansLogin: 'sans login', desactive: 'désactivé',
+        lien: 'Lien', lienEnCours: '…', copie: 'Lien copié — à usage unique, envoie-le-lui',
+        desactiver: 'Désactiver', reactiver: 'Réactiver', supprimer: 'Supprimer…',
+        actions: 'Son compte' },
   pl: { semaine: 'Tydzień', sansPlan: 'Brak aktywnego planu', seances: 'treningi', faites: 'zrobione',
         volume: 'Objętość', rpe: 'Ostatnie RPE', voir: 'Otwórz', chargement: 'Wczytywanie zawodników…',
         titre: 'Zawodnicy', reserve: 'Tworzenie zawodników i kont jest zastrzeżone dla admina.',
-        aucun: 'Brak widocznych zawodników.', courant: 'bieżący' },
+        aucun: 'Brak widocznych zawodników.', courant: 'bieżący',
+        compte: 'Konto', sansLogin: 'bez loginu', desactive: 'wyłączone',
+        lien: 'Link', lienEnCours: '…', copie: 'Link skopiowany — jednorazowy, wyślij mu go',
+        desactiver: 'Wyłącz', reactiver: 'Włącz', supprimer: 'Usuń…',
+        actions: 'Jego konto' },
 };
 
 function h(min: number): string {
@@ -249,6 +257,58 @@ export function SuiviAthlete({ app, large = false }: { app: App; large?: boolean
    qui en fait l'athlète affiché et ouvre son suivi. Dessous, pour l'admin,
    l'onboarding : l'assistant qui crée un athlète et son compte, une fois. Ce
    qui change tout le temps — son plan, ses starts — est dans ses sections. */
+/* Ce qu'on fait du compte d'un athlète depuis la liste : lui envoyer un lien
+   de connexion, le désactiver, ou le supprimer.
+
+   Supprimer n'est pas un bouton de plus ici : ça ouvre sa fiche, où la
+   suppression dit d'abord ce qu'elle détruit et demande son nom. Une
+   destruction irréversible n'a pas sa place au bout d'une ligne de tableau,
+   et en avoir deux versions serait pire encore. */
+function ActionsCompte({
+  athleteId, compte, t, onLien, onActif, onSupprimer,
+}: {
+  athleteId: number;
+  compte: CompteAdmin | null;
+  t: Record<string, string>;
+  onLien: (compteId: number) => Promise<void>;
+  onActif: (compteId: number, actif: boolean) => Promise<void>;
+  onSupprimer: (athleteId: number) => void;
+}) {
+  const [job, setJob] = useState<'idle' | 'lien'>('idle');
+  const bouton: React.CSSProperties = {
+    padding: '5px 9px', borderRadius: R.full, fontSize: 11, fontWeight: 600,
+    border: `1px solid ${C.border}`, background: C.surface, color: C.inkSecondary,
+    whiteSpace: 'nowrap',
+  };
+  return (
+    <span style={{ display: 'inline-flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      {compte && compte.actif && (
+        <button
+          type="button" style={bouton} disabled={job === 'lien'}
+          onClick={() => {
+            setJob('lien');
+            void onLien(compte.id).finally(() => setJob('idle'));
+          }}
+        >
+          {job === 'lien' ? t.lienEnCours : t.lien}
+        </button>
+      )}
+      {compte && (
+        <button type="button" style={bouton} onClick={() => void onActif(compte.id, !compte.actif)}>
+          {compte.actif ? t.desactiver : t.reactiver}
+        </button>
+      )}
+      <button
+        type="button"
+        style={{ ...bouton, color: C.negative, borderColor: C.border }}
+        onClick={() => onSupprimer(athleteId)}
+      >
+        {t.supprimer}
+      </button>
+    </span>
+  );
+}
+
 export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAthlete?: (o: Onglet) => void; large?: boolean }) {
   const t = T[app.lang];
   const fr = app.lang === 'fr';
@@ -263,9 +323,44 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
 
   /* Toucher un athlète, c'est ouvrir SA fiche : on bascule dessus, puis on
      entre par son suivi — ce qu'il a fait, la première question qu'on pose. */
-  const ouvrir = async (id: number) => {
+  const ouvrir = async (id: number, onglet: Onglet = 'suivi') => {
     if (id !== db.athleteId) await app.basculerAthlete(id);
-    onAthlete?.('suivi');
+    onAthlete?.(onglet);
+  };
+
+  /* Le compte d'un athlète : celui qui ne voit que lui, en écriture — son
+     login à lui. Un compte d'admin qui voit tout le monde n'est pas « son »
+     compte, et le désactiver couperait tout le club. */
+  const compteDe = (athleteId: number): CompteAdmin | null => {
+    const vus = listes?.comptes.filter((c) => c.athletes.some((a) => a.id === athleteId)) ?? [];
+    return vus.find((c) => c.athletes.length === 1 && c.athletes[0].droit === 'ecriture')
+      ?? vus.find((c) => c.role === 'athlete')
+      ?? null;
+  };
+
+  const [message, setMessage] = useState<string | null>(null);
+  const envoyerLien = async (compteId: number) => {
+    setMessage(null);
+    try {
+      const r = await api.lienDeConnexion(compteId);
+      const url = `${window.location.origin}${import.meta.env.BASE_URL}?lien=${r.jeton}`;
+      /* Le presse-papiers n'existe qu'en HTTPS : ailleurs, ou s'il refuse, le
+         lien s'affiche en entier plutôt que de prétendre qu'il est copié. */
+      let copie = false;
+      try { await navigator.clipboard.writeText(url); copie = true; } catch { copie = false; }
+      setMessage(copie ? `${t.copie} — ${r.email}` : `${r.email} · ${url}`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    }
+  };
+  const changerActif = async (compteId: number, actif: boolean) => {
+    setMessage(null);
+    try {
+      await api.majCompte(compteId, { actif });
+      relire();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    }
   };
 
   return (
@@ -288,7 +383,7 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
                   <thead>
                     <tr>
-                      {[t.titre.replace(/s$/, ''), fr ? 'Plan' : 'Plan', '10 km', fr ? 'Séances · semaine' : 'Treningi · tydzień', t.rpe, ''].map((h, i) => (
+                      {[t.titre.replace(/s$/, ''), t.compte, fr ? 'Plan' : 'Plan', '10 km', fr ? 'Séances · semaine' : 'Treningi · tydzień', t.rpe, ''].map((h, i) => (
                         <th key={i} scope="col" style={{ textAlign: 'left', padding: '6px 8px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -310,6 +405,21 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                               </div>
                             </div>
                           </td>
+                          {/* Son login : c'est ce qu'on cherche quand on veut
+                              lui écrire, lui renvoyer un lien, ou comprendre
+                              pourquoi il n'entre plus. */}
+                          <td style={cellule}>
+                            {(() => {
+                              const compte = compteDe(a.id);
+                              if (!compte) return <span style={{ color: C.inkQuiet, fontSize: 12 }}>{t.sansLogin}</span>;
+                              return (
+                                <span style={{ display: 'inline-flex', flexDirection: 'column' }}>
+                                  <span style={{ fontFamily: F.mono, fontSize: 11.5, color: compte.actif ? C.inkBody : C.inkQuiet }}>{compte.email}</span>
+                                  {!compte.actif && <span style={{ fontSize: 10.5, color: C.warning, fontWeight: 600 }}>{t.desactive}</span>}
+                                </span>
+                              );
+                            })()}
+                          </td>
                           <td style={cellule}>
                             {a.bloc && phase
                               ? <span style={{ color: phase.couleur, fontWeight: 600, fontSize: 12 }}>{`${a.bloc.nom[app.lang]} · ${t.semaine} ${a.semaine}/${a.total}`}</span>
@@ -323,6 +433,17 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                             {a.dernier_rpe ? `${a.dernier_rpe.valeur} · ${a.dernier_rpe.date}` : '—'}
                           </td>
                           <td style={{ ...cellule, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {admin && (
+                              <ActionsCompte
+                                athleteId={a.id}
+                                compte={compteDe(a.id)}
+                                t={t}
+                                onLien={envoyerLien}
+                                onActif={changerActif}
+                                onSupprimer={(id) => void ouvrir(id, 'profil')}
+                              />
+                            )}
+                            {' '}
                             <button type="button" className="msc-hover-accent" onClick={() => void ouvrir(a.id)} aria-label={`${t.voir} ${affiche}`}
                               style={{
                                 padding: '6px 11px', borderRadius: R.full, fontSize: 12, fontWeight: 600,
@@ -357,6 +478,14 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                       <span>{`· 10 km ${db.format10k(a.ref_actuelle_s)} → ${db.format10k(a.ref_cible_s)}`}</span>
                       <span>{`· ${fr ? 'séances' : 'treningi'} ${a.cette_semaine.faites}/${a.cette_semaine.prevues}`}</span>
                     </div>
+                    {admin && (() => {
+                      const compte = compteDe(a.id);
+                      return (
+                        <div style={{ fontSize: 11, color: compte?.actif === false ? C.warning : C.inkQuiet, fontFamily: F.mono }}>
+                          {compte ? `${compte.email}${compte.actif ? '' : ` · ${t.desactive}`}` : t.sansLogin}
+                        </div>
+                      );
+                    })()}
                   </div>
                   {/* Ouvrir vaut pour tout le monde, l'athlète affiché
                       compris : c'est sa fiche qu'on ouvre, pas un changement
@@ -381,6 +510,10 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
               );
             })}
       </div>
+
+      {message && (
+        <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.45, padding: '0 2px', fontFamily: F.mono, wordBreak: 'break-all' }}>{message}</div>
+      )}
 
       {admin && listes && (
         <Assistant

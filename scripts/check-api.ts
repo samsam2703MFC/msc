@@ -873,6 +873,51 @@ try {
     method: 'POST', body: JSON.stringify({ session_id: 1, date: '2026-10-20', note: 'x' }),
   });
   check('en lecture seule, comme demandé', lecture.statut === 403, String(lecture.statut));
+
+  /* Le lienCompte de connexion à usage unique : l'admin l'engendre, l'athlète entre
+     avec, pose son mot de passe — et le lienCompte ne resservira pas. */
+  const lienCompte = await c.appel(`/api/admin/comptes/${creeId}/lien`, { method: 'POST' });
+  check('un lien de connexion s’engendre pour un compte, et dit combien de temps il vaut',
+    lienCompte.statut === 200 && typeof lienCompte.corps.jeton === 'string' && lienCompte.corps.jeton.length >= 40
+      && lienCompte.corps.heures === 48 && lienCompte.corps.email === `cree-${EMAIL}`,
+    `${lienCompte.statut} ${lienCompte.corps.erreur ?? lienCompte.corps.heures ?? ''}`);
+  const [[empreintes]] = (await bd().execute(
+    'SELECT COUNT(*) AS n FROM msc_lien WHERE compte_id = ? AND empreinte = ?', [creeId, lienCompte.corps.jeton],
+  )) as any;
+  check('le jeton lui-même n’est pas en base — son empreinte seulement', Number(empreintes.n) === 0);
+  const c4 = client();
+  const entre = await c4.appel('/api/connexion/lien', { method: 'POST', body: JSON.stringify({ jeton: lienCompte.corps.jeton }) });
+  check('le lien ouvre une session, et dit qu’il reste un mot de passe à poser',
+    entre.statut === 200 && entre.corps.compte?.email === `cree-${EMAIL}` && entre.corps.poser_mot_de_passe === true
+      && c4.cookie !== '',
+    `${entre.statut} ${entre.corps.erreur ?? ''}`);
+  const encore = await client().appel('/api/connexion/lien', { method: 'POST', body: JSON.stringify({ jeton: lienCompte.corps.jeton }) });
+  check('le même lien une seconde fois est refusé : il ne vaut qu’une fois', encore.statut === 401, String(encore.statut));
+  const mdpCourt = await c4.appel('/api/moi/motdepasse', { method: 'POST', body: JSON.stringify({ mot_de_passe: 'court' }) });
+  check('poser un mot de passe trop court est refusé', mdpCourt.statut === 400, mdpCourt.corps.erreur);
+  const mdpPose = await c4.appel('/api/moi/motdepasse', { method: 'POST', body: JSON.stringify({ mot_de_passe: `lien-${MOT_DE_PASSE}` }) });
+  const reouvre = await client().appel('/api/connexion', {
+    method: 'POST', body: JSON.stringify({ email: `cree-${EMAIL}`, mot_de_passe: `lien-${MOT_DE_PASSE}` }),
+  });
+  check('… et le mot de passe posé ouvre la porte ensuite', mdpPose.statut === 200 && reouvre.statut === 200,
+    `${mdpPose.statut} ${reouvre.statut}`);
+  const anonyme = await client().appel('/api/moi/motdepasse', { method: 'POST', body: JSON.stringify({ mot_de_passe: `x-${MOT_DE_PASSE}` }) });
+  check('sans session, pas de mot de passe à poser', anonyme.statut === 401, String(anonyme.statut));
+  /* Un compte désactivé n'entre pas, lienCompte ou pas : le lienCompte engendré avant la
+     désactivation meurt avec elle. */
+  const lien2 = await c.appel(`/api/admin/comptes/${creeId}/lien`, { method: 'POST' });
+  await c.appel(`/api/admin/comptes/${creeId}`, { method: 'PUT', body: JSON.stringify({ actif: false }) });
+  const fermeParLien = await client().appel('/api/connexion/lien', { method: 'POST', body: JSON.stringify({ jeton: lien2.corps.jeton }) });
+  const pasDeLien = await c.appel(`/api/admin/comptes/${creeId}/lien`, { method: 'POST' });
+  check('un compte désactivé n’entre pas par un lien, et n’en reçoit pas de nouveau',
+    fermeParLien.statut === 401 && pasDeLien.statut === 400, `${fermeParLien.statut} ${pasDeLien.statut} ${pasDeLien.corps.erreur ?? ''}`);
+  await c.appel(`/api/admin/comptes/${creeId}`, { method: 'PUT', body: JSON.stringify({ actif: true }) });
+  /* L'email se change depuis le back office — c'est le login, et la ligne de
+     commande n'est pas un back office. */
+  const renomme = await c.appel(`/api/admin/comptes/${creeId}`, { method: 'PUT', body: JSON.stringify({ email: `Renomme-${EMAIL}` }) });
+  check('l’email d’un compte se change, mis en minuscules', renomme.statut === 200 && renomme.corps.compte?.email === `renomme-${EMAIL}`,
+    `${renomme.statut} ${renomme.corps.compte?.email ?? renomme.corps.erreur ?? ''}`);
+  await c.appel(`/api/admin/comptes/${creeId}`, { method: 'PUT', body: JSON.stringify({ email: `cree-${EMAIL}` }) });
   const horsPlage = await c.appel('/api/admin/athletes', {
     method: 'POST', body: JSON.stringify({ nom: 'Athlète créé du contrôle', actuelle: '1:30', cible: '1:20' }),
   });

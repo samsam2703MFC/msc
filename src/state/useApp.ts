@@ -70,6 +70,10 @@ export function useApp() {
   const [amorce, setAmorce] = useState<Amorce>('chargement');
   const [identite, setIdentite] = useState<api.Identite | null>(null);
   const [amorceErreur, setAmorceErreur] = useState<string | null>(null);
+  /* La feuille « pose ton mot de passe », et d'où elle vient : « lien » quand
+     l'athlète vient d'entrer par un lien de connexion — il lui en faut un pour
+     la prochaine fois —, « moi » quand il veut simplement changer le sien. */
+  const [motDePasse, setMotDePasse] = useState<'lien' | 'moi' | null>(null);
 
   /* Where the plan is. Defaults to the real date, clamped into the plan's
      span; the settings sheet lets you move it to walk the thirty weeks. */
@@ -334,6 +338,26 @@ export function useApp() {
   useEffect(() => {
     void (async () => {
       try {
+        /* Un lien de connexion dans l'adresse : on l'échange contre une
+           session avant tout le reste, et on le retire de la barre d'adresse —
+           un jeton à usage unique n'a rien à faire dans un historique ni dans
+           un partage de page. */
+        const jeton = new URLSearchParams(window.location.search).get('lien');
+        if (jeton) {
+          window.history.replaceState({}, '', window.location.pathname);
+          try {
+            const qui = await api.connexionParLien(jeton);
+            if (qui.poser_mot_de_passe !== false) setMotDePasse('lien');
+            await ouvrir(qui);
+            return;
+          } catch (e) {
+            /* Un lien mort n'annule pas une session vivante : on continue
+               comme sans lien, et l'écran de connexion dira pourquoi s'il n'y
+               en a pas. */
+            if (!(e instanceof api.ApiError)) throw e;
+            setAmorceErreur(message(e));
+          }
+        }
         await ouvrir(await api.moi());
       } catch (e) {
         if (!monte.current) return;
@@ -1101,6 +1125,11 @@ export function useApp() {
 
   const allerA = useCallback((iso: string) => setDate(db.positionDuPlan(iso).date), []);
 
+  const changerMotDePasse = useCallback(async (nouveau: string) => {
+    await api.changerMonMotDePasse(nouveau);
+    setMotDePasse(null);
+  }, []);
+
   return {
     /* l'amorçage */
     amorce,
@@ -1112,6 +1141,10 @@ export function useApp() {
     seDeconnecter,
     sInscrire,
     recharger,
+    motDePasse,
+    changerMotDePasse,
+    ouvrirMotDePasse: useCallback(() => setMotDePasse('moi'), []),
+    fermerMotDePasse: useCallback(() => setMotDePasse(null), []),
 
     screen,
     setScreen,

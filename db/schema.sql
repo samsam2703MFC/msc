@@ -44,6 +44,23 @@ CREATE TABLE IF NOT EXISTS compte (
   UNIQUE KEY uq_compte_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Un lien de connexion à usage unique : ce que l'admin envoie à un athlète qui
+-- a perdu son mot de passe, ou qui n'en a jamais eu. Le jeton n'est pas en
+-- base : son empreinte SHA-256 y est, comme un mot de passe — qui lit la base
+-- ne peut pas s'en servir pour entrer. Il vaut une fois, et il périme.
+CREATE TABLE IF NOT EXISTS msc_lien (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  compte_id  INT UNSIGNED NOT NULL,
+  empreinte  CHAR(64) NOT NULL COMMENT 'SHA-256 du jeton, en hexa — le jeton lui-même n''est montré qu''une fois',
+  expire_le  DATETIME(3) NOT NULL,
+  utilise_le DATETIME(3) NULL COMMENT 'la date d''usage : un lien servi ne ressert pas',
+  cree_le    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_lien_empreinte (empreinte),
+  KEY ix_lien_compte (compte_id),
+  CONSTRAINT fk_lien_compte FOREIGN KEY (compte_id) REFERENCES compte (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Les deux références 10 km d'où sortent toutes les allures du plan, et les
 -- planchers que le générateur ne franchit pas.
 CREATE TABLE IF NOT EXISTS msc_athlete (

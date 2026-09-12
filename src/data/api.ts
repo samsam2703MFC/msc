@@ -208,6 +208,22 @@ export function inscription(corps: {
   return appeler<Identite>('/inscription', { method: 'POST', body: JSON.stringify(corps) });
 }
 
+/** Entrer par un lien à usage unique. La réponse dit qu'il reste un mot de
+    passe à poser : c'est la raison d'être du lien. */
+export function connexionParLien(jeton: string): Promise<Identite & { poser_mot_de_passe?: boolean }> {
+  return appeler<Identite & { poser_mot_de_passe?: boolean }>('/connexion/lien', {
+    method: 'POST', body: JSON.stringify({ jeton }),
+  });
+}
+
+/** Son propre mot de passe — sans passer par l'admin, qui ne doit connaître
+    celui de personne. */
+export function changerMonMotDePasse(mot_de_passe: string): Promise<{ ok: boolean }> {
+  return appeler<{ ok: boolean }>('/moi/motdepasse', {
+    method: 'POST', body: JSON.stringify({ mot_de_passe }),
+  });
+}
+
 export function deconnexion(): Promise<{ ok: boolean }> {
   return appeler<{ ok: boolean }>('/deconnexion', { method: 'POST' });
 }
@@ -578,6 +594,14 @@ export function inscrire(corps: {
   athlete_id?: number | null;
 }): Promise<{ compte: CompteAdmin | null; athlete: AthleteAdmin | null }> {
   return appeler('/admin/inscription', { method: 'POST', body: JSON.stringify(corps) });
+}
+
+/** Un lien de connexion à usage unique pour ce compte. Le jeton ne revient
+    qu'ici, une fois : l'écran en fabrique l'adresse, et l'admin l'envoie. */
+export function lienDeConnexion(compteId: number): Promise<{
+  jeton: string; email: string; expire_le: string | null; heures: number;
+}> {
+  return appeler(`/admin/comptes/${compteId}/lien`, { method: 'POST' });
 }
 
 /** droit null : retirer l'accès. */

@@ -1857,6 +1857,51 @@ write nothing, because an empty row is not an objective. Free sign-up still
 asks for both paces (pre-filled 5:30 → 5:00): it addresses an athlete
 registering alone, and his profile corrects them.
 
+### Son compte, depuis la liste — et le lien de connexion
+
+The athlete list now says, per row, **which account is his** — the login that
+sees only him, in writing — with its address and whether it is deactivated
+(or `sans login`), and offers what an admin does with it without opening the
+file to find out: **Lien** (a connection link), **Désactiver / Réactiver**
+(the account, not the athlete — his plan, journal and measures stay), and
+**Supprimer…**, which opens his Profil where the deletion says what it
+destroys and asks for his name; a destruction that irreversible does not
+belong at the end of a table row, and having two versions of it would be
+worse. Comptes edits the **email** too, now: it is the login, and the command
+line is not a back office.
+
+The **connection link** is what replaced "go to the server, run `npm run
+compte -- motdepasse`, then say the new password out loud". An athlete who has
+lost his password, or never had one, gets a link the admin generates from his
+row (or from his account in Comptes) and sends however he likes — message,
+mail, paper. He enters by touching it, and the first thing he sees is **Pose
+ton mot de passe**. `server/lien.mjs`, table `msc_lien`, three rules:
+
+- **the token is not in the database** — its SHA-256 is, like a password;
+  whoever reads a dump cannot enter with it. The clear token comes back once,
+  to the admin's screen, which builds the address from the origin it is
+  talking to (`window.location.origin + BASE_URL + ?lien=`) — no setting to
+  keep in sync;
+- **it works once**: consuming it is one `UPDATE … WHERE utilise_le IS NULL
+  AND expire_le > NOW()`, so the database decides, and two simultaneous clicks
+  cannot both get in;
+- **it expires** — `securite.lien_heures`, 48 by default — because a link
+  lying in a conversation is a password lying in a conversation.
+
+A deactivated account does not enter, link or not, and gets no new link. On
+the client, `?lien=` is exchanged before anything else at boot and removed
+from the address bar (`history.replaceState`): a one-shot token has no
+business in a history or a shared page. A dead link does not kill a live
+session — the boot continues as without a link, and the login screen says
+why if there is none. `POST /api/moi/motdepasse` sets one's own password
+(`securite.mdp_min` applies), from the sheet the link opens or from **Mon
+application → Mot de passe** — the athlete's, without the admin, who must
+never know anyone's. `check:api` runs the whole life cycle (generate,
+hash-only in base, enter once, refuse the second time, refuse a deactivated
+account, set the password, log in with it); `check:app` enters through a
+link in the browser, sets the password, and re-tries the link from a fresh
+context.
+
 Two things the screen refuses, because the back office must never close from
 the inside: an admin cannot deactivate their own account or take their own
 `admin` role away, and nobody can demote or deactivate the last active admin.
