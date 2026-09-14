@@ -1031,6 +1031,12 @@ try {
      seul bouton — on dit ce qui sera détruit, et le nom se tape. */
   await page.getByRole('tab', { name: 'Profil', exact: true }).click();
   await page.waitForTimeout(900);
+  /* Sa fiche porte le même panneau que sa ligne : comment il entre. */
+  const compteFiche = page.getByRole('group', { name: 'Son compte' });
+  check('sa fiche porte son compte : adresse, mot de passe, état',
+    (await compteFiche.getByLabel(/^E-mail · /).count()) === 1
+      && (await compteFiche.getByLabel(/^Nouveau mot de passe · /).count()) === 1
+      && (await compteFiche.getByRole('button', { name: /^(Désactiver|Réactiver)$/ }).count()) === 1);
   await page.getByRole('button', { name: /Supprimer cet athlète…/ }).click();
   await page.waitForTimeout(1200);
   const zone = await page.locator('main').innerText();

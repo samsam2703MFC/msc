@@ -18,6 +18,7 @@ import { progression } from '../data/progression';
 import { CoachAvatar } from '../components/CoachAvatar';
 import { FormeJauge } from '../components/FormeJauge';
 import { Colonnes } from '../components/primitives';
+import { CompteAthlete, compteDeLAthlete } from '../components/CompteAthlete';
 import { Courbe } from '../components/Courbe';
 import type { Point } from '../components/Courbe';
 import { Icon } from '../components/Icon';
@@ -331,88 +332,6 @@ function ActionsCompte({
   );
 }
 
-/* Son compte, déplié sous sa ligne : son adresse, un mot de passe qu'on lui
-   pose, son état, et le lien d'un seul usage. L'adresse s'enregistre en
-   sortant du champ — la même règle que le calendrier ; le mot de passe
-   demande un bouton, parce qu'on ne remplace pas un mot de passe par
-   inadvertance. */
-function PanneauCompte({
-  compte, t, onLien, onActif, onChamp,
-}: {
-  compte: CompteAdmin | null;
-  t: Record<string, string>;
-  onLien: (compteId: number) => Promise<void>;
-  onActif: (compteId: number, actif: boolean) => Promise<void>;
-  onChamp: (compteId: number, corps: { email?: string; mot_de_passe?: string }) => Promise<void>;
-}) {
-  const [job, setJob] = useState<'idle' | 'lien'>('idle');
-  const [mdp, setMdp] = useState('');
-  if (!compte) return <div style={{ fontSize: 12, color: C.inkQuiet, padding: '2px 2px 8px' }}>{t.sansLoginAide}</div>;
-
-  const champ: React.CSSProperties = {
-    border: `1px solid ${C.border}`, borderRadius: R.md, padding: '6px 9px',
-    fontSize: 12.5, fontFamily: F.mono, background: C.surface, color: C.ink, minWidth: 200,
-  };
-  const etiquette: React.CSSProperties = {
-    fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-    textTransform: 'uppercase', color: C.inkSecondary,
-  };
-  return (
-    <div role="group" aria-label={t.actions} style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-end', padding: '2px 2px 8px' }}>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={etiquette}>{t.champEmail}</span>
-        <input
-          type="email"
-          defaultValue={compte.email}
-          aria-label={`${t.champEmail} · ${compte.email}`}
-          style={champ}
-          onBlur={(e) => {
-            const v = e.target.value.trim();
-            if (v && v !== compte.email) void onChamp(compte.id, { email: v });
-          }}
-        />
-      </label>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={etiquette}>{t.champMdp}</span>
-        <span style={{ display: 'flex', gap: 6 }}>
-          <input
-            type="password"
-            value={mdp}
-            autoComplete="new-password"
-            aria-label={`${t.champMdp} · ${compte.email}`}
-            style={champ}
-            onChange={(e) => setMdp(e.target.value)}
-          />
-          <button
-            type="button"
-            style={petitBouton}
-            disabled={mdp.length === 0}
-            onClick={() => { const v = mdp; setMdp(''); void onChamp(compte.id, { mot_de_passe: v }); }}
-          >
-            {t.definir}
-          </button>
-        </span>
-      </label>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={etiquette}>{t.etat}</span>
-        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button type="button" style={petitBouton} onClick={() => void onActif(compte.id, !compte.actif)}>
-            {compte.actif ? t.desactiver : t.reactiver}
-          </button>
-          {compte.actif && (
-            <button
-              type="button" style={petitBouton} disabled={job === 'lien'}
-              onClick={() => { setJob('lien'); void onLien(compte.id).finally(() => setJob('idle')); }}
-            >
-              {job === 'lien' ? t.lienEnCours : t.lien}
-            </button>
-          )}
-        </span>
-      </span>
-    </div>
-  );
-}
-
 export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAthlete?: (o: Onglet) => void; large?: boolean }) {
   const t = T[app.lang];
   const fr = app.lang === 'fr';
@@ -432,59 +351,14 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
     onAthlete?.(onglet);
   };
 
-  /* Le compte d'un athlète : celui qui ne voit que lui, en écriture — son
-     login à lui. Un compte d'admin qui voit tout le monde n'est pas « son »
-     compte, et le désactiver couperait tout le club. */
-  const compteDe = (athleteId: number): CompteAdmin | null => {
-    /* Un compte n'est le sien que s'il ne voit que lui. Un compte qui en voit
-       plusieurs — l'admin, un coach — n'est celui de personne : le prendre
-       pour son login affichait la même adresse sur toute la liste, et le
-       « Désactiver » de sa ligne aurait coupé tout le club. */
-    const siens = listes?.comptes.filter(
-      (c) => c.athletes.length === 1 && c.athletes[0].id === athleteId,
-    ) ?? [];
-    return siens.find((c) => c.athletes[0].droit === 'ecriture') ?? siens[0] ?? null;
-  };
+  /* Son login à lui, par la règle qui vaut partout : le compte qui ne voit
+     que lui. */
+  const compteDe = (athleteId: number): CompteAdmin | null =>
+    compteDeLAthlete(listes?.comptes ?? [], athleteId);
 
-  const [message, setMessage] = useState<string | null>(null);
   /* Un compte ouvert à la fois : deux panneaux dépliés dans un tableau, et on
      ne sait plus lequel on est en train de modifier. */
   const [compteOuvert, setCompteOuvert] = useState<number | null>(null);
-  const envoyerLien = async (compteId: number) => {
-    setMessage(null);
-    try {
-      const r = await api.lienDeConnexion(compteId);
-      const url = `${window.location.origin}${import.meta.env.BASE_URL}?lien=${r.jeton}`;
-      /* Le presse-papiers n'existe qu'en HTTPS : ailleurs, ou s'il refuse, le
-         lien s'affiche en entier plutôt que de prétendre qu'il est copié. */
-      let copie = false;
-      try { await navigator.clipboard.writeText(url); copie = true; } catch { copie = false; }
-      setMessage(copie ? `${t.copie} — ${r.email}` : `${r.email} · ${url}`);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : String(e));
-    }
-  };
-  const changerActif = async (compteId: number, actif: boolean) => {
-    setMessage(null);
-    try {
-      await api.majCompte(compteId, { actif });
-      relire();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : String(e));
-    }
-  };
-  /* L'adresse et le mot de passe passent par la même porte que le reste : le
-     serveur refuse une adresse déjà prise, et c'est ce refus qu'on affiche. */
-  const changerChamp = async (compteId: number, corps: { email?: string; mot_de_passe?: string }) => {
-    setMessage(null);
-    try {
-      const { compte } = await api.majCompte(compteId, corps);
-      setMessage(`${t.enregistre} — ${compte.email}`);
-      relire();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : String(e));
-    }
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -591,13 +465,7 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                                   un panneau qui défile avec lui sort de l'écran
                                   — la même règle que le calendrier. */}
                               <div style={{ position: 'sticky', left: 8, width: 'min(720px, calc(100vw - 76px))' }}>
-                              <PanneauCompte
-                                compte={compteLigne}
-                                t={t}
-                                onLien={envoyerLien}
-                                onActif={changerActif}
-                                onChamp={changerChamp}
-                              />
+                              <CompteAthlete athleteId={a.id} lang={app.lang} onChange={relire} />
                               </div>
                             </td>
                           </tr>
@@ -663,10 +531,6 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
               );
             })}
       </div>
-
-      {message && (
-        <div style={{ fontSize: 12, color: C.inkSecondary, lineHeight: 1.45, padding: '0 2px', fontFamily: F.mono, wordBreak: 'break-all' }}>{message}</div>
-      )}
 
       {admin && listes && (
         <Assistant

@@ -15,6 +15,7 @@ import { Icon } from '../components/Icon';
 import { Card, Colonnes, SectionLabel } from '../components/primitives';
 import { ProfilForm } from '../components/ProfilSheet';
 import { AdresseRetour } from '../components/StravaAthlete';
+import { CompteAthlete } from '../components/CompteAthlete';
 import type { App } from '../state/useApp';
 
 const T = {
@@ -27,6 +28,7 @@ const T = {
     connecte: 'connecté', nonConnecte: 'non connecté', nonConfigure: 'Strava non configuré pour cet athlète',
     synchro: 'dernière synchro', jamais: 'jamais', pasVerifie: 'pas encore vérifiée', versStrava: '→ Strava',
     aideStrava: 'Le compte Strava relié, et quand il a synchronisé pour la dernière fois. Pour relier, importer l’historique ou poser son application : sa section Strava.',
+    compte: 'Son compte', aideCompte: 'Comment il entre : son adresse, un mot de passe qu’on lui pose, et s’il peut se connecter. Le lien ne vaut qu’une fois.',
   },
   pl: {
     profil: 'Profil', objectifs: 'Cele w każdej dyscyplinie', actuelle: 'dziś', cible: 'cel',
@@ -37,6 +39,7 @@ const T = {
     connecte: 'połączona', nonConnecte: 'niepołączona', nonConfigure: 'Strava nieskonfigurowana dla tego zawodnika',
     synchro: 'ostatnia synchronizacja', jamais: 'nigdy', pasVerifie: 'jeszcze niesprawdzone', versStrava: '→ Strava',
     aideStrava: 'Połączone konto Strava i kiedy ostatnio synchronizowało. Połączenie, import historii, własna aplikacja: jego sekcja Strava.',
+    compte: 'Jego konto', aideCompte: 'Jak wchodzi: jego adres, hasło, które mu ustawiasz, i czy może się zalogować. Link działa tylko raz.',
   },
 } satisfies Record<Lang, unknown>;
 
@@ -49,6 +52,7 @@ export function ProfilScreen({
   large?: boolean;
 }) {
   const t = T[app.lang];
+  const athleteId = db.athleteId;
   const [etat, setEtat] = useState<strava.EtatStrava | null>(null);
   const [job, setJob] = useState<'idle' | 'verif'>('idle');
   const [erreur, setErreur] = useState<string | null>(null);
@@ -117,6 +121,17 @@ export function ProfilScreen({
         )}
         <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>{t.aideStrava}</div>
       </Card>
+
+      {/* Comment il entre. Le même panneau que sous sa ligne dans la liste :
+          c'est la même question, elle n'a qu'une réponse. Réservé à l'admin —
+          poser le mot de passe de quelqu'un n'est pas un réglage de plus. */}
+      {app.identite?.compte.role === 'admin' && athleteId != null && (
+        <Card padding="16px 18px" gap={8}>
+          <SectionLabel icon="key" color={C.teal}>{t.compte}</SectionLabel>
+          <CompteAthlete athleteId={athleteId} lang={app.lang} />
+          <div style={{ fontSize: 11, color: C.inkQuiet, lineHeight: 1.45 }}>{t.aideCompte}</div>
+        </Card>
+      )}
 
       {/* La sortie définitive : seulement dans le back office, seulement pour
           un admin, et jamais d'un seul bouton. */}
