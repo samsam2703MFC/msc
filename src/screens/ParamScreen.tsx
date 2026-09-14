@@ -12,6 +12,9 @@ import type { Classement, Lang, MscParam } from '../data/types';
 import { C, F, R } from '../design/theme';
 import { Icon } from '../components/Icon';
 import { AvatarNiveau } from '../components/AvatarNiveau';
+import { CoachAvatar } from '../components/CoachAvatar';
+import { COACH, COACHS } from '../data/coachs';
+import { SPORTS } from '../data/structure';
 import type { App } from '../state/useApp';
 
 /* Les groupes de réglages. Le bureau les pose en sous-menus sous
@@ -40,6 +43,8 @@ const T: Record<Lang, Record<string, string>> = {
     paliers: 'Les six paliers',
     paliersAide: 'La tête qu’un athlète porte à chaque palier, et le niveau de combat qu’il lui faut pour y arriver. Les seuils sont les réglages ci-dessous : change-en un, la liste suit.',
     aPartirDe: 'à partir de', depart: 'au départ',
+    coachs: 'Les trois coachs', methode: 'Sa méthode, sport par sport',
+    coachsAide: 'Le même plan, trois façons de le faire faire. L’athlète choisit le sien dans son profil ; l’admin le change dans sa fiche. Le ton porte l’analyse, le chat et le recalcul ; la méthode dit ce qu’il privilégie quand il entraîne.',
   },
   pl: {
     chargement: 'Wczytywanie ustawień…', enregistrer: 'Zapisz', effacer: 'Wyczyść',
@@ -50,6 +55,8 @@ const T: Record<Lang, Record<string, string>> = {
     paliers: 'Sześć poziomów',
     paliersAide: 'Twarz zawodnika na każdym poziomie i moc, której wymaga. Progi to ustawienia poniżej: zmień jeden, lista pójdzie za nim.',
     aPartirDe: 'od', depart: 'na start',
+    coachs: 'Trzej trenerzy', methode: 'Jego metoda, sport po sporcie',
+    coachsAide: 'Ten sam plan, trzy sposoby prowadzenia. Zawodnik wybiera swojego w profilu; admin zmienia go w jego karcie. Ton niesie analizę, czat i przeliczenie; metoda mówi, co trener stawia na pierwszym miejscu.',
   },
 };
 
@@ -202,6 +209,56 @@ function Paliers({ paliers, lang, t }: {
   );
 }
 
+/* Les trois coachs, en catalogue : qui ils sont, comment ils parlent, et ce
+   qu'ils privilégient sport par sport. C'est ici et pas dans un réglage parce
+   qu'il n'y a rien à régler — on choisit son coach dans son profil. Ce que
+   l'écran montre, le serveur le tient aussi (server/coach.mjs, PERSONA) :
+   c'est lui qui le pose sur la réponse. */
+function Coachs({ lang, t, large }: { lang: Lang; t: Record<string, string>; large: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 600, color: C.ink }}>{t.coachs}</div>
+      <div style={large
+        ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10, alignItems: 'start' }
+        : { display: 'flex', flexDirection: 'column', gap: 10 }}
+      >
+        {COACHS.map((code) => {
+          const c = COACH[code];
+          return (
+            <div key={code} style={{ padding: '10px 12px', borderRadius: R.md, border: `1px solid ${C.border}`, background: C.surfaceAlt, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <CoachAvatar code={code} taille={38} />
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{c.nom[lang]}</span>
+                  <span style={{ fontSize: 10.5, color: C.inkQuiet, fontStyle: 'italic' }}>{c.devise[lang]}</span>
+                </div>
+              </div>
+              <div style={{ fontSize: 11.5, color: C.inkBody, lineHeight: 1.45 }}>{c.ton[lang]}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.inkSecondary }}>
+                {t.methode}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {SPORTS.map((s) => (
+                  <div key={s.code} style={{ display: 'flex', gap: 7, alignItems: 'flex-start' }}>
+                    <Icon name={s.icon} size={13} color={C.teal} style={{ marginTop: 2 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>{s.nom[lang]}</div>
+                      <div style={{ fontSize: 11, color: C.inkSecondary, lineHeight: 1.4 }}>
+                        {c.methode[s.code]?.[lang] ?? '—'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 10.5, color: C.inkQuiet, lineHeight: 1.4 }}>{t.coachsAide}</div>
+    </div>
+  );
+}
+
 export function ParamScreen({ app, large = false, groupe }: {
   app: App; large?: boolean;
   /** Un seul groupe, pleine largeur — le bureau. Sans lui, tous, empilés. */
@@ -264,6 +321,7 @@ export function ParamScreen({ app, large = false, groupe }: {
               </div>
             </div>
             {g.code === 'niveau' && <Paliers paliers={paliers} lang={app.lang} t={t} />}
+            {g.code === 'coach' && <Coachs lang={app.lang} t={t} large={large && Boolean(groupe)} />}
             <div style={large && groupe
               ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', columnGap: 32, alignItems: 'start' }
               : undefined}

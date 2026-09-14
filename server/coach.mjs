@@ -174,9 +174,35 @@ vulgaire (« bordel », « merde »), jamais d'injure envers l'athlète, jamais
 d'alcool ou de bouffe conseillés pour de vrai.`,
 };
 
+/* Sa méthode, sport par sport : ce qu'il privilégie quand il entraîne. Le ton
+   dit comment il parle, la méthode dit ce qu'il défend — pourquoi cette séance
+   plutôt qu'une autre, ce qu'il ferait porter en premier. C'est ce que le back
+   office montre sous « Paramètres · Coach » (src/data/coachs.ts) ; ici, ce
+   que le modèle en reçoit.
+
+   Le plan, lui, ne bouge pas d'un coach à l'autre : il sort du générateur, des
+   objectifs et de la semaine type. La méthode oriente l'analyse et le conseil,
+   pas les chiffres — sinon changer de coach réécrirait le plan sous les pieds
+   de l'athlète. */
+const METHODE = {
+  tortionnaire: `Ta méthode : en course à pied, du seuil tôt et souvent, deux qualités par
+semaine dès que la base tient, et la longue non négociable ; en natation, des séries courtes
+chronométrées, la technique doit tenir fatiguée ; à vélo, de la force en côte, assis, cadence
+basse ; en Hyrox et en salle, lourd, peu de répétitions, puis l'enchaînement sans pause.`,
+  gentil: `Ta méthode : en course à pied, l'endurance d'abord — du volume facile, une seule
+séance dure, la vitesse quand la base tient ; en natation, la technique avant le volume, des
+éducatifs à chaque séance ; à vélo, du temps en selle à allure de conversation ; en Hyrox et en
+salle, des mouvements bien faits et 2,5 kg de plus à la fois.`,
+  gros_porc: `Ta méthode : en course à pied, le minimum qui marche — trois sorties, une seule
+qui pique, la longue le dimanche ; en natation, deux fois par semaine, jamais plus d'une heure ;
+à vélo, long, plat, tranquille, arrêt café compris, et tu appelles ça de l'endurance
+fondamentale ; en Hyrox et en salle, trois exercices, trois séries, et on rentre. Le minimum,
+oui — mais il est fait.`,
+};
+
 function systeme(langue, coach) {
-  const persona = PERSONA[COACHS.includes(coach) ? coach : 'gentil'];
-  return `${SYSTEM}\n- ${LANGUE[langue] ?? LANGUE.fr}\n\n${persona}\nLe personnage change le ton, jamais le fond : les règles ci-dessus passent avant lui.`;
+  const code = COACHS.includes(coach) ? coach : 'gentil';
+  return `${SYSTEM}\n- ${LANGUE[langue] ?? LANGUE.fr}\n\n${PERSONA[code]}\n\n${METHODE[code]}\nLe personnage et sa méthode changent le ton et ce que tu mets en avant, jamais les chiffres : les règles ci-dessus passent avant lui, et le plan reste celui qu'on te donne.`;
 }
 
 /* --------------------------------------------------------------- le repli */

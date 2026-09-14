@@ -896,6 +896,19 @@ try {
     moteurTexte.split('\n').find((l) => /Paramètres · /.test(l)) ?? '');
   await ouvrirSection(page, 'Coach');
   const coachTexte = await page.locator('body').innerText();
+  /* Les trois coachs y sont en entier — qui ils sont, comment ils parlent, et
+     ce qu'ils privilégient sport par sport — à côté de la clé qui les fait
+     parler. Choisir « le tortionnaire » dans un profil sans savoir ce qu'il
+     défend, c'est choisir à l'aveugle. */
+  check('les trois coachs sont au catalogue, avec leur ton et leur méthode sport par sport',
+    /Les trois coachs/i.test(coachTexte)
+      && /Le tortionnaire/.test(coachTexte) && /Le gentil/.test(coachTexte) && /Le gros porc/.test(coachTexte)
+      && /Sa méthode, sport par sport/i.test(coachTexte)
+      && /Course à pied/.test(coachTexte) && /Natation/.test(coachTexte)
+      && /Vélo/.test(coachTexte) && /Hyrox/.test(coachTexte)
+      && /du seuil tôt et souvent/i.test(coachTexte)
+      && /l’endurance d’abord/i.test(coachTexte)
+      && /le minimum qui marche/i.test(coachTexte));
   await ouvrirSection(page, 'Application Strava');
   const stravaParams = await page.locator('body').innerText();
   check('les paramètres de l’application sont réunis dans Paramètres : clé Anthropic, application Strava commune',
