@@ -3,7 +3,7 @@
    fait cette semaine, la forme. Tout vient de /api/apercu — rien n'est calculé
    deux fois. */
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import * as api from '../data/api';
 import type { AthleteAdmin, CompteAdmin } from '../data/api';
 import { Assistant } from './ComptesScreen';
@@ -40,7 +40,10 @@ const T: Record<Lang, Record<string, string>> = {
         compte: 'Compte', sansLogin: 'sans login', desactive: 'désactivé',
         lien: 'Lien', lienEnCours: '…', copie: 'Lien copié — à usage unique, envoie-le-lui',
         desactiver: 'Désactiver', reactiver: 'Réactiver', supprimer: 'Supprimer…',
-        actions: 'Son compte',
+        actions: 'Son compte', gerer: 'Compte…',
+        champEmail: 'E-mail', champMdp: 'Nouveau mot de passe', definir: 'Définir',
+        enregistre: 'Enregistré', etat: 'État', actif: 'Actif',
+        sansLoginAide: 'Pas de compte : crée-le dans l’assistant, en bas de cette page.',
         dou: 'D’où', sports: 'Sports', luiMeme: 'inscrit lui-même', parAdmin: 'encodé par l’admin',
         demo: 'démo', avant: 'd’avant', sansSport: '—' },
   pl: { semaine: 'Tydzień', sansPlan: 'Brak aktywnego planu', seances: 'treningi', faites: 'zrobione',
@@ -50,7 +53,10 @@ const T: Record<Lang, Record<string, string>> = {
         compte: 'Konto', sansLogin: 'bez loginu', desactive: 'wyłączone',
         lien: 'Link', lienEnCours: '…', copie: 'Link skopiowany — jednorazowy, wyślij mu go',
         desactiver: 'Wyłącz', reactiver: 'Włącz', supprimer: 'Usuń…',
-        actions: 'Jego konto',
+        actions: 'Jego konto', gerer: 'Konto…',
+        champEmail: 'E-mail', champMdp: 'Nowe hasło', definir: 'Ustaw',
+        enregistre: 'Zapisane', etat: 'Stan', actif: 'Aktywne',
+        sansLoginAide: 'Brak konta: utwórz je w asystencie, na dole tej strony.',
         dou: 'Skąd', sports: 'Sporty', luiMeme: 'sam się zapisał', parAdmin: 'dodany przez admina',
         demo: 'demo', avant: 'sprzed', sansSport: '—' },
 };
@@ -275,55 +281,135 @@ export function SuiviAthlete({ app, large = false }: { app: App; large?: boolean
    qui en fait l'athlète affiché et ouvre son suivi. Dessous, pour l'admin,
    l'onboarding : l'assistant qui crée un athlète et son compte, une fois. Ce
    qui change tout le temps — son plan, ses starts — est dans ses sections. */
-/* Ce qu'on fait du compte d'un athlète depuis la liste : lui envoyer un lien
-   de connexion, le désactiver, ou le supprimer.
+/* Ce qu'on fait du compte d'un athlète depuis la liste : l'ouvrir, ou le
+   supprimer.
+
+   Tout ce qui touche au compte — son adresse, son mot de passe, s'il est
+   actif, un lien pour entrer — se déplie sous sa ligne au lieu de tenir en
+   cinq pastilles au bout du tableau : un seul endroit, et la ligne reste
+   lisible.
 
    Supprimer n'est pas un bouton de plus ici : ça ouvre sa fiche, où la
    suppression dit d'abord ce qu'elle détruit et demande son nom. Une
    destruction irréversible n'a pas sa place au bout d'une ligne de tableau,
    et en avoir deux versions serait pire encore. */
+const petitBouton: React.CSSProperties = {
+  padding: '5px 9px', borderRadius: R.full, fontSize: 11, fontWeight: 600,
+  border: `1px solid ${C.border}`, background: C.surface, color: C.inkSecondary,
+  whiteSpace: 'nowrap',
+};
+
 function ActionsCompte({
-  athleteId, compte, t, onLien, onActif, onSupprimer,
+  athleteId, ouvert, t, onOuvrir, onSupprimer,
 }: {
   athleteId: number;
-  compte: CompteAdmin | null;
+  ouvert: boolean;
   t: Record<string, string>;
-  onLien: (compteId: number) => Promise<void>;
-  onActif: (compteId: number, actif: boolean) => Promise<void>;
+  onOuvrir: (athleteId: number | null) => void;
   onSupprimer: (athleteId: number) => void;
 }) {
-  const [job, setJob] = useState<'idle' | 'lien'>('idle');
-  const bouton: React.CSSProperties = {
-    padding: '5px 9px', borderRadius: R.full, fontSize: 11, fontWeight: 600,
-    border: `1px solid ${C.border}`, background: C.surface, color: C.inkSecondary,
-    whiteSpace: 'nowrap',
-  };
   return (
     <span style={{ display: 'inline-flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-      {compte && compte.actif && (
-        <button
-          type="button" style={bouton} disabled={job === 'lien'}
-          onClick={() => {
-            setJob('lien');
-            void onLien(compte.id).finally(() => setJob('idle'));
-          }}
-        >
-          {job === 'lien' ? t.lienEnCours : t.lien}
-        </button>
-      )}
-      {compte && (
-        <button type="button" style={bouton} onClick={() => void onActif(compte.id, !compte.actif)}>
-          {compte.actif ? t.desactiver : t.reactiver}
-        </button>
-      )}
       <button
         type="button"
-        style={{ ...bouton, color: C.negative, borderColor: C.border }}
+        aria-expanded={ouvert}
+        style={ouvert
+          ? { ...petitBouton, background: C.accentSoft, color: C.accentDeep, borderColor: C.accent }
+          : petitBouton}
+        onClick={() => onOuvrir(ouvert ? null : athleteId)}
+      >
+        {t.gerer}
+      </button>
+      <button
+        type="button"
+        style={{ ...petitBouton, color: C.negative }}
         onClick={() => onSupprimer(athleteId)}
       >
         {t.supprimer}
       </button>
     </span>
+  );
+}
+
+/* Son compte, déplié sous sa ligne : son adresse, un mot de passe qu'on lui
+   pose, son état, et le lien d'un seul usage. L'adresse s'enregistre en
+   sortant du champ — la même règle que le calendrier ; le mot de passe
+   demande un bouton, parce qu'on ne remplace pas un mot de passe par
+   inadvertance. */
+function PanneauCompte({
+  compte, t, onLien, onActif, onChamp,
+}: {
+  compte: CompteAdmin | null;
+  t: Record<string, string>;
+  onLien: (compteId: number) => Promise<void>;
+  onActif: (compteId: number, actif: boolean) => Promise<void>;
+  onChamp: (compteId: number, corps: { email?: string; mot_de_passe?: string }) => Promise<void>;
+}) {
+  const [job, setJob] = useState<'idle' | 'lien'>('idle');
+  const [mdp, setMdp] = useState('');
+  if (!compte) return <div style={{ fontSize: 12, color: C.inkQuiet, padding: '2px 2px 8px' }}>{t.sansLoginAide}</div>;
+
+  const champ: React.CSSProperties = {
+    border: `1px solid ${C.border}`, borderRadius: R.md, padding: '6px 9px',
+    fontSize: 12.5, fontFamily: F.mono, background: C.surface, color: C.ink, minWidth: 200,
+  };
+  const etiquette: React.CSSProperties = {
+    fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+    textTransform: 'uppercase', color: C.inkSecondary,
+  };
+  return (
+    <div role="group" aria-label={t.actions} style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-end', padding: '2px 2px 8px' }}>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={etiquette}>{t.champEmail}</span>
+        <input
+          type="email"
+          defaultValue={compte.email}
+          aria-label={`${t.champEmail} · ${compte.email}`}
+          style={champ}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v && v !== compte.email) void onChamp(compte.id, { email: v });
+          }}
+        />
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={etiquette}>{t.champMdp}</span>
+        <span style={{ display: 'flex', gap: 6 }}>
+          <input
+            type="password"
+            value={mdp}
+            autoComplete="new-password"
+            aria-label={`${t.champMdp} · ${compte.email}`}
+            style={champ}
+            onChange={(e) => setMdp(e.target.value)}
+          />
+          <button
+            type="button"
+            style={petitBouton}
+            disabled={mdp.length === 0}
+            onClick={() => { const v = mdp; setMdp(''); void onChamp(compte.id, { mot_de_passe: v }); }}
+          >
+            {t.definir}
+          </button>
+        </span>
+      </label>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={etiquette}>{t.etat}</span>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button type="button" style={petitBouton} onClick={() => void onActif(compte.id, !compte.actif)}>
+            {compte.actif ? t.desactiver : t.reactiver}
+          </button>
+          {compte.actif && (
+            <button
+              type="button" style={petitBouton} disabled={job === 'lien'}
+              onClick={() => { setJob('lien'); void onLien(compte.id).finally(() => setJob('idle')); }}
+            >
+              {job === 'lien' ? t.lienEnCours : t.lien}
+            </button>
+          )}
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -361,6 +447,9 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
   };
 
   const [message, setMessage] = useState<string | null>(null);
+  /* Un compte ouvert à la fois : deux panneaux dépliés dans un tableau, et on
+     ne sait plus lequel on est en train de modifier. */
+  const [compteOuvert, setCompteOuvert] = useState<number | null>(null);
   const envoyerLien = async (compteId: number) => {
     setMessage(null);
     try {
@@ -379,6 +468,18 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
     setMessage(null);
     try {
       await api.majCompte(compteId, { actif });
+      relire();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    }
+  };
+  /* L'adresse et le mot de passe passent par la même porte que le reste : le
+     serveur refuse une adresse déjà prise, et c'est ce refus qu'on affiche. */
+  const changerChamp = async (compteId: number, corps: { email?: string; mot_de_passe?: string }) => {
+    setMessage(null);
+    try {
+      const { compte } = await api.majCompte(compteId, corps);
+      setMessage(`${t.enregistre} — ${compte.email}`);
       relire();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
@@ -416,8 +517,11 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                       const affiche = [a.prenom, a.nom].filter(Boolean).join(' ') || a.nom;
                       const phase = a.bloc ? phaseDe(a.bloc.part) : null;
                       const cellule: React.CSSProperties = { padding: '8px 8px', borderTop: `1px solid ${C.borderSoft}`, verticalAlign: 'middle' };
+                      const compteLigne = compteDe(a.id);
+                      const deplie = compteOuvert === a.id;
                       return (
-                        <tr key={a.id} style={{ background: courant ? C.accentSoft : 'transparent' }}>
+                        <Fragment key={a.id}>
+                        <tr style={{ background: courant ? C.accentSoft : 'transparent' }}>
                           <td style={cellule}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <Avatar nom={affiche} taille={32} palier={a.niveau} />
@@ -431,16 +535,14 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                               lui écrire, lui renvoyer un lien, ou comprendre
                               pourquoi il n'entre plus. */}
                           <td style={cellule}>
-                            {(() => {
-                              const compte = compteDe(a.id);
-                              if (!compte) return <span style={{ color: C.inkQuiet, fontSize: 12 }}>{t.sansLogin}</span>;
-                              return (
+                            {!compteLigne
+                              ? <span style={{ color: C.inkQuiet, fontSize: 12 }}>{t.sansLogin}</span>
+                              : (
                                 <span style={{ display: 'inline-flex', flexDirection: 'column' }}>
-                                  <span style={{ fontFamily: F.mono, fontSize: 11.5, color: compte.actif ? C.inkBody : C.inkQuiet }}>{compte.email}</span>
-                                  {!compte.actif && <span style={{ fontSize: 10.5, color: C.warning, fontWeight: 600 }}>{t.desactive}</span>}
+                                  <span style={{ fontFamily: F.mono, fontSize: 11.5, color: compteLigne.actif ? C.inkBody : C.inkQuiet }}>{compteLigne.email}</span>
+                                  {!compteLigne.actif && <span style={{ fontSize: 10.5, color: C.warning, fontWeight: 600 }}>{t.desactive}</span>}
                                 </span>
-                              );
-                            })()}
+                              )}
                           </td>
                           <td style={{ ...cellule, fontSize: 12, color: C.inkSecondary, whiteSpace: 'nowrap' }}>
                             {origineEnClair(a, t, app.lang)}
@@ -464,10 +566,9 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                             {admin && (
                               <ActionsCompte
                                 athleteId={a.id}
-                                compte={compteDe(a.id)}
+                                ouvert={deplie}
                                 t={t}
-                                onLien={envoyerLien}
-                                onActif={changerActif}
+                                onOuvrir={setCompteOuvert}
                                 onSupprimer={(id) => void ouvrir(id, 'profil')}
                               />
                             )}
@@ -483,6 +584,25 @@ export function AthletesHub({ app, onAthlete, large = false }: { app: App; onAth
                             </button>
                           </td>
                         </tr>
+                        {admin && deplie && (
+                          <tr style={{ background: C.page }}>
+                            <td colSpan={9} style={{ padding: '4px 8px 0', borderTop: `1px solid ${C.borderSoft}` }}>
+                              {/* Collé à gauche : le tableau défile de côté, et
+                                  un panneau qui défile avec lui sort de l'écran
+                                  — la même règle que le calendrier. */}
+                              <div style={{ position: 'sticky', left: 8, width: 'min(720px, calc(100vw - 76px))' }}>
+                              <PanneauCompte
+                                compte={compteLigne}
+                                t={t}
+                                onLien={envoyerLien}
+                                onActif={changerActif}
+                                onChamp={changerChamp}
+                              />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>

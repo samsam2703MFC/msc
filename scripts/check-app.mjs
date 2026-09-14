@@ -11,7 +11,7 @@
 
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright-core';
-import { hacher } from '../server/auth.mjs';
+import { hacher, verifier } from '../server/auth.mjs';
 import { bd, fermer } from '../server/bd.mjs';
 import { creerLien } from '../server/lien.mjs';
 
@@ -128,7 +128,10 @@ async function ouvrirFiche(page, onglet) {
 }
 
 /* Un compte qui voit l'athlète 1 — celui que le seed installe. */
-await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `libre-${EMAIL}`]);
+/* Le contrôle change l'adresse d'un compte : l'adresse d'arrivée doit être
+   libre au départ, sinon la deuxième exécution se heurte au « un autre compte
+   a déjà cet email » — le bon refus, au mauvais moment. */
+await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?)', [EMAIL, `libre-${EMAIL}`, `change-libre-${EMAIL}`]);
 await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Libre du navigateur']);
 const [c] = await bd().execute(
   'INSERT INTO compte (email, mot_de_passe, nom, role) VALUES (?, ?, ?, ?)',
@@ -784,10 +787,9 @@ try {
      voit l'athlète semé ET celui de l'assistant : il n'est donc celui de
      personne, et la colonne dit « sans login » plutôt que de coller la même
      adresse sur toute la liste. */
-  check('et, pour l’admin, le compte de chacun : son adresse, un lien, désactiver, supprimer',
+  check('et, pour l’admin, le compte de chacun : son adresse, et de quoi le tenir',
     /COMPTE/.test(hubTexte) && hubTexte.includes(EMAIL)
-      && (await page.getByRole('button', { name: /^Lien$/ }).count()) > 0
-      && (await page.getByRole('button', { name: /^Désactiver$/ }).count()) > 0
+      && (await page.getByRole('button', { name: /^Compte…$/ }).count()) > 0
       && (await page.getByRole('button', { name: /^Supprimer…$/ }).count()) > 0);
   /* D'où vient chacun, et ce qu'il fait : l'athlète semé est « démo », et ses
      sports sont ceux de sa semaine type — ou de son plan tant qu'il n'en a pas. */
@@ -795,12 +797,22 @@ try {
     /D’OÙ/.test(hubTexte) && /SPORTS/.test(hubTexte) && /démo · \d+ /.test(hubTexte)
       && /Course à pied|Natation|Vélo|Hyrox/.test(hubTexte),
     hubTexte.split('\n').find((l) => /démo · /.test(l))?.slice(0, 80) ?? '');
-  await page.getByRole('button', { name: /^Lien$/ }).first().click();
+  /* Et tout ce qui le tient se déplie sous sa ligne, en un seul endroit. */
+  await page.getByRole('button', { name: /^Compte…$/ }).first().click();
+  await page.waitForTimeout(600);
+  const panneauLigne = page.getByRole('group', { name: 'Son compte' });
+  check('son compte se déplie sous sa ligne : adresse, mot de passe, état, lien',
+    (await panneauLigne.getByLabel(/^E-mail · /).count()) > 0
+      && (await panneauLigne.getByLabel(/^Nouveau mot de passe · /).count()) > 0
+      && (await panneauLigne.getByRole('button', { name: /^Désactiver$/ }).count()) > 0);
+  await panneauLigne.getByRole('button', { name: /^Lien$/ }).click();
   await page.waitForTimeout(700);
   const apresLien = await page.locator('body').innerText();
   check('« Lien » engendre un lien de connexion pour ce compte',
     /Lien copié|\?lien=/.test(apresLien),
     apresLien.split('\n').find((l) => /Lien copié|\?lien=/.test(l))?.slice(0, 70) ?? '');
+  await page.getByRole('button', { name: /^Compte…$/ }).first().click();
+  await page.waitForTimeout(400);
   check('et porte l’onboarding pas à pas — un athlète et son compte, une fois',
     /Onboarding/i.test(hubTexte) && /Un athlète et son compte/.test(hubTexte));
   await page.getByRole('button', { name: 'Suivant' }).click();
@@ -1029,6 +1041,57 @@ try {
   await page.getByRole('button', { name: /^Annuler$/ }).click();
   await page.waitForTimeout(500);
 
+  /* Le compte d'un athlète se tient depuis sa ligne : son adresse, son mot de
+     passe, et s'il peut entrer. On le fait sur l'athlète inscrit librement —
+     le compte du contrôle est le sien, et le serveur refuse (à raison) qu'on
+     se coupe soi-même. Il faut donc que l'admin le voie : on lui donne accès
+     le temps du contrôle, et on le lui retire après. */
+  const [[libre]] = await bd().execute(
+    `SELECT c.id AS compte_id, x.athlete_id FROM compte c
+       JOIN msc_acces x ON x.compte_id = c.id WHERE c.email = ?`,
+    [`libre-${EMAIL}`],
+  );
+  await bd().execute(
+    "INSERT IGNORE INTO msc_acces (compte_id, athlete_id, droit) VALUES (?, ?, 'lecture')",
+    [c.insertId, libre.athlete_id],
+  );
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1200);
+  await ouvrirSection(page, /^(Athlètes|Mon entraînement)$/);
+  const ligneLibre = page.locator('tr').filter({ hasText: 'Libre du navigateur' }).first();
+  await ligneLibre.getByRole('button', { name: 'Compte…' }).click();
+  await page.waitForTimeout(600);
+  const panneau = page.getByRole('group', { name: 'Son compte' });
+  check('le compte d’un athlète se déplie sous sa ligne', await panneau.isVisible());
+
+  const NOUVELLE = `change-libre-${EMAIL}`;
+  const champEmail = panneau.getByLabel(/^E-mail · /);
+  await champEmail.fill(NOUVELLE);
+  await champEmail.blur();
+  await page.waitForTimeout(1000);
+  const [[apresEmail]] = await bd().execute('SELECT email FROM compte WHERE id = ?', [libre.compte_id]);
+  check('son adresse se change depuis la liste', apresEmail.email === NOUVELLE, apresEmail.email);
+
+  const AUTRE = 'un-autre-mot-de-passe-de-controle';
+  await panneau.getByLabel(/^Nouveau mot de passe · /).fill(AUTRE);
+  await panneau.getByRole('button', { name: 'Définir' }).click();
+  await page.waitForTimeout(1000);
+  const [[apresMdp]] = await bd().execute('SELECT mot_de_passe FROM compte WHERE id = ?', [libre.compte_id]);
+  check('son mot de passe se repose, et c’est le nouveau qui ouvre',
+    verifier(AUTRE, apresMdp.mot_de_passe) && !verifier(MOT_DE_PASSE, apresMdp.mot_de_passe));
+
+  await panneau.getByRole('button', { name: 'Désactiver' }).click();
+  await page.waitForTimeout(1000);
+  const [[coupe1]] = await bd().execute('SELECT actif FROM compte WHERE id = ?', [libre.compte_id]);
+  await panneau.getByRole('button', { name: 'Réactiver' }).click();
+  await page.waitForTimeout(1000);
+  const [[rendu]] = await bd().execute('SELECT actif FROM compte WHERE id = ?', [libre.compte_id]);
+  check('et il se désactive, puis se réactive',
+    Number(coupe1.actif) === 0 && Number(rendu.actif) === 1);
+
+  await bd().execute('DELETE FROM msc_acces WHERE compte_id = ? AND athlete_id = ?',
+    [c.insertId, libre.athlete_id]);
+
   await menu.getByRole('button', { name: 'Système' }).click();
   await page.waitForTimeout(900);
   check('une section s’ouvre depuis le menu', /cette page/i.test(await page.locator('body').innerText()));
@@ -1132,7 +1195,7 @@ try {
   serveur.kill('SIGTERM');
   await bd().execute("DELETE FROM msc_competition WHERE nom LIKE '%de contrôle'");
   await bd().execute("DELETE FROM msc_sponsor WHERE nom LIKE '%du navigateur'");
-  await bd().execute('DELETE FROM compte WHERE email IN (?, ?)', [EMAIL, `libre-${EMAIL}`]);
+  await bd().execute('DELETE FROM compte WHERE email IN (?, ?, ?)', [EMAIL, `libre-${EMAIL}`, `change-libre-${EMAIL}`]);
   await bd().execute('DELETE FROM msc_athlete WHERE nom = ?', ['Libre du navigateur']);
   await fermer();
 }
